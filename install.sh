@@ -1,6 +1,6 @@
 #!/bin/sh
-# rProxy Web (Python/Bottle Edition) Installer for Keenetic
-# VERSION: 2.0.2
+# rProxy Web (Python/Zero-Dep Edition) Installer for Keenetic
+# VERSION: 2.0.3
 
 set -e
 
@@ -15,7 +15,7 @@ err() { printf "${RED}✖${NC} %s\n" "$*" >&2; exit 1; }
 
 header() {
     printf "\n${GREEN}====================================${NC}\n"
-    printf "${GREEN}   rProxy Web (Bottle) Installer    ${NC}\n"
+    printf "${GREEN}   rProxy Web (Zero-Dep) Installer  ${NC}\n"
     printf "${GREEN}====================================${NC}\n\n"
 }
 
@@ -26,17 +26,21 @@ if [ ! -d "/opt/bin" ]; then
     err "Entware не найден. Установите Entware на ваш роутер."
 fi
 
-# 2. Установка Python и зависимостей (только легкие пакеты из opkg)
-msg "Установка Python3 и библиотеки Bottle..."
+# 2. Установка Python
+msg "Установка Python3..."
 opkg update
-opkg install python3 python3-bottle
+opkg install python3
 
-# 3. Установка файлов проекта
+# 3. Подготовка директорий
 INSTALL_DIR="/opt/share/rproxy-web"
 msg "Установка в $INSTALL_DIR..."
 mkdir -p "$INSTALL_DIR/templates"
 
-# Загрузка или копирование файлов
+# 4. Загрузка Bottle.py (Zero-Dependency Strategy)
+msg "Загрузка библиотеки Bottle (автономный режим)..."
+curl -sL https://raw.githubusercontent.com/bottlepy/bottle/master/bottle.py -o "$INSTALL_DIR/bottle.py"
+
+# 5. Установка файлов проекта
 if [ -f "./main.py" ]; then
     msg "Копирование локальных файлов..."
     cp main.py "$INSTALL_DIR/"
@@ -52,7 +56,7 @@ else
     rm -rf "$TMP_DIR"
 fi
 
-# 4. Настройка автозапуска
+# 6. Настройка автозапуска
 msg "Создание службы автозапуска..."
 CAT_INIT="/opt/etc/init.d/S99rproxy-web"
 cat > "$CAT_INIT" <<EOF
@@ -60,13 +64,12 @@ cat > "$CAT_INIT" <<EOF
 
 case "\$1" in
     start)
-        echo "Starting rProxy Web (Bottle)..."
+        echo "Starting rProxy Web..."
         cd $INSTALL_DIR
-        # Запуск в фоновом режиме через nohup или просто &
         python3 main.py > /opt/var/log/rproxy-web.log 2>&1 &
         ;;
     stop)
-        echo "Stopping rProxy Web (Bottle)..."
+        echo "Stopping rProxy Web..."
         pkill -f "python3 main.py"
         ;;
     restart)
