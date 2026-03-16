@@ -1,7 +1,19 @@
 import os
+import sys
 import subprocess
 import time
-from bottle import route, run, template, request, response, static_file, post, HTTPResponse
+
+# Принудительно добавляем путь к текущей директории для импорта бутылки
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, current_dir)
+
+try:
+    from bottle import route, run, template, request, response, static_file, post, HTTPResponse
+except ImportError:
+    # Если импорт не удался, пробуем вручную найти bottle.py
+    sys.stderr.write("Bottle not found, trying to load from local file...\n")
+    import bottle
+    from bottle import route, run, template, request, response, static_file, post, HTTPResponse
 
 # Константы путей rProxy
 RPROXY_ROOT = "/opt/etc/rproxy"
@@ -9,7 +21,11 @@ SERVICES_DIR = os.path.join(RPROXY_ROOT, "services")
 VPS_DIR = os.path.join(RPROXY_ROOT, "vps")
 GLOBAL_CONF = os.path.join(RPROXY_ROOT, "rproxy.conf")
 PID_DIR = "/opt/var/run/rproxy"
-TEMPLATES_DIR = "./templates"
+TEMPLATES_DIR = os.path.join(current_dir, "templates")
+
+print(f"--- rProxy Web v3.0.1 Starting ---")
+print(f"Work dir: {current_dir}")
+print(f"Templates dir: {TEMPLATES_DIR}")
 
 def parse_config(file_path: str) -> dict:
     if not os.path.exists(file_path): return {}
@@ -21,7 +37,8 @@ def parse_config(file_path: str) -> dict:
                 if line and not line.startswith("#") and "=" in line:
                     parts = line.split("=", 1)
                     config[parts[0].strip()] = parts[1].strip().strip("'").strip('"')
-    except: pass
+    except Exception as e:
+        print(f"Config parse error: {e}")
     return config
 
 def get_service_status(service_name: str) -> str:
@@ -42,13 +59,13 @@ def index():
 def get_system():
     config = parse_config(GLOBAL_CONF)
     services = [f for f in os.listdir(SERVICES_DIR) if f.endswith(".conf")] if os.path.exists(SERVICES_DIR) else []
-    online_count = sum(1 for f in services if get_service_status(f[:-5]) == "online")
+    online_count = sum(1 for f in services if get_service_status(f.replace(".conf", "")) == "online")
     vps_count = len(os.listdir(VPS_DIR)) if os.path.exists(VPS_DIR) else 0
     
     return f"""
     <div class="stat-card">
         <div class="stat-label"><i data-lucide="cpu"></i> Version</div>
-        <div class="stat-value" style="color: var(--accent-main)">{config.get("VERSION", "3.0.0")}</div>
+        <div class="stat-value" style="color: var(--accent-main)">{config.get("VERSION", "3.0.1")}</div>
     </div>
     <div class="stat-card">
         <div class="stat-label"><i data-lucide="hard-drive"></i> Global VPS</div>
@@ -68,18 +85,18 @@ def get_services():
     html = ""
     try:
         files = sorted([f for f in os.listdir(SERVICES_DIR) if f.endswith(".conf")])
-    except: return '<div class="loading-state"><p>Ошибка доступа к FS</p></div>'
+    except Exception as e:
+        return f'<div class="loading-state"><p>Ошибка FS: {e}</p></div>'
 
     if not files:
         return '<div class="loading-state"><p>Список сервисов пуст</p></div>'
 
     for f in files:
-        name = f[:-5]
+        name = f.replace(".conf", "")
         cfg = parse_config(os.path.join(SERVICES_DIR, f))
         status = get_service_status(name)
         is_online = status == "online"
         
-        # Визуальные настройки в зависимости от типа
         is_tcp = cfg.get('SVC_TYPE') == 'tcp'
         icon = "terminal" if is_tcp else "globe"
         accent = "var(--accent-purple)" if is_tcp else "var(--accent-main)"
@@ -131,22 +148,25 @@ def get_services():
 @post('/api/services/<service_id>/<action>')
 def service_action(service_id, action):
     try:
-        # Прямой вызов CLI rproxy
         subprocess.run(["/opt/bin/rproxy", action, service_id], capture_output=True)
         return {"status": "success"}
-    except: return HTTPResponse(status=500)
+    except Exception as e:
+        print(f"Action error: {e}")
+        return HTTPResponse(status=500)
 
 @route('/api/logs/<service_id>')
 def get_logs(service_id):
-    # Пытаемся прочитать лог ttyd если он есть
     log_file = f"/tmp/rproxy_ttyd_{service_id}.log"
     if os.path.exists(log_file):
         try:
-            with open(log_file, "r") as f:
-                content = f.read().splitlines()[-50:] # Последние 50 строк
-                return "<br>".join(content) if content else "Лог пуст..."
-        except: return "Ошибка чтения лога."
+            with open(log_file, "r", encoding="utf-8", errors="ignore") as f:
+                lines = f.readlines()
+                content = lines[-50:]
+                return "<br>".join([l.strip() for l in content]) if content else "Лог пуст..."
+        except Exception as e:
+            return f"Ошибка чтения лога: {e}"
     return "Лог-файл не найден. Запустите сервис с ttyd."
 
 if __name__ == "__main__":
-    run(host='0.0.0.0', port=3000, quiet=True)
+    print("Serving on http://0.0.0.0:3000")
+    run(host='0.0.0.0', port=3000, quiet=False)
