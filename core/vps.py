@@ -1,0 +1,92 @@
+import os
+import subprocess
+from .utils import msg, warn, err
+
+class VPSManager:
+    """Управление удаленными VPS серверами"""
+    
+    RPROXY_ROOT = "/opt/etc/rproxy"
+    VPS_DIR = os.path.join(RPROXY_ROOT, "vps")
+    SSH_KEY = os.path.join(RPROXY_ROOT, "id_ed25519")
+
+    @staticmethod
+    def ensure_ssh_key():
+        """Гарантирует наличие SSH-ключа для работы с VPS"""
+        if not os.path.exists(VPSManager.SSH_KEY):
+            msg("Генерирую SSH-ключ (ed25519)...")
+            try:
+                # Пытаемся найти ssh-keygen в путях Entware или системных
+                keygen = "/opt/bin/ssh-keygen"
+                if not os.path.exists(keygen):
+                    keygen = "ssh-keygen"
+                
+                subprocess.run([keygen, "-t", "ed25519", "-f", VPSManager.SSH_KEY, "-N", "", "-q"], check=True)
+                os.chmod(VPSManager.SSH_KEY, 0o600)
+                
+                # Генерируем публичный ключ, если он не создался автоматически
+                pub_key = f"{VPSManager.SSH_KEY}.pub"
+                if not os.path.exists(pub_key):
+                    subprocess.run([keygen, "-y", "-f", VPSManager.SSH_KEY], 
+                                 stdout=open(pub_key, 'w'), check=True)
+            except Exception as e:
+                err(f"Не удалось сгенерировать SSH-ключ: {e}")
+
+    @staticmethod
+    def run_remote(vps_cfg, cmd, timeout=30):
+        """Выполняет команду на удаленном VPS через SSH"""
+        ssh_bin = "/opt/bin/ssh"
+        if not os.path.exists(ssh_bin):
+            ssh_bin = "ssh"
+            
+        host = vps_cfg.get('VPS_HOST')
+        user = vps_cfg.get('VPS_USER', 'root')
+        port = vps_cfg.get('VPS_PORT', '22')
+        
+        ssh_cmd = [
+            ssh_bin, 
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "ConnectTimeout=10",
+            "-i", VPSManager.SSH_KEY,
+            "-p", str(port),
+            f"{user}@{host}",
+            cmd
+        ]
+        
+        try:
+            result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=timeout)
+            if result.returncode != 0:
+                return False, result.stderr.strip()
+            return True, result.stdout.strip()
+        except subprocess.TimeoutExpired:
+            return False, "Превышено время ожидания SSH"
+        except Exception as e:
+            return False, str(e)
+
+    @staticmethod
+    def setup_vps(vps_cfg):
+        """Первичная настройка окружения на удаленном VPS"""
+        # Скрипт настройки из оригинального rproxy (адаптированный)
+        setup_script = """
+        if ! command -v nginx >/dev/null 2>&1; then
+            apt-get update -qq && apt-get install -y -qq nginx psmisc || (yum update -y && yum install -y nginx psmisc)
+        else
+            apt-get update -qq && apt-get install -y -qq psmisc || yum install -y psmisc
+        fi
+        mkdir -p /etc/nginx/sites-enabled
+        grep -q 'sites-enabled' /etc/nginx/nginx.conf || sed -i '/http {/a\    include /etc/nginx/sites-enabled/*.conf;' /etc/nginx/nginx.conf
+        command -v certbot >/dev/null 2>&1 || (apt-get update -qq && apt-get install -y -qq certbot python3-certbot-nginx || yum install -y certbot python3-certbot-nginx)
+        
+        # Настройка Nginx Stream
+        mkdir -p /etc/nginx/streams-enabled
+        if ! grep -q 'streams-enabled' /etc/nginx/nginx.conf; then
+            if grep -q 'stream {' /etc/nginx/nginx.conf; then
+                 echo "include /etc/nginx/streams-enabled/*.conf;" >> /etc/nginx/nginx.conf
+            else
+                 printf "\\nstream {\\n    include /etc/nginx/streams-enabled/*.conf;\\n}\\n" >> /etc/nginx/nginx.conf
+            fi
+        fi
+        systemctl enable nginx && systemctl start nginx
+        """
+        msg(f"Настройка окружения на VPS {vps_cfg.get('VPS_HOST')}...")
+        success, output = VPSManager.run_remote(vps_cfg, setup_script, timeout=300)
+        return success, output

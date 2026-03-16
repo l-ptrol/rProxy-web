@@ -1,7 +1,7 @@
 #!/bin/sh
-# rProxy Web (Premium Dashboard) Installer for Keenetic
-# VERSION: 5.0.1 - Pure Python & Premium CSS Edition (Bugfix)
-# Чистый Glassmorphism без лишних фреймворков
+# rProxy Web & CLI (Python Core) Installer for Keenetic
+# VERSION: 6.0.0 - Modular Architecture
+# Новое ядро на Python. 100% паритет с Bash + Модульность.
 
 set -e
 
@@ -14,52 +14,59 @@ msg() { printf "${GREEN}▸${NC} %b\n" "$*"; }
 err() { printf "${RED}✖${NC} %b\n" "$*" >&2; exit 1; }
 
 printf "\n${CYAN}==========================================${NC}\n"
-printf "${CYAN}    rProxy Web v5.0.0 (Premium)           ${NC}\n"
+printf "${CYAN}    rProxy Python Core v6.0.0             ${NC}\n"
 printf "${CYAN}==========================================${NC}\n\n"
 
 if [ ! -d "/opt/bin" ]; then
     err "Entware не найден. Установите Entware."
 fi
 
-msg "Установка Python3 и зависимостей..."
+msg "Установка Python3 и необходимых системных утилит..."
 opkg update
-opkg install python3-light python3-pip
+opkg install python3-light python3-pip autossh psmisc ssh-keygen
 
 INSTALL_DIR="/opt/share/rproxy-web"
-mkdir -p "$INSTALL_DIR/templates"
+mkdir -p "$INSTALL_DIR"
 
-msg "Чистка старой (Node.js) версии..."
+msg "Очистка старой версии..."
 /opt/etc/init.d/S99rproxy-web stop 2>/dev/null || true
-pkill -f "python3 main.py" || true
+rm -rf "$INSTALL_DIR/core"
+rm -f "$INSTALL_DIR/main.py"
+rm -f "$INSTALL_DIR/rproxy.py"
 
 msg "Загрузка Bottle.py..."
 curl -sL https://raw.githubusercontent.com/bottlepy/bottle/master/bottle.py -o "$INSTALL_DIR/bottle.py"
 
-if [ -f "./main.py" ] && [ -d "./templates" ]; then
+if [ -d "./core" ] && [ -f "./main.py" ]; then
     msg "Локальная установка..."
-    cp main.py "$INSTALL_DIR/"
-    cp templates/index.html "$INSTALL_DIR/templates/"
+    cp -r core "$INSTALL_DIR/"
+    cp -r templates "$INSTALL_DIR/"
+    cp main.py rproxy.py "$INSTALL_DIR/"
 else
-    msg "Загрузка v5.0.0 из GitHub..."
-    TMP_DIR="/tmp/rproxy-web-v5"
+    msg "Загрузка v6.0.0 из GitHub..."
+    TMP_DIR="/tmp/rproxy-web-v6"
     rm -rf "$TMP_DIR"
     mkdir -p "$TMP_DIR"
-    # Примечание: в реальной ситуации здесь должна быть ссылка на конкретную ветку/релиз
     curl -sL https://github.com/l-ptrol/rProxy-web/archive/refs/heads/master.tar.gz -o "$TMP_DIR/master.tar.gz"
     tar -xzf "$TMP_DIR/master.tar.gz" -C "$TMP_DIR"
     SRC_DIR=$(find "$TMP_DIR" -maxdepth 1 -name "rProxy-web*" -type d)
-    cp "$SRC_DIR/main.py" "$INSTALL_DIR/"
-    cp "$SRC_DIR/templates/index.html" "$INSTALL_DIR/templates/"
+    cp -r "$SRC_DIR/core" "$INSTALL_DIR/"
+    cp -r "$SRC_DIR/templates" "$INSTALL_DIR/"
+    cp "$SRC_DIR/main.py" "$SRC_DIR/rproxy.py" "$INSTALL_DIR/"
     rm -rf "$TMP_DIR"
 fi
 
-msg "Настройка службы автозапуска..."
+msg "Настройка прав доступа..."
+chmod +x "$INSTALL_DIR/rproxy.py"
+ln -sf "$INSTALL_DIR/rproxy.py" "/opt/bin/rproxy"
+
+msg "Создание службы автозапуска веб-интерфейса..."
 CAT_INIT="/opt/etc/init.d/S99rproxy-web"
 cat > "$CAT_INIT" <<EOF
 #!/bin/sh
 case "\$1" in
     start)
-        echo "Starting rProxy Web v5.0..."
+        echo "Starting rProxy Web v6.0..."
         cd "$INSTALL_DIR"
         /opt/bin/python3 main.py > /opt/var/log/rproxy-web.log 2>&1 &
         ;;
@@ -73,11 +80,7 @@ case "\$1" in
         \$0 start
         ;;
     status)
-        if pgrep -f "python3 main.py" > /dev/null; then
-            echo "online"
-        else
-            echo "offline"
-        fi
+        if pgrep -f "python3 main.py" > /dev/null; then echo "online"; else echo "offline"; fi
         ;;
     *)
         echo "Usage: \$0 {start|stop|restart|status}"
@@ -87,5 +90,8 @@ esac
 EOF
 chmod +x "$CAT_INIT"
 
-msg "Установка v5.0.0 завершена!"
-msg "Запустите: ${CYAN}$CAT_INIT start${NC}"
+msg "Установка rProxy v6.0.0 завершена!"
+printf "\n"
+msg "Консоль:  ${CYAN}rproxy${NC}"
+msg "Веб-порт: ${CYAN}3000${NC}"
+warn "Не забудьте запустить веб-панель: ${CYAN}$CAT_INIT start${NC}"
