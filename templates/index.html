@@ -2,366 +2,412 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>rProxy Панель v3.1 | Премиум</title>
-    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, vertical-align=middle">
+    <title>rProxy Premium Dashboard</title>
     <style>
-        /* BASE & THEME */
         :root {
-            --bg-color: #030508;
-            --accent-main: #00f2ff;
-            --accent-success: #00ffa3;
-            --accent-danger: #ff3e6d;
-            --accent-purple: #c084fc;
-            --glass-bg: rgba(15, 23, 42, 0.4);
-            --glass-border: rgba(255, 255, 255, 0.06);
-            --text-main: #f8fafc;
-            --text-dim: #94a3b8;
-            --card-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.5);
-            --transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            --accent: #00f2ff;
+            --accent-glow: rgba(0, 242, 255, 0.5);
+            --bg: #050505;
+            --glass: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --text: #ffffff;
+            --text-dim: rgba(255, 255, 255, 0.4);
         }
 
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        
+        @keyframes mesh {
+            0% { transform: translate(0, 0); }
+            50% { transform: translate(-5%, 5%); }
+            100% { transform: translate(0, 0); }
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
         body {
-            background-color: var(--bg-color);
-            color: var(--text-main);
-            font-family: 'Inter', -apple-system, system-ui, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
             min-height: 100vh;
-            display: flex;
-            justify-content: center;
             overflow-x: hidden;
-            background-image: 
-                radial-gradient(circle at 10% 20%, rgba(0, 242, 255, 0.03) 0%, transparent 40%),
-                radial-gradient(circle at 90% 80%, rgba(192, 132, 252, 0.03) 0%, transparent 40%);
+            display: flex;
+            flex-direction: column;
         }
 
-        /* LAYOUT */
-        .app-container {
+        /* Animated Mesh Background */
+        .mesh-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
             width: 100%;
-            max-width: 1440px;
-            padding: 32px;
-            display: grid;
-            grid-template-columns: 320px 1fr;
-            gap: 32px;
-        }
-
-        @media (max-width: 1100px) {
-            .app-container { grid-template-columns: 1fr; padding: 20px; }
-        }
-
-        /* REUSABLE GLASS COMPONENT */
-        .glass {
-            background: var(--glass-bg);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid var(--glass-border);
-            border-radius: 24px;
-            box-shadow: var(--card-shadow);
-            transition: var(--transition);
-        }
-
-        /* SIDEBAR */
-        .sidebar { display: flex; flex-direction: column; gap: 24px; }
-        .branding {
-            padding: 32px;
-            text-align: left;
-            position: relative;
+            height: 100%;
+            z-index: -1;
             overflow: hidden;
-            border-bottom: 4px solid var(--accent-main);
+            background: radial-gradient(at 0% 0%, #0a1128 0%, transparent 50%),
+                        radial-gradient(at 100% 100%, #1a0a28 0%, transparent 50%);
         }
-        .branding h1 { font-size: 28px; font-weight: 900; letter-spacing: -1px; margin-bottom: 4px; }
-        .branding h1 span { color: var(--accent-main); text-shadow: 0 0 20px rgba(0, 242, 255, 0.3); }
-        .branding p { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 2.5px; color: var(--text-dim); }
 
-        .sys-info { padding: 24px; }
-        .stat-card {
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 16px; margin-bottom: 12px; border-radius: 16px;
-            background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.03);
-            transition: var(--transition);
+        .mesh-bg::after {
+            content: '';
+            position: absolute;
+            width: 150%;
+            height: 150%;
+            top: -25%;
+            left: -25%;
+            background: radial-gradient(circle at 20% 30%, rgba(0, 242, 255, 0.05) 0%, transparent 40%),
+                        radial-gradient(circle at 80% 70%, rgba(192, 132, 252, 0.05) 0%, transparent 40%);
+            filter: blur(80px);
+            animation: mesh 20s ease-in-out infinite;
         }
-        .stat-card:hover { background: rgba(255, 255, 255, 0.04); border-color: rgba(255, 255, 255, 0.08); }
-        .stat-label { display: flex; align-items: center; gap: 10px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-dim); }
-        .stat-value { font-family: monospace; font-size: 14px; color: #fff; font-weight: 900; }
 
-        /* MAIN CONTENT */
-        .main-content { display: flex; flex-direction: column; gap: 32px; }
-        .top-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px; }
-        
-        .search-field { position: relative; flex: 1; max-width: 480px; }
-        .search-field input {
-            width: 100%; padding: 18px 24px 18px 56px;
-            background: rgba(255, 255, 255, 0.03); border: 1px solid var(--glass-border);
-            border-radius: 20px; color: #fff; font-size: 14px; outline: none; transition: var(--transition);
+        .container {
+            max-width: 100%;
+            width: 100%;
+            padding: 20px;
+            margin: 0 auto;
         }
-        .search-field i { position: absolute; left: 24px; top: 18px; color: var(--text-dim); }
-        .search-field input:focus { border-color: var(--accent-main); background: rgba(255, 255, 255, 0.06); box-shadow: 0 0 30px rgba(0, 242, 255, 0.05); }
 
-        .btn-glow {
-            padding: 18px 36px; border-radius: 20px; border: none; font-weight: 800; cursor: pointer;
-            text-transform: uppercase; font-size: 13px; display: flex; align-items: center; gap: 12px;
-            background: var(--accent-main); color: #000; box-shadow: 0 8px 20px rgba(0, 242, 255, 0.3);
-            transition: var(--transition);
+        header {
+            margin-bottom: 30px;
+            padding: 10px 0;
         }
-        .btn-glow:hover { transform: translateY(-3px); box-shadow: 0 12px 28px rgba(0, 242, 255, 0.4); }
-        .btn-glow:active { transform: translateY(0); scale: 0.98; }
 
-        /* GRID SYSTEM */
-        .dashboard-grid {
+        .logo-group h1 {
+            font-size: 28px;
+            font-weight: 900;
+            letter-spacing: -1px;
+            background: linear-gradient(to right, #fff, var(--accent));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .version-badge {
+            font-size: 10px;
+            font-weight: 800;
+            padding: 2px 8px;
+            background: var(--accent);
+            color: #000;
+            border-radius: 4px;
+            margin-left: 10px;
+            vertical-align: middle;
+        }
+
+        .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-            gap: 24px;
+            grid-template-cols: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: var(--glass);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            padding: 16px;
+            border-radius: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .stat-card .label {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-card .value {
+            font-size: 24px;
+            font-weight: 800;
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 800;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .services-list {
+            display: grid;
+            grid-template-cols: 1fr;
+            gap: 16px;
         }
 
         .service-card {
-            padding: 28px;
+            background: var(--glass);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 20px;
+            transition: transform 0.3s ease, border-color 0.3s ease;
             position: relative;
             overflow: hidden;
+        }
+
+        .service-card:active {
+            transform: scale(0.98);
+        }
+
+        .service-card.online {
+            border-color: rgba(0, 242, 255, 0.2);
+            box-shadow: 0 0 20px rgba(0, 242, 255, 0.05);
+        }
+
+        .svc-header {
             display: flex;
-            flex-direction: column;
-            gap: 24px;
-        }
-        .service-card::after {
-            content: ''; position: absolute; top:0; right:0; width: 60px; height: 60px;
-            background: linear-gradient(135deg, transparent 50%, var(--accent-color) 50%);
-            opacity: 0.1;
-        }
-        
-        .svc-header { display: flex; justify-content: space-between; align-items: flex-start; }
-        .svc-visual { display: flex; align-items: center; gap: 20px; }
-        .svc-icon-box {
-            width: 64px; height: 64px; border-radius: 20px;
-            background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06);
-            display: flex; align-items: center; justify-content: center;
-            color: var(--accent-color); transition: var(--transition);
-        }
-        .service-card:hover .svc-icon-box { transform: scale(1.1) rotate(-5deg); border-color: var(--accent-color); box-shadow: 0 0 20px var(--accent-glow); }
-        
-        .svc-name-group h3 { font-size: 20px; font-weight: 800; margin-bottom: 6px; letter-spacing: -0.5px; }
-        .status-badge {
-            display: inline-flex; align-items: center; gap: 6px;
-            padding: 6px 12px; border-radius: 99px; font-size: 9px; font-weight: 900;
-            text-transform: uppercase; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05);
-        }
-        .status-badge .dot { width: 6px; height: 6px; border-radius: 50%; }
-        .status-badge.online { color: var(--accent-success); }
-        .status-badge.online .dot { background: var(--accent-success); box-shadow: 0 0 10px var(--accent-success); }
-        .status-badge.offline { color: var(--accent-danger); }
-        .status-badge.offline .dot { background: var(--accent-danger); }
-
-        .svc-meta { display: flex; flex-direction: column; gap: 8px; }
-        .meta-row {
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 14px 18px; border-radius: 16px; background: rgba(0,0,0,0.2);
-            border: 1px solid rgba(255,255,255,0.03);
-        }
-        .meta-label { font-size: 10px; font-weight: 800; text-transform: uppercase; color: var(--text-dim); display: flex; align-items: center; gap: 8px; }
-        .meta-value { font-family: monospace; font-size: 13px; font-weight: 700; color: var(--text-main); }
-
-        .svc-actions { display: flex; gap: 12px; padding-top: 8px; }
-        .btn-action {
-            flex: 1; height: 48px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.05);
-            background: rgba(255,255,255,0.02); color: var(--text-dim); cursor: pointer;
-            display: flex; align-items: center; justify-content: center; transition: var(--transition);
-        }
-        .btn-action:hover { background: rgba(255, 255, 255, 0.08); color: #fff; transform: translateY(-2px); }
-        .btn-action.primary { flex: 2; gap: 10px; font-size: 10px; font-weight: 900; text-transform: uppercase; border-color: rgba(255,255,255,0.1); }
-        .btn-action.primary.on:hover { background: var(--accent-success); color: #000; border-color: var(--accent-success); }
-        .btn-action.primary.off:hover { background: var(--accent-danger); color: #000; border-color: var(--accent-danger); }
-        .btn-action.danger:hover { color: var(--accent-danger); border-color: rgba(255, 62, 109, 0.3); }
-
-        /* FORM STYLES */
-        .svc-form { display: flex; flex-direction: column; gap: 16px; padding: 10px; }
-        .form-group { display: flex; flex-direction: column; gap: 8px; }
-        .form-group label { font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--text-dim); }
-        .form-group input, .form-group select {
-            background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border);
-            padding: 14px; border-radius: 12px; color: #fff; outline: none; transition: var(--transition);
-        }
-        .form-group input:focus { border-color: var(--accent-main); }
-
-        /* MODAL */
-        .modal {
-            display: none; position: fixed; inset: 0; z-index: 1000;
-            background: rgba(0,0,0,0.85); backdrop-filter: blur(12px);
-            align-items: center; justify-content: center; padding: 20px;
-        }
-        .modal-container {
-            width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto;
-            border-color: rgba(255,255,255,0.1);
-        }
-        .modal-header {
-            padding: 24px; border-bottom: 1px solid rgba(255,255,255,0.05);
-            display: flex; justify-content: space-between; align-items: center;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
         }
 
-        /* UTILITIES */
-        .pulse { animation: pulseAnim 2s infinite; }
-        @keyframes pulseAnim { 0% { opacity: 0.6; } 50% { opacity: 0.3; } 100% { opacity: 0.6; } }
-        .loading-state { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; padding: 100px 0; color: var(--text-dim); gap: 20px; }
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+        .svc-info h3 {
+            font-size: 18px;
+            font-weight: 800;
+            margin-bottom: 4px;
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 10px;
+            border-radius: 100px;
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .status-pill.online {
+            color: #00f2ff;
+            background: rgba(0, 242, 255, 0.1);
+        }
+
+        .svc-details {
+            display: grid;
+            grid-template-cols: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .detail-item .d-label {
+            font-size: 10px;
+            color: var(--text-dim);
+            margin-bottom: 4px;
+        }
+
+        .detail-item .d-value {
+            font-size: 13px;
+            font-weight: 600;
+            font-family: 'Monaco', monospace;
+        }
+
+        .svc-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 12px;
+            border-radius: 14px;
+            border: none;
+            font-weight: 700;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-main {
+            background: var(--accent);
+            color: #000;
+        }
+
+        .btn-stop {
+            background: rgba(255, 69, 58, 0.1);
+            color: #ff453a;
+            border: 1px solid rgba(255, 69, 58, 0.2);
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--glass-border);
+            color: var(--text);
+        }
+
+        /* Floating Add Button */
+        .fab {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            background: var(--accent);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 30px var(--accent-glow);
+            z-index: 100;
+            border: none;
+        }
+
+        /* Loading Animation */
+        .loader {
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.1);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Responsive Mobile */
+        @media (max-width: 480px) {
+            .logo-group h1 { font-size: 24px; }
+            .container { padding: 15px; }
+        }
     </style>
 </head>
-<body class="custom-scrollbar">
-    <div class="app-container">
-        
-        <!-- SIDEBAR -->
-        <aside class="sidebar">
-            <div class="glass branding">
-                <p>УПРАВЛЕНИЕ ТУННЕЛЯМИ</p>
-                <h1>rProxy <span>v3.1</span></h1>
-                <div style="position: absolute; bottom: -20px; right: -20px; opacity: 0.05; transform: rotate(-15deg);"><i data-lucide="zap" style="width: 120px; height: 120px;"></i></div>
+<body>
+    <div class="mesh-bg"></div>
+    
+    <div class="container">
+        <header>
+            <div class="logo-group">
+                <h1>rProxy Dashboard<span class="version-badge" id="app-version">v5.0</span></h1>
             </div>
+        </header>
 
-            <div class="glass sys-info">
-                <div id="system-stats" hx-get="/api/system" hx-trigger="load, every 10s">
-                    <div style="height: 50px; border-radius: 16px; margin-bottom: 12px; background: rgba(255,255,255,0.02);"></div>
-                    <div style="height: 50px; border-radius: 16px; margin-bottom: 12px; background: rgba(255,255,255,0.02);"></div>
-                </div>
-                
-                <div style="margin-top: 32px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                    <button class="btn-action" title="Управление SSL">
-                        <i data-lucide="shield" style="width:18px"></i>
-                    </button>
-                    <button class="btn-action" title="Настройки системы">
-                        <i data-lucide="settings" style="width:18px"></i>
-                    </button>
-                </div>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <span class="label">Туннели</span>
+                <span class="value" id="stat-services">-</span>
             </div>
-
-            <div class="glass" style="padding: 24px; background: linear-gradient(to bottom right, rgba(0, 242, 255, 0.05), transparent);">
-                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
-                    <div style="width: 32px; height: 32px; border-radius: 8px; background: rgba(0, 242, 255, 0.1); display: flex; align-items: center; justify-content: center; color: var(--accent-main);"><i data-lucide="info" style="width: 16px;"></i></div>
-                    <span style="font-size: 11px; font-weight: 800; text-transform: uppercase;">Система</span>
-                </div>
-                <p style="font-size: 12px; line-height: 1.6; color: var(--text-dim);">Все узлы работают штатно. SSH-соединения стабильны.</p>
+            <div class="stat-card">
+                <span class="label">Онлайн</span>
+                <span class="value" id="stat-online" style="color: var(--accent)">-</span>
             </div>
-        </aside>
+        </div>
 
-        <!-- MAIN -->
-        <main class="main-content">
-            <header class="top-bar">
-                <div class="search-field">
-                    <i data-lucide="search"></i>
-                    <input type="text" placeholder="Поиск туннелей по имени или порту...">
-                </div>
-                
-                <button class="btn-glow" hx-get="/api/services/new" hx-target="#modal-body" onclick="openModal('Новый сервис')">
-                    <i data-lucide="plus-circle"></i>
-                    <span>Добавить сервис</span>
-                </button>
-            </header>
+        <div class="section-title">
+            <span>Ваши сервисы</span>
+            <button onclick="refreshData()" class="btn-outline" style="padding: 4px 8px; border-radius: 8px; font-size: 10px;">Обновить</button>
+        </div>
 
-            <div id="services-grid" class="dashboard-grid" hx-get="/api/services" hx-trigger="load, every 5s">
-                <div class="loading-state">
-                    <i data-lucide="loader-2" class="pulse" style="width: 48px; height: 48px; color: var(--accent-main)"></i>
-                    <p style="font-weight: 600; letter-spacing: 1px; text-transform: uppercase; font-size: 11px;">Синхронизация данных...</p>
-                </div>
-            </div>
-        </main>
-    </div>
-
-    <!-- MAIN MODAL -->
-    <div id="main-modal" class="modal">
-        <div class="glass modal-container">
-            <div class="modal-header">
-                <div style="display: flex; align-items: center; gap: 16px;">
-                    <i data-lucide="terminal" id="modal-icon" style="color: var(--accent-main);"></i>
-                    <h2 style="font-size: 18px; font-weight: 800;" id="modal-title">Заголовок</h2>
-                </div>
-                <button onclick="closeModal()" class="btn-action" style="width: 40px; height: 40px; border-radius: 12px;"><i data-lucide="x"></i></button>
-            </div>
-            <div id="modal-body" style="padding: 24px;">
-                <!-- Контент загрузится сюда -->
+        <div class="services-list" id="services-container">
+            <!-- Скелет загрузки -->
+            <div style="padding: 40px; text-align: center; color: var(--text-dim)">
+                <div class="loader" style="margin: 0 auto 10px;"></div>
+                Загрузка данных...
             </div>
         </div>
     </div>
 
-    <!-- LOG MODAL -->
-    <div id="log-modal" class="modal">
-        <div class="glass modal-container" style="max-width: 1000px; height: 700px; display: flex; flex-direction: column;">
-            <div class="modal-header">
-                <div style="display: flex; align-items: center; gap: 16px;">
-                    <i data-lucide="file-text" style="color: var(--accent-main);"></i>
-                    <h2 style="font-size: 18px; font-weight: 800;" id="log-title">Логи сервиса</h2>
-                </div>
-                <button onclick="closeLogModal()" class="btn-action" style="width: 40px; height: 40px; border-radius: 12px;"><i data-lucide="x"></i></button>
-            </div>
-            <div id="log-content" style="flex: 1; padding: 24px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #a4b1cd; overflow-y: auto; background: #010204;">
-                <p>> Ожидание данных...</p>
-            </div>
-        </div>
-    </div>
+    <button class="fab" onclick="alert('Добавление скоро появится в v5.1')">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+    </button>
 
     <script>
-        let logInterval = null;
+        async function fetchData() {
+            try {
+                const statsRes = await fetch('/api/stats');
+                const stats = await statsRes.json();
+                document.getElementById('stat-services').innerText = stats.services;
+                document.getElementById('stat-online').innerText = stats.online;
+                document.getElementById('app-version').innerText = 'v' + stats.version;
 
-        document.body.addEventListener('htmx:afterOnLoad', function(evt) {
-            lucide.createIcons();
-            if (evt.detail.target.id === 'modal-body') {
-                // После загрузки формы в модалку
-            }
-        });
-
-        function openModal(title, icon = 'settings') {
-            document.getElementById('modal-title').innerText = title;
-            document.getElementById('main-modal').style.display = 'flex';
-        }
-
-        function closeModal() {
-            document.getElementById('main-modal').style.display = 'none';
-            document.getElementById('modal-body').innerHTML = '';
-        }
-
-        function editService(name) {
-            openModal(`Правка: ${name}`, 'edit-3');
-            htmx.ajax('GET', `/api/services/${name}/edit`, '#modal-body');
-        }
-
-        function showLogs(name) {
-            const modal = document.getElementById('log-modal');
-            const title = document.getElementById('log-title');
-            const content = document.getElementById('log-content');
-            
-            title.innerText = `Терминал: ${name}`;
-            modal.style.display = 'flex';
-            content.innerHTML = '<p class="pulse">> Подключение к потоку...</p>';
-            
-            if (logInterval) clearInterval(logInterval);
-            
-            const fetchLogs = async () => {
-                try {
-                    const response = await fetch(`/api/logs/${name}`);
-                    const text = await response.text();
-                    content.innerHTML = text;
-                    content.scrollTop = content.scrollHeight;
-                } catch (e) {
-                    content.innerHTML = '<p style="color: var(--accent-danger)">! Ошибка соединения</p>';
-                }
-            };
-            
-            fetchLogs();
-            logInterval = setInterval(fetchLogs, 3000);
-        }
-
-        function closeLogModal() {
-            document.getElementById('log-modal').style.display = 'none';
-            if (logInterval) clearInterval(logInterval);
-        }
-
-        // Закрытие при клике по фону
-        window.onclick = function(event) {
-            if (event.target.classList.contains('modal')) {
-                closeModal();
-                closeLogModal();
+                const svcRes = await fetch('/api/services');
+                const data = await svcRes.json();
+                renderServices(data.services);
+            } catch (err) {
+                console.error(err);
+                document.getElementById('services-container').innerHTML = '<div style="color: #ff453a; padding: 20px; text-align: center;">Ошибка связи с роутером</div>';
             }
         }
 
-        lucide.createIcons();
+        function renderServices(services) {
+            const container = document.getElementById('services-container');
+            if (services.length === 0) {
+                container.innerHTML = '<div style="padding: 40px; text-align: center; color: var(--text-dim)">Нет активных сервисов</div>';
+                return;
+            }
+
+            container.innerHTML = services.map(s => `
+                <div class="service-card ${s.status === 'online' ? 'online' : ''}">
+                    <div class="svc-header">
+                        <div class="svc-info">
+                            <div class="status-pill ${s.status === 'online' ? 'online' : ''}">${s.status === 'online' ? '● В сети' : '○ Оффлайн'}</div>
+                            <h3>${s.name}</h3>
+                        </div>
+                    </div>
+                    <div class="svc-details">
+                        <div class="detail-item">
+                            <div class="d-label">Локальный порт</div>
+                            <div class="d-value">${s.target.split(':')[1]}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="d-label">Внешний порт</div>
+                            <div class="d-value" style="color: var(--accent)">${s.ext_port}</div>
+                        </div>
+                    </div>
+                    <div class="svc-actions">
+                        ${s.status === 'online' 
+                            ? `<button class="btn btn-stop" onclick="action('${s.id}', 'stop')">Стоп</button>`
+                            : `<button class="btn btn-main" onclick="action('${s.id}', 'start')">Запуск</button>`
+                        }
+                        <button class="btn btn-outline" onclick="action('${s.id}', 'restart')">🔄</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function action(name, act) {
+            const btn = event.target;
+            const originalText = btn.innerText;
+            btn.innerText = '...';
+            btn.disabled = true;
+            
+            try {
+                await fetch(\`/api/action/\${name}/\${act}\`, { method: 'POST' });
+                setTimeout(fetchData, 2000); // Даем время скрипту отработать
+            } catch (err) {
+                alert('Ошибка выполнения команды');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = originalText;
+            }
+        }
+
+        function refreshData() {
+            fetchData();
+        }
+
+        fetchData();
+        setInterval(fetchData, 10000); // Обновление раз в 10 сек
     </script>
 </body>
 </html>
