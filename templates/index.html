@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>rProxy Dashboard v3.0 | Premium Edition</title>
+    <title>rProxy Панель v3.1 | Премиум</title>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
@@ -172,13 +172,38 @@
         .btn-action.primary.off:hover { background: var(--accent-danger); color: #000; border-color: var(--accent-danger); }
         .btn-action.danger:hover { color: var(--accent-danger); border-color: rgba(255, 62, 109, 0.3); }
 
+        /* FORM STYLES */
+        .svc-form { display: flex; flex-direction: column; gap: 16px; padding: 10px; }
+        .form-group { display: flex; flex-direction: column; gap: 8px; }
+        .form-group label { font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--text-dim); }
+        .form-group input, .form-group select {
+            background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border);
+            padding: 14px; border-radius: 12px; color: #fff; outline: none; transition: var(--transition);
+        }
+        .form-group input:focus { border-color: var(--accent-main); }
+
+        /* MODAL */
+        .modal {
+            display: none; position: fixed; inset: 0; z-index: 1000;
+            background: rgba(0,0,0,0.85); backdrop-filter: blur(12px);
+            align-items: center; justify-content: center; padding: 20px;
+        }
+        .modal-container {
+            width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto;
+            border-color: rgba(255,255,255,0.1);
+        }
+        .modal-header {
+            padding: 24px; border-bottom: 1px solid rgba(255,255,255,0.05);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+
         /* UTILITIES */
         .pulse { animation: pulseAnim 2s infinite; }
         @keyframes pulseAnim { 0% { opacity: 0.6; } 50% { opacity: 0.3; } 100% { opacity: 0.6; } }
-
         .loading-state { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; padding: 100px 0; color: var(--text-dim); gap: 20px; }
-        .shimmer { background: linear-gradient(90deg, transparent, rgba(255,255,255,0.03), transparent); background-size: 200% 100%; animation: shimmer 2s infinite; }
-        @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
     </style>
 </head>
 <body class="custom-scrollbar">
@@ -187,24 +212,22 @@
         <!-- SIDEBAR -->
         <aside class="sidebar">
             <div class="glass branding">
-                <p>Advanced Control</p>
-                <h1>rProxy <span>v3.0</span></h1>
+                <p>УПРАВЛЕНИЕ ТУННЕЛЯМИ</p>
+                <h1>rProxy <span>v3.1</span></h1>
                 <div style="position: absolute; bottom: -20px; right: -20px; opacity: 0.05; transform: rotate(-15deg);"><i data-lucide="zap" style="width: 120px; height: 120px;"></i></div>
             </div>
 
             <div class="glass sys-info">
                 <div id="system-stats" hx-get="/api/system" hx-trigger="load, every 10s">
-                    <!-- Stat Loading State -->
-                    <div class="shimmer" style="height: 50px; border-radius: 16px; margin-bottom: 12px;"></div>
-                    <div class="shimmer" style="height: 50px; border-radius: 16px; margin-bottom: 12px;"></div>
-                    <div class="shimmer" style="height: 50px; border-radius: 16px;"></div>
+                    <div style="height: 50px; border-radius: 16px; margin-bottom: 12px; background: rgba(255,255,255,0.02);"></div>
+                    <div style="height: 50px; border-radius: 16px; margin-bottom: 12px; background: rgba(255,255,255,0.02);"></div>
                 </div>
                 
                 <div style="margin-top: 32px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                    <button class="btn-action" title="SSL Certificates Management">
+                    <button class="btn-action" title="Управление SSL">
                         <i data-lucide="shield" style="width:18px"></i>
                     </button>
-                    <button class="btn-action" title="System Settings">
+                    <button class="btn-action" title="Настройки системы">
                         <i data-lucide="settings" style="width:18px"></i>
                     </button>
                 </div>
@@ -213,9 +236,9 @@
             <div class="glass" style="padding: 24px; background: linear-gradient(to bottom right, rgba(0, 242, 255, 0.05), transparent);">
                 <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
                     <div style="width: 32px; height: 32px; border-radius: 8px; background: rgba(0, 242, 255, 0.1); display: flex; align-items: center; justify-content: center; color: var(--accent-main);"><i data-lucide="info" style="width: 16px;"></i></div>
-                    <span style="font-size: 11px; font-weight: 800; text-transform: uppercase;">Status Check</span>
+                    <span style="font-size: 11px; font-weight: 800; text-transform: uppercase;">Система</span>
                 </div>
-                <p style="font-size: 12px; line-height: 1.6; color: var(--text-dim);">Все системы работают штатно. SSH-туннели удерживаются в активном состоянии.</p>
+                <p style="font-size: 12px; line-height: 1.6; color: var(--text-dim);">Все узлы работают штатно. SSH-соединения стабильны.</p>
             </div>
         </aside>
 
@@ -224,38 +247,52 @@
             <header class="top-bar">
                 <div class="search-field">
                     <i data-lucide="search"></i>
-                    <input type="text" placeholder="Поиск по названию или домену...">
+                    <input type="text" placeholder="Поиск туннелей по имени или порту...">
                 </div>
                 
-                <button class="btn-glow">
+                <button class="btn-glow" hx-get="/api/services/new" hx-target="#modal-body" onclick="openModal('Новый сервис')">
                     <i data-lucide="plus-circle"></i>
                     <span>Добавить сервис</span>
                 </button>
             </header>
 
             <div id="services-grid" class="dashboard-grid" hx-get="/api/services" hx-trigger="load, every 5s">
-                <!-- Grid Loading State -->
                 <div class="loading-state">
                     <i data-lucide="loader-2" class="pulse" style="width: 48px; height: 48px; color: var(--accent-main)"></i>
-                    <p style="font-weight: 600; letter-spacing: 1px; text-transform: uppercase; font-size: 11px;">Синхронизация конфигураций...</p>
+                    <p style="font-weight: 600; letter-spacing: 1px; text-transform: uppercase; font-size: 11px;">Синхронизация данных...</p>
                 </div>
             </div>
         </main>
     </div>
 
-    <!-- LOG VIEWER MODAL (Hidden by default) -->
-    <div id="log-modal" style="display: none; position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,0.8); backdrop-filter: blur(8px); display: none; align-items: center; justify-content: center; padding: 40px;">
-        <div class="glass" style="width: 100%; max-width: 1000px; height: 100%; max-height: 700px; display: flex; flex-direction: column; overflow: hidden; border-color: rgba(255,255,255,0.1);">
-            <div style="padding: 24px; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center;">
+    <!-- MAIN MODAL -->
+    <div id="main-modal" class="modal">
+        <div class="glass modal-container">
+            <div class="modal-header">
+                <div style="display: flex; align-items: center; gap: 16px;">
+                    <i data-lucide="terminal" id="modal-icon" style="color: var(--accent-main);"></i>
+                    <h2 style="font-size: 18px; font-weight: 800;" id="modal-title">Заголовок</h2>
+                </div>
+                <button onclick="closeModal()" class="btn-action" style="width: 40px; height: 40px; border-radius: 12px;"><i data-lucide="x"></i></button>
+            </div>
+            <div id="modal-body" style="padding: 24px;">
+                <!-- Контент загрузится сюда -->
+            </div>
+        </div>
+    </div>
+
+    <!-- LOG MODAL -->
+    <div id="log-modal" class="modal">
+        <div class="glass modal-container" style="max-width: 1000px; height: 700px; display: flex; flex-direction: column;">
+            <div class="modal-header">
                 <div style="display: flex; align-items: center; gap: 16px;">
                     <i data-lucide="file-text" style="color: var(--accent-main);"></i>
-                    <h2 style="font-size: 18px; font-weight: 800;" id="log-title">Service Logs</h2>
+                    <h2 style="font-size: 18px; font-weight: 800;" id="log-title">Логи сервиса</h2>
                 </div>
-                <button onclick="document.getElementById('log-modal').style.display='none'" class="btn-action" style="width: 40px; height: 40px; border-radius: 12px;"><i data-lucide="x"></i></button>
+                <button onclick="closeLogModal()" class="btn-action" style="width: 40px; height: 40px; border-radius: 12px;"><i data-lucide="x"></i></button>
             </div>
             <div id="log-content" style="flex: 1; padding: 24px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #a4b1cd; overflow-y: auto; background: #010204;">
-                <!-- Logs will stream here -->
-                <p>> Waiting for data...</p>
+                <p>> Ожидание данных...</p>
             </div>
         </div>
     </div>
@@ -265,17 +302,34 @@
 
         document.body.addEventListener('htmx:afterOnLoad', function(evt) {
             lucide.createIcons();
-            // Если обновился список сервисов, и модалка открыта - ничего не делаем
+            if (evt.detail.target.id === 'modal-body') {
+                // После загрузки формы в модалку
+            }
         });
-        
+
+        function openModal(title, icon = 'settings') {
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('main-modal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('main-modal').style.display = 'none';
+            document.getElementById('modal-body').innerHTML = '';
+        }
+
+        function editService(name) {
+            openModal(`Правка: ${name}`, 'edit-3');
+            htmx.ajax('GET', `/api/services/${name}/edit`, '#modal-body');
+        }
+
         function showLogs(name) {
             const modal = document.getElementById('log-modal');
             const title = document.getElementById('log-title');
             const content = document.getElementById('log-content');
             
-            title.innerText = `Terminal Logs: ${name}`;
+            title.innerText = `Терминал: ${name}`;
             modal.style.display = 'flex';
-            content.innerHTML = '<p class="pulse">> Connecting to tunnel stream...</p>';
+            content.innerHTML = '<p class="pulse">> Подключение к потоку...</p>';
             
             if (logInterval) clearInterval(logInterval);
             
@@ -286,22 +340,27 @@
                     content.innerHTML = text;
                     content.scrollTop = content.scrollHeight;
                 } catch (e) {
-                    content.innerHTML = '<p style="color: var(--accent-danger)">! Connection Error</p>';
+                    content.innerHTML = '<p style="color: var(--accent-danger)">! Ошибка соединения</p>';
                 }
             };
             
             fetchLogs();
             logInterval = setInterval(fetchLogs, 3000);
-            
-            // Закрытие при клике по фону
-            modal.onclick = (e) => {
-                if (e.target === modal) {
-                    modal.style.display = 'none';
-                    if (logInterval) clearInterval(logInterval);
-                }
-            };
         }
-        
+
+        function closeLogModal() {
+            document.getElementById('log-modal').style.display = 'none';
+            if (logInterval) clearInterval(logInterval);
+        }
+
+        // Закрытие при клике по фону
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                closeModal();
+                closeLogModal();
+            }
+        }
+
         lucide.createIcons();
     </script>
 </body>

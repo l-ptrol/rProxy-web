@@ -2,6 +2,7 @@ import os
 import sys
 import subprocess
 import time
+from bottle import route, run, template, request, response, static_file, post, HTTPResponse
 
 # Принудительно добавляем путь к текущей директории для импорта бутылки
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -10,8 +11,6 @@ sys.path.insert(0, current_dir)
 try:
     from bottle import route, run, template, request, response, static_file, post, HTTPResponse
 except ImportError:
-    # Если импорт не удался, пробуем вручную найти bottle.py
-    sys.stderr.write("Bottle not found, trying to load from local file...\n")
     import bottle
     from bottle import route, run, template, request, response, static_file, post, HTTPResponse
 
@@ -23,10 +22,6 @@ GLOBAL_CONF = os.path.join(RPROXY_ROOT, "rproxy.conf")
 PID_DIR = "/opt/var/run/rproxy"
 TEMPLATES_DIR = os.path.join(current_dir, "templates")
 
-print(f"--- rProxy Web v3.0.1 Starting ---")
-print(f"Work dir: {current_dir}")
-print(f"Templates dir: {TEMPLATES_DIR}")
-
 def parse_config(file_path: str) -> dict:
     if not os.path.exists(file_path): return {}
     config = {}
@@ -37,9 +32,16 @@ def parse_config(file_path: str) -> dict:
                 if line and not line.startswith("#") and "=" in line:
                     parts = line.split("=", 1)
                     config[parts[0].strip()] = parts[1].strip().strip("'").strip('"')
-    except Exception as e:
-        print(f"Config parse error: {e}")
+    except: pass
     return config
+
+def write_config(name: str, data: dict):
+    os.makedirs(SERVICES_DIR, exist_ok=True)
+    file_path = os.path.join(SERVICES_DIR, f"{name}.conf")
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(f"# rProxy Service Config: {name}\n")
+        for k, v in data.items():
+            f.write(f"{k}='{v}'\n")
 
 def get_service_status(service_name: str) -> str:
     pid_file = os.path.join(PID_DIR, f"{service_name}.pid")
@@ -64,15 +66,15 @@ def get_system():
     
     return f"""
     <div class="stat-card">
-        <div class="stat-label"><i data-lucide="cpu"></i> Version</div>
-        <div class="stat-value" style="color: var(--accent-main)">{config.get("VERSION", "3.0.1")}</div>
+        <div class="stat-label"><i data-lucide="cpu"></i> Версия</div>
+        <div class="stat-value" style="color: var(--accent-main)">{config.get("VERSION", "3.1.0")}</div>
     </div>
     <div class="stat-card">
-        <div class="stat-label"><i data-lucide="hard-drive"></i> Global VPS</div>
+        <div class="stat-label"><i data-lucide="hard-drive"></i> Активных VPS</div>
         <div class="stat-value">{vps_count}</div>
     </div>
     <div class="stat-card">
-        <div class="stat-label"><i data-lucide="activity"></i> Active Tunnels</div>
+        <div class="stat-label"><i data-lucide="activity"></i> Туннелей онлайн</div>
         <div class="stat-value" style="color: var(--accent-success)">{online_count}</div>
     </div>
     """
@@ -80,13 +82,12 @@ def get_system():
 @route('/api/services')
 def get_services():
     if not os.path.exists(SERVICES_DIR):
-        return '<div class="loading-state"><p>Конфигурации rProxy не найдены</p></div>'
+        return '<div class="loading-state"><p>Конфигурации не найдены</p></div>'
     
     html = ""
     try:
         files = sorted([f for f in os.listdir(SERVICES_DIR) if f.endswith(".conf")])
-    except Exception as e:
-        return f'<div class="loading-state"><p>Ошибка FS: {e}</p></div>'
+    except: return '<div class="loading-state"><p>Ошибка доступа к FS</p></div>'
 
     if not files:
         return '<div class="loading-state"><p>Список сервисов пуст</p></div>'
@@ -111,7 +112,7 @@ def get_services():
                         <h3>{name}</h3>
                         <div class="status-badge {'online' if is_online else 'offline'}">
                             <span class="dot"></span>
-                            <span>{'On-Air' if is_online else 'Standby'}</span>
+                            <span>{'В СЕТИ' if is_online else 'ОЖИДАНИЕ'}</span>
                         </div>
                     </div>
                 </div>
@@ -119,11 +120,11 @@ def get_services():
 
             <div class="svc-meta">
                 <div class="meta-row">
-                    <div class="meta-label"><i data-lucide="server" style="width:12px"></i> Target</div>
+                    <div class="meta-label"><i data-lucide="server" style="width:12px"></i> Локальный адрес</div>
                     <div class="meta-value">{cfg.get('SVC_TARGET_HOST', '127.0.0.1')}:{cfg.get('SVC_TARGET_PORT', '')}</div>
                 </div>
                 <div class="meta-row">
-                    <div class="meta-label"><i data-lucide="external-link" style="width:12px"></i> Public Port</div>
+                    <div class="meta-label"><i data-lucide="external-link" style="width:12px"></i> Внешний порт</div>
                     <div class="meta-value" style="color: var(--accent-main); font-weight: 900;">{cfg.get('SVC_EXT_PORT', '')}</div>
                 </div>
             </div>
@@ -132,12 +133,15 @@ def get_services():
                 <button hx-post="/api/services/{name}/{'stop' if is_online else 'start'}" hx-swap="none"
                     class="btn-action primary {'off' if is_online else 'on'}">
                     <i data-lucide="power" style="width:16px"></i>
-                    <span>{'Stop Session' if is_online else 'Start Tunnel'}</span>
+                    <span>{'Стоп' if is_online else 'Старт'}</span>
                 </button>
-                <button onclick="showLogs('{name}')" class="btn-action" title="View Logs">
+                <button onclick="editService('{name}')" class="btn-action" title="Редактировать">
+                    <i data-lucide="edit-3" style="width:18px"></i>
+                </button>
+                <button onclick="showLogs('{name}')" class="btn-action" title="Логи">
                     <i data-lucide="file-text" style="width:18px"></i>
                 </button>
-                <button class="btn-action danger" hx-post="/api/services/{name}/remove" hx-confirm="Вы уверены, что хотите удалить {name}?" hx-swap="none">
+                <button class="btn-action danger" hx-post="/api/services/{name}/remove" hx-confirm="Удалить сервис {name}?" hx-swap="none">
                     <i data-lucide="trash-2" style="width:18px"></i>
                 </button>
             </div>
@@ -145,14 +149,122 @@ def get_services():
         """
     return html
 
+@route('/api/services/new')
+def service_form_new():
+    return f"""
+    <form hx-post="/api/services/save" hx-target="#modal-body" class="svc-form">
+        <div class="form-group">
+            <label>Имя сервиса (англ.)</label>
+            <input type="text" name="name" placeholder="my-app" required>
+        </div>
+        <div class="form-group">
+            <label>Тип сервиса</label>
+            <select name="type">
+                <option value="http">HTTP Proxy (Веб-сайт)</option>
+                <option value="tcp">TCP Tunnel (SSH/Game/Database)</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Локальный IP</label>
+            <input type="text" name="target_host" value="127.0.0.1" required>
+        </div>
+        <div class="form-group">
+            <label>Локальный порт</label>
+            <input type="number" name="target_port" placeholder="8080" required>
+        </div>
+        <div class="form-group">
+            <label>Внешний домен (для HTTP)</label>
+            <input type="text" name="domain" placeholder="app.example.com">
+        </div>
+        <div class="form-group">
+            <label>Внешний порт (для TCP/Custom)</label>
+            <input type="number" name="ext_port" placeholder="26001">
+        </div>
+        <div style="display: flex; gap: 12px; margin-top: 20px;">
+            <button type="submit" class="btn-glow" style="flex: 1; padding: 12px;">Создать туннель</button>
+            <button type="button" onclick="closeModal()" class="btn-action" style="flex: 1;">Отмена</button>
+        </div>
+    </form>
+    """
+
+@route('/api/services/<name>/edit')
+def service_form_edit(name):
+    cfg = parse_config(os.path.join(SERVICES_DIR, f"{name}.conf"))
+    return f"""
+    <form hx-post="/api/services/{name}/update" hx-target="#modal-body" class="svc-form">
+        <div class="form-group">
+            <label>Тип сервиса</label>
+            <select name="type">
+                <option value="http" {'selected' if cfg.get('SVC_TYPE') == 'http' else ''}>HTTP Proxy</option>
+                <option value="tcp" {'selected' if cfg.get('SVC_TYPE') == 'tcp' else ''}>TCP Tunnel</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Локальный IP</label>
+            <input type="text" name="target_host" value="{cfg.get('SVC_TARGET_HOST', '127.0.0.1')}" required>
+        </div>
+        <div class="form-group">
+            <label>Локальный порт</label>
+            <input type="number" name="target_port" value="{cfg.get('SVC_TARGET_PORT', '')}" required>
+        </div>
+        <div class="form-group">
+            <label>Внешний домен</label>
+            <input type="text" name="domain" value="{cfg.get('SVC_DOMAIN', '')}">
+        </div>
+        <div class="form-group">
+            <label>Внешний порт</label>
+            <input type="number" name="ext_port" value="{cfg.get('SVC_EXT_PORT', '')}">
+        </div>
+        <div style="display: flex; gap: 12px; margin-top: 20px;">
+            <button type="submit" class="btn-glow" style="flex: 1; padding: 12px;">Сохранить изменения</button>
+            <button type="button" onclick="closeModal()" class="btn-action" style="flex: 1;">Отмена</button>
+        </div>
+    </form>
+    """
+
+@post('/api/services/save')
+def service_save():
+    name = request.forms.get('name').strip().lower()
+    if not name or not name.isalnum(): return "Ошибка: Неверное имя"
+    
+    data = {
+        "SVC_TYPE": request.forms.get('type'),
+        "SVC_TARGET_HOST": request.forms.get('target_host'),
+        "SVC_TARGET_PORT": request.forms.get('target_port'),
+        "SVC_DOMAIN": request.forms.get('domain', ''),
+        "SVC_EXT_PORT": request.forms.get('ext_port', ''),
+        "SVC_NAME": name
+    }
+    write_config(name, data)
+    return """<div style="text-align: center; color: var(--accent-success); padding: 40px;">
+        <i data-lucide="check-circle" style="width: 64px; height: 64px; margin-bottom: 20px;"></i>
+        <h3>Сервис успешно создан!</h3>
+        <script>setTimeout(closeModal, 1500);</script>
+    </div>"""
+
+@post('/api/services/<name>/update')
+def service_update(name):
+    data = {
+        "SVC_TYPE": request.forms.get('type'),
+        "SVC_TARGET_HOST": request.forms.get('target_host'),
+        "SVC_TARGET_PORT": request.forms.get('target_port'),
+        "SVC_DOMAIN": request.forms.get('domain', ''),
+        "SVC_EXT_PORT": request.forms.get('ext_port', ''),
+        "SVC_NAME": name
+    }
+    write_config(name, data)
+    return """<div style="text-align: center; color: var(--accent-success); padding: 40px;">
+        <i data-lucide="refresh-ccw" style="width: 64px; height: 64px; margin-bottom: 20px;"></i>
+        <h3>Настройки обновлены!</h3>
+        <script>setTimeout(closeModal, 1500);</script>
+    </div>"""
+
 @post('/api/services/<service_id>/<action>')
 def service_action(service_id, action):
     try:
         subprocess.run(["/opt/bin/rproxy", action, service_id], capture_output=True)
         return {"status": "success"}
-    except Exception as e:
-        print(f"Action error: {e}")
-        return HTTPResponse(status=500)
+    except: return HTTPResponse(status=500)
 
 @route('/api/logs/<service_id>')
 def get_logs(service_id):
@@ -163,10 +275,8 @@ def get_logs(service_id):
                 lines = f.readlines()
                 content = lines[-50:]
                 return "<br>".join([l.strip() for l in content]) if content else "Лог пуст..."
-        except Exception as e:
-            return f"Ошибка чтения лога: {e}"
+        except: return "Ошибка чтения лога."
     return "Лог-файл не найден. Запустите сервис с ttyd."
 
 if __name__ == "__main__":
-    print("Serving on http://0.0.0.0:3000")
-    run(host='0.0.0.0', port=3000, quiet=False)
+    run(host='0.0.0.0', port=3000, quiet=True)
