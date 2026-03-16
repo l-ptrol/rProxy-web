@@ -31,16 +31,31 @@ msg "Проверка и установка зависимостей (node, npm)
 opkg update
 opkg install node node-npm curl
 
-# 3. Скачивание проекта
+# 3. Установка файлов проекта
 INSTALL_DIR="/opt/share/rproxy-web"
 msg "Установка в $INSTALL_DIR..."
 mkdir -p "$INSTALL_DIR"
 
-# В реальном сценарии здесь будет скачивание архива или git clone
-# Для демонстрации создаем структуру
-cd "$INSTALL_DIR"
+# Копируем фронтенд (сборку) и бэкенд
+if [ -d "./frontend/dist" ] && [ -d "./backend" ]; then
+    msg "Копирование файлов из текущей директории..."
+    cp -r ./backend "$INSTALL_DIR/"
+    cp -r ./frontend/dist "$INSTALL_DIR/frontend_dist"
+    # Обновляем путь к фронтенду в server.js для работы на роутере
+    sed -i "s|../frontend/dist|../frontend_dist|g" "$INSTALL_DIR/backend/server.js"
+else
+    warn "Локальные файлы не найдены. Попытка загрузки из GitHub..."
+    # Здесь можно добавить git clone или curl архива
+    # Для текущего контекста считаем, что пользователь запускает из папки проекта
+    err "Пожалуйста, запустите скрипт из корня репозитория rProxy-web."
+fi
 
-# 4. Настройка автозапуска (S-скрипт)
+# 4. Установка npm-зависимостей
+msg "Установка npm-зависимостей сервера (может занять время)..."
+cd "$INSTALL_DIR/backend"
+npm install --production
+
+# 5. Настройка автозапуска (S-скрипт)
 msg "Настройка автозапуска..."
 CAT_INIT="/opt/etc/init.d/S99rproxy-web"
 cat > "$CAT_INIT" <<EOF
@@ -50,6 +65,7 @@ case "\$1" in
     start)
         echo "Starting rProxy Web..."
         cd $INSTALL_DIR/backend
+        # Запуск с указанием порта и путей через переменные окружения если нужно
         node server.js > /opt/var/log/rproxy-web.log 2>&1 &
         ;;
     stop)
@@ -70,6 +86,8 @@ EOF
 
 chmod +x "$CAT_INIT"
 
-msg "Установка завершена!"
-msg "Веб-интерфейс будет доступен по адресу роутера на порту 3000 (по умолчанию)."
-warn "Не забудьте настроить rproxy.conf перед использованием."
+msg "Установка успешно завершена!"
+msg "1. Бэкенд и зависимости установлены."
+msg "2. Автозапуск настроен: /opt/etc/init.d/S99rproxy-web"
+msg "3. Веб-интерфейс готов к работе на порту 3000."
+warn "Для запуска выполните: /opt/etc/init.d/S99rproxy-web start"
