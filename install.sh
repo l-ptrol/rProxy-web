@@ -11,6 +11,7 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 msg() { printf "${GREEN}▸${NC} %b\n" "$*"; }
+warn() { printf "${YELLOW}⚠${NC} %b\n" "$*"; }
 err() { printf "${RED}✖${NC} %b\n" "$*" >&2; exit 1; }
 
 printf "\n${CYAN}==========================================${NC}\n"

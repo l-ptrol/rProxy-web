@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import sys
 import os
-from core.utils import msg, warn, err, header, draw_separator, BOLD, NC, GREEN, RED, YELLOW, CYN
+from core.utils import msg, warn, err, header, draw_separator, BOLD, NC, GREEN, RED, YELLOW, CYAN
 from core.config import ConfigManager
 from core.vps import VPSManager
 from core.manager import ProcessManager
