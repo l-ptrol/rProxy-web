@@ -3,139 +3,229 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>rProxy Dashboard | Python Edition</title>
+    <title>rProxy Dashboard | Zero-Dep Edition</title>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
+        /* ПРЕМИАЛЬНЫЙ ТЕМНЫЙ ДИЗАЙН БЕЗ ВНЕШНИХ CSS ФРЕЙМВОРКОВ */
         :root {
-            --glass-bg: rgba(255, 255, 255, 0.03);
-            --glass-border: rgba(255, 255, 255, 0.08);
+            --bg-color: #05070a;
+            --card-bg: rgba(255, 255, 255, 0.03);
+            --card-border: rgba(255, 255, 255, 0.08);
             --neon-cyan: #00f2ff;
-            --neon-purple: #bc13fe;
             --neon-emerald: #00ff88;
+            --neon-purple: #bc13fe;
+            --neon-red: #ff3e3e;
+            --text-main: #ffffff;
+            --text-dim: #94a3b8;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
+
+        * { margin:0; padding:0; box-sizing: border-box; }
 
         body {
-            background-color: #05070a;
-            color: #fff;
-            font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
-            background-image: 
-                radial-gradient(circle at 0% 0%, rgba(0, 242, 255, 0.05) 0%, transparent 50%),
-                radial-gradient(circle at 100% 100%, rgba(188, 19, 254, 0.05) 0%, transparent 50%);
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            background-image: 
+                radial-gradient(circle at 0% 0%, rgba(0, 242, 255, 0.05) 0%, transparent 40%),
+                radial-gradient(circle at 100% 100%, rgba(188, 19, 254, 0.05) 0%, transparent 40%);
         }
 
-        .neon-glass {
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
-            backdrop-filter: blur(20px);
-            border: 1px solid var(--glass-border);
-            border-radius: 1.5rem;
-            transition: all 0.3s ease;
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 30px;
         }
 
-        .neon-border-cyan:hover { border-color: rgba(0, 242, 255, 0.5); box-shadow: 0 0 20px rgba(0, 242, 255, 0.1); }
-        .neon-border-emerald:hover { border-color: rgba(0, 255, 136, 0.5); box-shadow: 0 0 20px rgba(0, 255, 136, 0.1); }
-        .neon-border-purple:hover { border-color: rgba(188, 19, 254, 0.5); box-shadow: 0 0 20px rgba(188, 19, 254, 0.1); }
-
-        .status-dot { width: 8px; height: 8px; border-radius: 9999px; position: relative; }
-        .online-dot { background-color: var(--neon-emerald); }
-        .online-dot::after {
-            content: ''; position: absolute; inset: -4px; border-radius: 9999px;
-            background-color: var(--neon-emerald); opacity: 0.4; filter: blur(4px);
-            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        @media (max-width: 900px) {
+            .container { grid-template-columns: 1fr; }
         }
-        .offline-dot { background-color: #ff3e3e; }
 
-        @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.1; } }
+        /* GLASS CARD */
+        .glass {
+            background: var(--card-bg);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid var(--card-border);
+            border-radius: 20px;
+            padding: 24px;
+            transition: var(--transition);
+        }
 
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
-
-        .btn-action {
+        .glass:hover {
+            border-color: rgba(255, 255, 255, 0.15);
             background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 0.75rem;
-            border-radius: 0.75rem;
-            transition: all 0.2s;
         }
-        .btn-action:hover { background: rgba(255, 255, 255, 0.1); transform: translateY(-2px); }
-        .btn-action:active { transform: translateY(0); scale: 0.95; }
+
+        /* SIDEBAR STYLES */
+        .sidebar { display: flex; flex-direction: column; gap: 20px; }
+        .logo-box { display: flex; align-items: center; gap: 15px; margin-bottom: 20px; }
+        .logo-icon {
+            width: 48px; height: 48px;
+            background: rgba(0, 242, 255, 0.1);
+            color: var(--neon-cyan);
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 0 20px rgba(0, 242, 255, 0.1);
+        }
+        .logo-text h1 { font-size: 24px; font-weight: 800; letter-spacing: -0.5px; }
+        .logo-text span { color: var(--neon-cyan); }
+        .logo-tag { font-size: 10px; text-transform: uppercase; color: var(--text-dim); letter-spacing: 2px; }
+
+        .stat-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px; background: rgba(255,255,255,0.03);
+            border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);
+            margin-bottom: 10px;
+        }
+        .stat-label { font-size: 11px; text-transform: uppercase; color: var(--text-dim); font-weight: 700; display: flex; align-items: center; gap: 8px; }
+        .stat-value { font-family: monospace; font-weight: 700; font-size: 14px; }
+
+        /* MAIN CONTENT STYLES */
+        .main-col { display: flex; flex-direction: column; gap: 20px; }
+        .header-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 15px; }
+        
+        .search-box { position: relative; flex: 1; min-width: 250px; }
+        .search-box input {
+            width: 100%; background: var(--card-bg); border: 1px solid var(--card-border);
+            border-radius: 15px; padding: 15px 15px 15px 45px; color: #fff; outline: none;
+            transition: var(--transition);
+        }
+        .search-box input:focus { border-color: var(--neon-cyan); background: rgba(255,255,255,0.08); }
+        .search-box i { position: absolute; left: 15px; top: 15px; color: var(--text-dim); }
+
+        .btn-add {
+            background: var(--neon-cyan); color: #000; border: none;
+            padding: 15px 30px; border-radius: 15px; font-weight: 800;
+            text-transform: uppercase; font-size: 13px; display: flex; align-items: center; gap: 10px;
+            cursor: pointer; transition: var(--transition); box-shadow: 0 10px 20px rgba(0, 242, 255, 0.2);
+        }
+        .btn-add:hover { transform: translateY(-2px); box-shadow: 0 15px 25px rgba(0, 242, 255, 0.3); opacity: 0.9; }
+
+        /* SERVICE CARDS GRID */
+        .services-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 20px; width: 100%;
+        }
+
+        .svc-card { position: relative; overflow: hidden; }
+        .svc-card::before {
+            content: ''; position: absolute; top:0; left:0; width:100%; height:4px;
+            background: var(--accent-color, var(--neon-purple));
+        }
+        .svc-card.online::before { --accent-color: var(--neon-emerald); }
+
+        .svc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .svc-info { display: flex; align-items: center; gap: 12px; }
+        .svc-icon {
+            width: 44px; height: 44px; background: rgba(255,255,255,0.05);
+            border-radius: 12px; display: flex; align-items: center; justify-content: center;
+            color: var(--accent-color, var(--neon-purple));
+        }
+        .svc-name h3 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+        .svc-status { display: flex; align-items: center; gap: 6px; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .status-dot.online { background: var(--neon-emerald); box-shadow: 0 0 10px var(--neon-emerald); }
+        .status-dot.offline { background: var(--neon-red); }
+        .status-text { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
+
+        .svc-details { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+        .detail-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px; background: rgba(0,0,0,0.2); border-radius: 10px;
+        }
+        .detail-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+        .detail-value { font-family: monospace; font-size: 13px; color: #fff; }
+
+        .svc-actions {
+            display: flex; gap: 8px; border-top: 1px solid rgba(255,255,255,0.05);
+            padding-top: 15px;
+        }
+        .action-btn {
+            flex: 1; padding: 12px; border: 1px solid rgba(255,255,255,0.05);
+            background: rgba(255,255,255,0.03); border-radius: 10px; color: #fff;
+            cursor: pointer; transition: var(--transition); display: flex; align-items: center; justify-content: center;
+        }
+        .action-btn:hover { background: rgba(255,255,255,0.1); transform: translateY(-2px); }
+        .action-btn.power { flex: 2; font-size: 10px; font-weight: 900; text-transform: uppercase; gap: 8px; }
+        .action-btn.power.on:hover { border-color: var(--neon-emerald); color: var(--neon-emerald); }
+        .action-btn.power.off:hover { border-color: var(--neon-red); color: var(--neon-red); }
+        .action-btn.delete:hover { color: var(--neon-red); border-color: rgba(255,0,0,0.3); }
+
+        /* LOADING ANIMATION */
+        .pulse { animation: pulse 1.5s infinite ease-in-out; }
+        @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 0.3; } 100% { opacity: 0.5; } }
+
+        .custom-loader {
+            grid-column: 1 / -1; height: 200px; display: flex; align-items: center;
+            justify-content: center; flex-direction: column; gap: 15px; color: var(--text-dim);
+        }
     </style>
 </head>
-<body class="p-4 md:p-8 custom-scrollbar">
-    <div class="max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-8">
-        
+<body>
+    <div class="container">
         <!-- Sidebar -->
-        <aside class="space-y-6">
-            <div class="neon-glass p-6 neon-border-cyan relative overflow-hidden">
-                <div class="flex items-center gap-3 mb-8">
-                    <div class="w-12 h-12 bg-cyan-500/20 rounded-2xl flex items-center justify-center text-[#00f2ff] shadow-lg shadow-cyan-500/20">
-                        <i data-lucide="zap" class="w-7 h-7"></i>
-                    </div>
-                    <div>
-                        <h1 class="text-2xl font-black tracking-tighter">rProxy <span class="text-[#00f2ff]">PY</span></h1>
-                        <p class="text-[10px] uppercase tracking-[0.2em] font-bold text-gray-500">Efficient Control</p>
+        <aside class="sidebar">
+            <div class="glass svc-card" style="--accent-color: var(--neon-cyan)">
+                <div class="logo-box">
+                    <div class="logo-icon"><i data-lucide="zap"></i></div>
+                    <div class="logo-text">
+                        <h1>rProxy <span>CORE</span></h1>
+                        <p class="logo-tag">System Interface</p>
                     </div>
                 </div>
 
-                <div id="system-stats" hx-get="/api/system" hx-trigger="load, every 10s" class="space-y-4">
-                    <!-- Загрузка статистики... -->
-                    <div class="animate-pulse space-y-3">
-                        <div class="h-10 bg-white/5 rounded-xl"></div>
-                        <div class="h-10 bg-white/5 rounded-xl"></div>
-                        <div class="h-10 bg-white/5 rounded-xl"></div>
+                <div id="system-stats" hx-get="/api/system" hx-trigger="load, every 10s">
+                    <div class="pulse">
+                        <div class="stat-item"><div class="stat-label">Загрузка...</div></div>
                     </div>
                 </div>
 
-                <div class="mt-8 pt-6 border-t border-white/5">
-                    <button class="w-full flex items-center justify-between text-xs font-bold uppercase text-gray-400 hover:text-[#00f2ff] transition-colors">
-                        <span>Настройки VPS</span>
-                        <i data-lucide="chevron-right" class="w-4 h-4"></i>
-                    </button>
-                </div>
+                <button class="action-btn" style="width: 100%; margin-top: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; gap: 10px;">
+                    <i data-lucide="settings" style="width:14px"></i> Настройки VPS
+                </button>
             </div>
 
-            <div class="grid grid-cols-2 gap-4">
-                <button class="neon-glass p-4 flex flex-col items-center gap-2 hover:border-[#00f2ff]/30 transition-all group">
-                    <i data-lucide="shield" class="w-6 h-6 text-[#00f2ff] group-hover:scale-110 transition-transform"></i>
-                    <span class="text-[10px] font-bold uppercase text-gray-400">Update SSL</span>
-                </button>
-                <button class="neon-glass p-4 flex flex-col items-center gap-2 hover:border-[#00ff88]/30 transition-all group">
-                    <i data-lucide="refresh-cw" class="w-6 h-6 text-[#00ff88] group-hover:rotate-180 transition-transform duration-500"></i>
-                    <span class="text-[10px] font-bold uppercase text-gray-400">Self Update</span>
-                </button>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div class="glass" style="padding: 15px; display: flex; flex-direction: column; align-items: center; gap: 10px; cursor: pointer;">
+                    <i data-lucide="shield" style="color: var(--neon-cyan)"></i>
+                    <span style="font-size: 9px; font-weight: 800; text-transform: uppercase; color: var(--text-dim)">SSL Fix</span>
+                </div>
+                <div class="glass" style="padding: 15px; display: flex; flex-direction: column; align-items: center; gap: 10px; cursor: pointer;">
+                    <i data-lucide="refresh-cw" style="color: var(--neon-emerald)"></i>
+                    <span style="font-size: 9px; font-weight: 800; text-transform: uppercase; color: var(--text-dim)">Update</span>
+                </div>
             </div>
         </aside>
 
-        <!-- Main Content -->
-        <main class="space-y-6">
-            <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div class="relative w-full sm:w-96">
-                    <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 w-5 h-5"></i>
-                    <input type="text" placeholder="Поиск сервисов..." class="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 outline-none focus:border-[#00f2ff]/50 focus:bg-white/10 transition-all font-medium placeholder:text-gray-600 shadow-xl">
+        <!-- Main -->
+        <main class="main-col">
+            <div class="header-actions">
+                <div class="search-box">
+                    <i data-lucide="search"></i>
+                    <input type="text" placeholder="Поиск активных туннелей...">
                 </div>
-
-                <button class="flex items-center gap-2 px-8 py-4 bg-cyan-600 hover:bg-cyan-500 rounded-2xl font-black uppercase text-sm transition-all shadow-lg shadow-cyan-600/30 active:scale-95">
-                    <i data-lucide="plus-circle" class="w-5 h-5"></i>
-                    <span>Добавить сервис</span>
+                <button class="btn-add">
+                    <i data-lucide="plus"></i> Добавить сервис
                 </button>
-            </header>
+            </div>
 
-            <!-- Services Grid -->
-            <div id="services-grid" hx-get="/api/services" hx-trigger="load, every 5s" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                <!-- Загрузка сервисов... -->
-                <div class="neon-glass h-64 animate-pulse"></div>
-                <div class="neon-glass h-64 animate-pulse"></div>
+            <div id="services-grid" class="services-grid" hx-get="/api/services" hx-trigger="load, every 5s">
+                <div class="custom-loader pulse">
+                    <i data-lucide="loader-2" style="width: 40px; height: 40px;"></i>
+                    <p>Синхронизация с rProxy...</p>
+                </div>
             </div>
         </main>
     </div>
-
-    <!-- Рецепты для HTMX шаблонов (скрытые) -->
-    <template id="service-card-template">
-        <!-- Будет использоваться на бэкенде для генерации HTML -->
-    </template>
 
     <script>
         document.body.addEventListener('htmx:afterOnLoad', function() {
