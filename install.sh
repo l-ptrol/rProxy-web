@@ -1,6 +1,6 @@
 #!/bin/sh
 # rProxy Web (Premium Dashboard) Installer for Keenetic
-# VERSION: 5.0.0 - Pure Python & Premium CSS Edition
+# VERSION: 5.0.1 - Pure Python & Premium CSS Edition (Bugfix)
 # Чистый Glassmorphism без лишних фреймворков
 
 set -e

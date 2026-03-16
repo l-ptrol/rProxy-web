@@ -3,7 +3,8 @@ import sys
 import subprocess
 import json
 import time
-from bottle import route, run, template, request, response, static_file, post, get, HTTPResponse
+import bottle
+from bottle import route, run, template, request, response, static_file, post, get, HTTPResponse, debug
 
 # Пути rProxy (Entware)
 RPROXY_ROOT = "/opt/etc/rproxy"
@@ -13,9 +14,14 @@ GLOBAL_CONF = os.path.join(RPROXY_ROOT, "rproxy.conf")
 PID_DIR = "/opt/var/run/rproxy"
 
 # Версия интерфейса
-VERSION = "5.0.0"
+VERSION = "5.0.1"
+
+# Настройка путей для шаблонов
+bottle.TEMPLATE_PATH.insert(0, './templates')
+debug(True)
 
 def parse_bash_config(file_path):
+
     if not os.path.exists(file_path): return {}
     config = {}
     try:
