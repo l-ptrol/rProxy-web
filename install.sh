@@ -23,7 +23,7 @@ fi
 
 msg "Установка Python3 и необходимых системных утилит..."
 opkg update
-opkg install python3-light python3-pip autossh psmisc ssh-keygen
+opkg install python3-light python3-pip autossh psmisc openssh-keygen
 
 INSTALL_DIR="/opt/share/rproxy-web"
 mkdir -p "$INSTALL_DIR"
