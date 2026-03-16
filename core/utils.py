@@ -7,6 +7,7 @@ GREEN = '\033[0;32m'
 YELLOW = '\033[1;33m'
 CYAN = '\033[0;36m'
 BOLD = '\033[1m'
+DIM = '\033[2m'
 NC = '\033[0m'
 
 def msg(text):
@@ -24,4 +25,18 @@ def header(text):
     print(f"\n{CYAN}{BOLD}{text}{NC}")
 
 def draw_separator():
-    print(f"{NC}──────────────────────────────────────────────────")
+    print(f"{DIM}──────────────────────────────────────────────────{NC}")
+
+def gen_htpasswd(user, password):
+    import subprocess
+    try:
+        # Пытаемся использовать openssl для генерации MD5-хэша (apr1)
+        result = subprocess.run(
+            ['openssl', 'passwd', '-apr1', password],
+            capture_output=True, text=True, check=True
+        )
+        hash_val = result.stdout.strip()
+        return f"{user}:{hash_val}"
+    except Exception:
+        # Если openssl нет, возвращаем plain text (Nginx может не принять)
+        return f"{user}:{password}"

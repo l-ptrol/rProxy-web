@@ -1,12 +1,12 @@
 #!/opt/bin/python3
 import sys
 import os
-from core.utils import msg, warn, err, header, draw_separator, BOLD, NC, GREEN, RED, YELLOW, CYAN
+from core.utils import msg, warn, err, header, draw_separator, BOLD, NC, GREEN, RED, YELLOW, CYAN, DIM
 from core.config import ConfigManager
 from core.vps import VPSManager
 from core.manager import ProcessManager
 
-VERSION = "6.0.0"
+VERSION = "6.1.0"
 
 class RProxyCLI:
     def __init__(self):
@@ -23,110 +23,322 @@ class RProxyCLI:
         while True:
             self.clear()
             header(f"rProxy v{VERSION} — Python Core Edition")
-            print(f"  {BOLD}1){NC}  🌐  Список публикаций и статус")
-            print(f"  {BOLD}2){NC}  🚀  Запустить туннели")
-            print(f"  {BOLD}3){NC}  🛑  Остановить туннели")
-            print(f"  {BOLD}4){NC}  ➕  Добавить новый сервис")
-            print(f"  {BOLD}5){NC}  🖥️   Управление VPS")
-            print(f"  {BOLD}6){NC}  🔑  Управление SSL (Certbot)")
+            
+            # Статистика
+            total = len([f for f in os.listdir(self.services_dir) if f.endswith(".conf")]) if os.path.exists(self.services_dir) else 0
+            vps_count = len([f for f in os.listdir(self.vps_dir) if f.endswith(".conf")]) if os.path.exists(self.vps_dir) else 0
+            online = 0
+            if os.path.exists(self.services_dir):
+                for f in os.listdir(self.services_dir):
+                    if f.endswith(".conf") and ProcessManager.is_running(f.replace(".conf", "")):
+                        online += 1
+
+            print(f"  {DIM}Серверов VPS:{NC} {BOLD}{vps_count}{NC}  {DIM}Сервисов:{NC} {BOLD}{total}{NC}  {DIM}Онлайн:{NC} {GREEN}{BOLD}{online}{NC}")
+            draw_separator()
+            
+            print(f"  {BOLD}1){NC}  📋  Список сервисов и статус")
+            print(f"  {BOLD}2){NC}  ➕  Добавить сервис")
+            print(f"  {BOLD}3){NC}  📝  Редактировать сервис")
+            print(f"  {BOLD}4){NC}  ❌  Удалить сервис")
+            draw_separator()
+            print(f"  {BOLD}5){NC}  ▶️   Запустить туннель")
+            print(f"  {BOLD}6){NC}  ⏹️   Остановить туннель")
+            print(f"  {BOLD}7){NC}  🔄  Перезапустить туннель")
+            draw_separator()
+            print(f"  {BOLD}8){NC}  🔒  Управление SSL (Certbot)")
+            print(f"  {BOLD}9){NC}  ⚙️   Настройки VPS")
             print(f"  {BOLD}0){NC}      Выход")
             
             choice = input(f"\n{BOLD}Выберите действие:{NC} ")
             
-            if choice == '1': self.list_services()
-            elif choice == '2': self.start_services()
-            elif choice == '3': self.stop_services()
-            elif choice == '5': self.vps_menu()
+            if choice == '1': self.show_status()
+            elif choice == '2': self.add_service()
+            elif choice == '4': self.remove_service()
+            elif choice == '5': self.start_menu()
+            elif choice == '6': self.stop_menu()
+            elif choice == '7': self.restart_menu()
+            elif choice == '9': self.vps_menu()
             elif choice == '0': break
-            else: warn("Неверный ввод")
             
             if choice != '0': input(f"\n{NC}Нажмите Enter для продолжения...")
 
-    def list_services(self):
-        header("Список настроенных сервисов")
-        files = [f for f in os.listdir(self.services_dir) if f.endswith(".conf")]
+    def show_status(self):
+        self.clear()
+        header("Список сервисов")
+        files = sorted([f for f in os.listdir(self.services_dir) if f.endswith(".conf")])
         if not files:
-            print("  Сервисы не настроены.")
+            print(f"\n  {YELLOW}Нет добавленных сервисов.{NC}")
             return
 
-        for f in sorted(files):
+        print(f"  {BOLD}{'№':<4} {'ИМЯ':<14} {'ЦЕЛЬ':<22} {'ПОРТ':<7} {'СТАТУС':<9} {'ДОМЕН'}{NC}")
+        draw_separator()
+        
+        for idx, f in enumerate(files, 1):
             name = f.replace(".conf", "")
             cfg = ConfigManager.load(os.path.join(self.services_dir, f))
-            status_text = f"{RED}OFFLINE{NC}"
-            if ProcessManager.is_running(name):
-                status_text = f"{GREEN}ONLINE{NC}"
+            is_on = ProcessManager.is_running(name)
+            status = f"{GREEN}● онлайн{NC}" if is_on else f"{RED}○ офлайн{NC}"
             
-            domain = cfg.get('SVC_DOMAIN', cfg.get('SVC_EXT_PORT', '---'))
-            print(f"  • {BOLD}{name:15}{NC} {domain:20} [{status_text}]")
+            target = f"{cfg.get('SVC_TARGET_HOST','127.0.0.1')}:{cfg.get('SVC_TARGET_PORT','---')}"
+            domain = cfg.get('SVC_DOMAIN', '---')
+            port = cfg.get('SVC_EXT_PORT', '---')
+            
+            print(f"  {idx:<4} {name:<14} {target:<22} {port:<7} {status} {domain}")
 
-    def start_services(self):
-        header("Запуск сервисов")
-        files = [f for f in os.listdir(self.services_dir) if f.endswith(".conf")]
-        for f in files:
+    def select_service(self, title, filter_type='all'):
+        files = sorted([f for f in os.listdir(self.services_dir) if f.endswith(".conf")])
+        if not files:
+            warn("Нет сервисов.")
+            return []
+
+        header(title)
+        shown_files = []
+        for idx, f in enumerate(files, 1):
             name = f.replace(".conf", "")
+            is_on = ProcessManager.is_running(name)
+            
+            if filter_type == 'running' and not is_on: continue
+            if filter_type == 'stopped' and is_on: continue
+            
+            status = f"{GREEN}●{NC}" if is_on else f"{RED}○{NC}"
             cfg = ConfigManager.load(os.path.join(self.services_dir, f))
-            # Загружаем VPS конфиг
+            target = f"{cfg.get('SVC_TARGET_HOST','127.0.0.1')}:{cfg.get('SVC_TARGET_PORT','---')}"
+            
+            print(f"  {BOLD}{idx}){NC}  {status}  {name:<14}  {target}")
+            shown_files.append((idx, name))
+
+        if not shown_files:
+            warn("Нет подходящих сервисов.")
+            return []
+
+        draw_separator()
+        print(f"  {BOLD}903){NC} Все сервисы")
+        print(f"  {BOLD}0){NC}   Назад")
+        
+        ans = input(f"\n{BOLD}Выберите номер(а) (через пробел или 903):{NC} ").strip()
+        if ans == '0' or not ans: return []
+        if ans == '903': return [name for idx, name in shown_files]
+        
+        selected = []
+        for part in ans.split():
+            try:
+                val = int(part)
+                for idx, name in shown_files:
+                    if idx == val:
+                        selected.append(name)
+            except ValueError: continue
+        return selected
+
+    def start_menu(self):
+        names = self.select_service("Запустить туннель", 'stopped')
+        for name in names:
+            msg(f"Запуск {name}...")
+            cfg = ConfigManager.load(os.path.join(self.services_dir, f"{name}.conf"))
             vps_id = cfg.get('SVC_VPS')
             vps_cfg = ConfigManager.load(os.path.join(self.vps_dir, f"{vps_id}.conf"))
-            
-            if not vps_cfg:
-                warn(f"VPS '{vps_id}' для сервиса '{name}' не найден.")
-                continue
-            
-            ProcessManager.start_service(cfg, vps_cfg)
+            if vps_cfg:
+                ProcessManager.start_service(cfg, vps_cfg)
+            else:
+                err(f"VPS {vps_id} не найден.")
 
-    def stop_services(self):
-        header("Остановка сервисов")
-        files = [f for f in os.listdir(self.services_dir) if f.endswith(".conf")]
-        for f in files:
-            name = f.replace(".conf", "")
+    def stop_menu(self):
+        names = self.select_service("Остановить туннель", 'running')
+        for name in names:
+            msg(f"Остановка {name}...")
             ProcessManager.stop_service(name)
+
+    def restart_menu(self):
+        names = self.select_service("Перезапустить туннель")
+        for name in names:
+            msg(f"Перезапуск {name}...")
+            ProcessManager.stop_service(name)
+            cfg = ConfigManager.load(os.path.join(self.services_dir, f"{name}.conf"))
+            vps_id = cfg.get('SVC_VPS')
+            vps_cfg = ConfigManager.load(os.path.join(self.vps_dir, f"{vps_id}.conf"))
+            if vps_cfg:
+                ProcessManager.start_service(cfg, vps_cfg)
+
+    def remove_service(self):
+        names = self.select_service("Удалить сервис")
+        if not names: return
+        confirm = input(f"\n{RED}Удалить {len(names)} сервис(ов)? (y/n): {NC}").lower()
+        if confirm != 'y': return
+        
+        for name in names:
+            ProcessManager.stop_service(name)
+            path = os.path.join(self.services_dir, f"{name}.conf")
+            if os.path.exists(path):
+                os.remove(path)
+            msg(f"Сервис {name} удален.")
 
     def vps_menu(self):
         while True:
             self.clear()
             header("Управление VPS серверами")
-            files = [f for f in os.listdir(self.vps_dir) if f.endswith(".conf")]
-            for f in files:
+            files = sorted([f for f in os.listdir(self.vps_dir) if f.endswith(".conf")])
+            for idx, f in enumerate(files, 1):
                 name = f.replace(".conf", "")
                 cfg = ConfigManager.load(os.path.join(self.vps_dir, f))
-                print(f"  • {BOLD}{name:15}{NC} ({cfg.get('VPS_HOST')})")
+                print(f"  {BOLD}{idx}){NC}  {name:<14} ({cfg.get('VPS_HOST')})")
             
             draw_separator()
-            print(f"  {BOLD}1){NC} Добавить VPS")
+            print(f"  {BOLD}901){NC} Добавить VPS")
             print(f"  {BOLD}0){NC} Назад")
             
-            c = input(f"\n{BOLD}Выбор:{NC} ")
-            if c == '1': self.add_vps()
-            elif c == '0': break
+            choice = input(f"\n{BOLD}Выбор:{NC} ")
+            if choice == '0': break
+            elif choice == '901': self.add_vps()
 
     def add_vps(self):
         header("Добавление нового VPS")
         name = input("Название сервера (лат.): ").strip()
+        if not name or os.path.exists(os.path.join(self.vps_dir, f"{name}.conf")):
+            warn("Некорректное имя или сервер существует.")
+            return
+
         host = input("IP адрес: ").strip()
         user = input("Пользователь [root]: ").strip() or "root"
         port = input("SSH порт [22]: ").strip() or "22"
         
+        VPSManager.ensure_ssh_key()
+        msg(f"Настройка SSH доступа для {host}...")
+        pub_key_path = "/opt/etc/rproxy/id_ed25519.pub"
+        
+        try:
+            with open(pub_key_path, 'r') as f:
+                pub_key = f.read().strip()
+            
+            cmd = f"mkdir -p ~/.ssh && echo '{pub_key}' >> ~/.ssh/authorized_keys && chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys"
+            os.system(f"ssh -o StrictHostKeyChecking=no -p {port} {user}@{host} \"{cmd}\"")
+        except Exception as e:
+            err(f"Ошибка настройки ключей: {e}")
+            return
+        
         cfg = {
             "VPS_HOST": host,
             "VPS_USER": user,
-            "VPS_PORT": port
+            "VPS_PORT": port,
+            "VPS_AUTH": "key"
         }
-        
-        VPSManager.ensure_ssh_key()
-        msg("Настройка SSH доступа по ключу...")
-        # Тут должна быть логика копирования ключа, как в bash (ssh-copy-id)
-        # Для краткости пропустим прямой вызов ssh-copy-id
-        
         ConfigManager.save(os.path.join(self.vps_dir, f"{name}.conf"), cfg)
         msg(f"VPS '{name}' успешно добавлен.")
+
+    def add_service(self, edit_name=None):
+        header("Мастер настроек сервиса" if not edit_name else f"Редактирование: {edit_name}")
+        
+        old_cfg = {}
+        if edit_name:
+            old_cfg = ConfigManager.load(os.path.join(self.services_dir, f"{edit_name}.conf"))
+
+        # 1. Имя
+        if not edit_name:
+            name = input(f"{BOLD}Название (лат. без пробелов):{NC} ").strip()
+            if not name or os.path.exists(os.path.join(self.services_dir, f"{name}.conf")):
+                warn("Некорректное имя или сервис существует.")
+                return
+        else:
+            name = edit_name
+
+        # 2. Тип
+        print(f"\n{DIM}Типы: http (веб), tcp (порты), ttyd (терминал), ssh (удаленный доступ){NC}")
+        t_def = old_cfg.get('SVC_TYPE', 'http')
+        svc_type = input(f"Тип сервиса [{t_def}]: ").strip() or t_def
+
+        # 3. Цель (Target)
+        h_def = old_cfg.get('SVC_TARGET_HOST', '127.0.0.1')
+        target_host = input(f"Локальный IP цели [{h_def}]: ").strip() or h_def
+        
+        p_def = old_cfg.get('SVC_TARGET_PORT', '80')
+        target_port = input(f"Локальный порт цели [{p_def}]: ").strip() or p_def
+
+        # 4. VPS
+        vps_files = [f.replace('.conf', '') for f in os.listdir(self.vps_dir) if f.endswith('.conf')]
+        if not vps_files:
+            err("Сначала добавьте VPS!")
+            return
+        
+        v_def = old_cfg.get('SVC_VPS', vps_files[0])
+        print(f"Доступные VPS: {', '.join(vps_files)}")
+        vps_id = input(f"Выберите VPS [{v_def}]: ").strip() or v_def
+
+        # 5. Внешний порт (на VPS)
+        ext_def = old_cfg.get('SVC_EXT_PORT', '80' if svc_type == 'http' else '26000')
+        ext_port = input(f"Внешний порт на VPS [{ext_def}]: ").strip() or ext_def
+
+        # 6. Домен и SSL
+        dom_def = old_cfg.get('SVC_DOMAIN', '')
+        domain = input(f"Домен (опционально) [{dom_def}]: ").strip() or dom_def
+        
+        use_ssl = 'no'
+        if domain:
+            ssl_def = old_cfg.get('SVC_SSL', 'yes')
+            use_ssl = input(f"Использовать SSL (Certbot)? (yes/no) [{ssl_def}]: ").strip() or ssl_def
+
+        # 7. Авторизация
+        auth_def = 'yes' if old_cfg.get('SVC_AUTH_USER') else 'no'
+        use_auth = input(f"Защитить паролем (Basic Auth)? (yes/no) [{auth_def}]: ").strip() or auth_def
+        
+        auth_user = old_cfg.get('SVC_AUTH_USER', '')
+        auth_pass = old_cfg.get('SVC_AUTH_PASS', '')
+        if use_auth == 'yes':
+            auth_user = input(f"Имя пользователя [admin]: ").strip() or "admin"
+            auth_pass = input(f"Пароль: ").strip()
+            if not auth_pass and edit_name: auth_pass = old_cfg.get('SVC_AUTH_PASS')
+
+        # 8. Финализация
+        import random
+        tunnel_port = old_cfg.get('SVC_TUNNEL_PORT', random.randint(10000, 15000))
+
+        new_cfg = {
+            "SVC_NAME": name,
+            "SVC_TYPE": svc_type,
+            "SVC_TARGET_HOST": target_host,
+            "SVC_TARGET_PORT": target_port,
+            "SVC_VPS": vps_id,
+            "SVC_EXT_PORT": ext_port,
+            "SVC_DOMAIN": domain,
+            "SVC_SSL": use_ssl,
+            "SVC_TUNNEL_PORT": tunnel_port,
+            "SVC_ENABLED": "yes"
+        }
+        if auth_user:
+            new_cfg["SVC_AUTH_USER"] = auth_user
+            new_cfg["SVC_AUTH_PASS"] = auth_pass
+
+        ConfigManager.save(os.path.join(self.services_dir, f"{name}.conf"), new_cfg)
+        msg(f"Сервис '{name}' успешно {'обновлен' if edit_name else 'сохранен'}.")
+        if not edit_name:
+            if input("\nЗапустить сейчас? (y/n): ").lower() == 'y':
+                v_path = os.path.join(self.vps_dir, f"{vps_id}.conf")
+                vps_cfg = ConfigManager.load(v_path)
+                ProcessManager.start_service(new_cfg, vps_cfg)
+
+    def edit_service(self):
+        names = self.select_service("Редактирование сервиса")
+        if names:
+            self.add_service(edit_name=names[0])
 
 if __name__ == "__main__":
     cli = RProxyCLI()
     if len(sys.argv) > 1:
-        # Обработка прямых команд (start/stop)
         cmd = sys.argv[1]
-        if cmd == 'start': cli.start_services()
-        elif cmd == 'stop': cli.stop_services()
+        if cmd == 'start': 
+            if len(sys.argv) > 2:
+                name = sys.argv[2]
+                cfg = ConfigManager.load(os.path.join(cli.services_dir, f"{name}.conf"))
+                vps_cfg = ConfigManager.load(os.path.join(cli.vps_dir, f"{cfg.get('SVC_VPS')}.conf"))
+                if vps_cfg: ProcessManager.start_service(cfg, vps_cfg)
+            else:
+                for f in sorted(os.listdir(cli.services_dir)):
+                    if f.endswith(".conf"):
+                        cfg = ConfigManager.load(os.path.join(cli.services_dir, f))
+                        if cfg.get('SVC_ENABLED') == 'yes':
+                            vps_cfg = ConfigManager.load(os.path.join(cli.vps_dir, f"{cfg.get('SVC_VPS')}.conf"))
+                            if vps_cfg: ProcessManager.start_service(cfg, vps_cfg)
+        elif cmd == 'stop':
+            if len(sys.argv) > 2: ProcessManager.stop_service(sys.argv[2])
+            else:
+                for f in os.listdir(cli.services_dir):
+                    if f.endswith(".conf"): ProcessManager.stop_service(f.replace(".conf", ""))
     else:
         cli.main_menu()

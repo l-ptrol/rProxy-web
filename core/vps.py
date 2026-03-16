@@ -65,7 +65,6 @@ class VPSManager:
     @staticmethod
     def setup_vps(vps_cfg):
         """Первичная настройка окружения на удаленном VPS"""
-        # Скрипт настройки из оригинального rproxy (адаптированный)
         setup_script = """
         if ! command -v nginx >/dev/null 2>&1; then
             apt-get update -qq && apt-get install -y -qq nginx psmisc || (yum update -y && yum install -y nginx psmisc)
@@ -90,3 +89,46 @@ class VPSManager:
         msg(f"Настройка окружения на VPS {vps_cfg.get('VPS_HOST')}...")
         success, output = VPSManager.run_remote(vps_cfg, setup_script, timeout=300)
         return success, output
+
+    @staticmethod
+    def check_ssl_exists(vps_cfg, domain):
+        """Проверяет наличие SSL сертификата для домена на VPS"""
+        success, _ = VPSManager.run_remote(vps_cfg, f"[ -d /etc/letsencrypt/live/{domain} ]")
+        return success
+
+    @staticmethod
+    def deploy_vhost(vps_cfg, name, content, path="/etc/nginx/sites-enabled"):
+        """Деплоит конфиг Nginx на VPS"""
+        # Экранируем кавычки для sh
+        content_escaped = content.replace("'", "'\\''")
+        cmd = f"printf '{content_escaped}' > {path}/rproxy_{name}.conf && nginx -t && systemctl reload nginx"
+        return VPSManager.run_remote(vps_cfg, cmd)
+
+    @staticmethod
+    def run_certbot(vps_cfg, domain):
+        """Запускает Certbot для получения SSL"""
+        cmd = f"certbot certonly --nginx -d {domain} --non-interactive --agree-tos --register-unsafely-without-email"
+        return VPSManager.run_remote(vps_cfg, cmd, timeout=120)
+
+    @staticmethod
+    def cleanup_vps(vps_cfg, active_services):
+        """Умная очистка VPS от фантомных конфигов"""
+        cmd = "ls /etc/nginx/sites-enabled/rproxy_*.conf /etc/nginx/streams-enabled/rproxy_*.conf 2>/dev/null"
+        success, output = VPSManager.run_remote(vps_cfg, cmd)
+        if not success or not output:
+            return True, "No files found for cleanup"
+        
+        files = output.splitlines()
+        deleted = []
+        for f in files:
+            # Извлекаем имя из /path/rproxy_NAME.conf
+            fname = os.path.basename(f)
+            s_name = fname.replace("rproxy_", "").replace(".conf", "")
+            if s_name not in active_services:
+                VPSManager.run_remote(vps_cfg, f"rm -f {f}")
+                deleted.append(fname)
+        
+        if deleted:
+            VPSManager.run_remote(vps_cfg, "nginx -t && systemctl reload nginx")
+            return True, f"Deleted: {', '.join(deleted)}"
+        return True, "VPS is clean"
