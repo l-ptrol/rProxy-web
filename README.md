@@ -14,7 +14,7 @@
 Для установки веб-интерфейса выполните следующую команду в терминале вашего роутера (требуется установленный Entware):
 
 ```sh
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/l-ptrol/rProxy-web/main/install.sh)"
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/l-ptrol/rProxy-web/master/install.sh)"
 ```
 
 ## Требования

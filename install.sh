@@ -41,14 +41,26 @@ if [ -d "./frontend/dist" ] && [ -d "./backend" ]; then
     msg "Копирование файлов из текущей директории..."
     cp -r ./backend "$INSTALL_DIR/"
     cp -r ./frontend/dist "$INSTALL_DIR/frontend_dist"
-    # Обновляем путь к фронтенду в server.js для работы на роутере
-    sed -i "s|../frontend/dist|../frontend_dist|g" "$INSTALL_DIR/backend/server.js"
 else
-    warn "Локальные файлы не найдены. Попытка загрузки из GitHub..."
-    # Здесь можно добавить git clone или curl архива
-    # Для текущего контекста считаем, что пользователь запускает из папки проекта
-    err "Пожалуйста, запустите скрипт из корня репозитория rProxy-web."
+    warn "Локальные файлы не найдены. Загрузка из GitHub (ветка master)..."
+    mkdir -p /tmp/rproxy-web-download
+    cd /tmp/rproxy-web-download
+    
+    msg "Загрузка архива проекта..."
+    curl -L https://github.com/l-ptrol/rProxy-web/archive/refs/heads/master.tar.gz -o project.tar.gz
+    tar -xzf project.tar.gz
+    cd rProxy-web-master
+    
+    msg "Установка файлов в систему..."
+    cp -rv ./backend "$INSTALL_DIR/"
+    cp -rv ./frontend/dist "$INSTALL_DIR/frontend_dist"
+    
+    # Очистка
+    rm -rf /tmp/rproxy-web-download
 fi
+
+# Исправляем путь в server.js
+sed -i "s|../frontend/dist|../frontend_dist|g" "$INSTALL_DIR/backend/server.js"
 
 # 4. Установка npm-зависимостей
 msg "Установка npm-зависимостей сервера (может занять время)..."
