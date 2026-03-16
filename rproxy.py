@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/opt/bin/python3
 import sys
 import os
 from core.utils import msg, warn, err, header, draw_separator, BOLD, NC, GREEN, RED, YELLOW, CYAN
