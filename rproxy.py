@@ -6,7 +6,7 @@ from core.config import ConfigManager
 from core.vps import VPSManager
 from core.manager import ProcessManager
 
-VERSION = "6.2.1"
+VERSION = "6.2.2"
 
 class RProxyCLI:
     def __init__(self):
@@ -283,10 +283,34 @@ class RProxyCLI:
         else:
             name = edit_name
 
-        # 2. Тип
-        print(f"\n{DIM}Типы: http (веб), tcp (порты), ttyd (терминал), ssh (удаленный доступ){NC}")
+        # 2. Тип (Меню вариантов)
         t_def = old_cfg.get('SVC_TYPE', 'http')
-        svc_type = input(f"Тип сервиса [{t_def}]: ").strip() or t_def
+        types = [
+            ("http", "веб"),
+            ("tcp", "вынос портов"),
+            ("ttyd", "веб-терминал"),
+            ("ssh", "удаленный доступ")
+        ]
+        
+        print(f"\n{BOLD}Выберите тип сервиса (по умолчанию {t_def}):{NC}")
+        for idx, (code, desc) in enumerate(types, 1):
+            mark = f"{GREEN}●{NC}" if code == t_def else " "
+            print(f"  {BOLD}{idx}){NC} {code:<6} {DIM}({desc}){NC} {mark}")
+        
+        t_choice = input(f"\n{BOLD}Вариант [1-4]:{NC} ").strip()
+        if not t_choice:
+            svc_type = t_def
+        else:
+            try:
+                idx = int(t_choice) - 1
+                if 0 <= idx < len(types):
+                    svc_type = types[idx][0]
+                else:
+                    svc_type = t_def
+            except:
+                svc_type = t_def
+        
+        msg(f"Выбран тип: {svc_type}")
 
         # 3. Цель (Target)
         h_def = old_cfg.get('SVC_TARGET_HOST', '127.0.0.1')
