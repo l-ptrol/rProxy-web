@@ -1,6 +1,6 @@
 #!/bin/sh
-# rProxy Web Installer for Keenetic (Entware)
-# VERSION: 1.0.0
+# rProxy Web (Python Edition) Installer for Keenetic
+# VERSION: 2.0.1
 
 set -e
 
@@ -15,7 +15,7 @@ err() { printf "${RED}✖${NC} %s\n" "$*" >&2; exit 1; }
 
 header() {
     printf "\n${GREEN}====================================${NC}\n"
-    printf "${GREEN}   rProxy Web Dashboard Installer   ${NC}\n"
+    printf "${GREEN}   rProxy Web (Python) Installer    ${NC}\n"
     printf "${GREEN}====================================${NC}\n\n"
 }
 
@@ -23,66 +23,54 @@ header
 
 # 1. Проверка Entware
 if [ ! -d "/opt/bin" ]; then
-    err "Entware не найден. Пожалуйста, установите Entware на ваш роутер."
+    err "Entware не найден. Установите Entware на ваш роутер."
 fi
 
-# 2. Установка зависимостей
-msg "Проверка и установка зависимостей (node, npm)..."
+# 2. Установка Python и зависимостей
+msg "Установка Python3 и необходимых библиотек..."
 opkg update
-opkg install node node-npm curl
+opkg install python3 python3-pip python3-asyncio
+
+# Установка FastAPI и Uvicorn через pip (легкие версии)
+msg "Установка FastAPI и Uvicorn (это может занять пару минут)..."
+pip3 install fastapi uvicorn jinja2
 
 # 3. Установка файлов проекта
 INSTALL_DIR="/opt/share/rproxy-web"
 msg "Установка в $INSTALL_DIR..."
-mkdir -p "$INSTALL_DIR"
+mkdir -p "$INSTALL_DIR/templates"
 
-# Копируем фронтенд (сборку) и бэкенд
-if [ -d "./frontend/dist" ] && [ -d "./backend" ]; then
-    msg "Копирование файлов из текущей директории..."
-    cp -r ./backend "$INSTALL_DIR/"
-    cp -r ./frontend/dist "$INSTALL_DIR/frontend_dist"
+# Загрузка или копирование файлов
+if [ -f "./main.py" ]; then
+    msg "Копирование локальных файлов..."
+    cp main.py "$INSTALL_DIR/"
+    cp templates/index.html "$INSTALL_DIR/templates/"
 else
-    warn "Локальные файлы не найдены. Загрузка из GitHub (ветка master)..."
-    mkdir -p /tmp/rproxy-web-download
-    cd /tmp/rproxy-web-download
-    
-    msg "Загрузка архива проекта..."
-    curl -L https://github.com/l-ptrol/rProxy-web/archive/refs/heads/master.tar.gz -o project.tar.gz
-    tar -xzf project.tar.gz
-    cd rProxy-web-master
-    
-    msg "Установка файлов в систему..."
-    cp -rv ./backend "$INSTALL_DIR/"
-    cp -rv ./frontend/dist "$INSTALL_DIR/frontend_dist"
-    
-    # Очистка
-    rm -rf /tmp/rproxy-web-download
+    msg "Загрузка из репозитория GitHub..."
+    TMP_DIR="/tmp/rproxy-web-py"
+    mkdir -p "$TMP_DIR"
+    curl -L https://github.com/l-ptrol/rProxy-web/archive/refs/heads/master.tar.gz -o "$TMP_DIR/master.tar.gz"
+    tar -xzf "$TMP_DIR/master.tar.gz" -C "$TMP_DIR"
+    cp -r "$TMP_DIR"/rProxy-web-master/*.py "$INSTALL_DIR/"
+    cp -r "$TMP_DIR"/rProxy-web-master/templates "$INSTALL_DIR/"
+    rm -rf "$TMP_DIR"
 fi
 
-# Исправляем путь в server.js
-sed -i "s|../frontend/dist|../frontend_dist|g" "$INSTALL_DIR/backend/server.js"
-
-# 4. Установка npm-зависимостей
-msg "Установка npm-зависимостей сервера (может занять время)..."
-cd "$INSTALL_DIR/backend"
-npm install --production
-
-# 5. Настройка автозапуска (S-скрипт)
-msg "Настройка автозапуска..."
+# 4. Настройка автозапуска
+msg "Создание службы автозапуска..."
 CAT_INIT="/opt/etc/init.d/S99rproxy-web"
 cat > "$CAT_INIT" <<EOF
 #!/bin/sh
 
 case "\$1" in
     start)
-        echo "Starting rProxy Web..."
-        cd $INSTALL_DIR/backend
-        # Запуск с указанием порта и путей через переменные окружения если нужно
-        node server.js > /opt/var/log/rproxy-web.log 2>&1 &
+        echo "Starting rProxy Web (Python)..."
+        cd $INSTALL_DIR
+        python3 main.py > /opt/var/log/rproxy-web.log 2>&1 &
         ;;
     stop)
-        echo "Stopping rProxy Web..."
-        pkill -f "node server.js"
+        echo "Stopping rProxy Web (Python)..."
+        pkill -f "python3 main.py"
         ;;
     restart)
         \$0 stop
@@ -98,8 +86,6 @@ EOF
 
 chmod +x "$CAT_INIT"
 
-msg "Установка успешно завершена!"
-msg "1. Бэкенд и зависимости установлены."
-msg "2. Автозапуск настроен: /opt/etc/init.d/S99rproxy-web"
-msg "3. Веб-интерфейс готов к работе на порту 3000."
-warn "Для запуска выполните: /opt/etc/init.d/S99rproxy-web start"
+msg "Установка завершена успешно!"
+msg "Порт управления: 3000"
+warn "Для запуска выполните: $CAT_INIT start"
