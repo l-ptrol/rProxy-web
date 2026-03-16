@@ -1,6 +1,6 @@
 #!/bin/sh
 # rProxy Web & CLI (Python Core) Installer for Keenetic
-# VERSION: 6.0.0 - Modular Architecture
+# VERSION: 6.0.1 - Modular Architecture (Bugfix)
 # Новое ядро на Python. 100% паритет с Bash + Модульность.
 
 set -e
@@ -15,7 +15,7 @@ warn() { printf "${YELLOW}⚠${NC} %b\n" "$*"; }
 err() { printf "${RED}✖${NC} %b\n" "$*" >&2; exit 1; }
 
 printf "\n${CYAN}==========================================${NC}\n"
-printf "${CYAN}    rProxy Python Core v6.0.0             ${NC}\n"
+printf "${CYAN}    rProxy Python Core v6.0.1             ${NC}\n"
 printf "${CYAN}==========================================${NC}\n\n"
 
 if [ ! -d "/opt/bin" ]; then
@@ -91,7 +91,7 @@ esac
 EOF
 chmod +x "$CAT_INIT"
 
-msg "Установка rProxy v6.0.0 завершена!"
+msg "Установка rProxy v6.0.1 завершена!"
 printf "\n"
 msg "Консоль:  ${CYAN}rproxy${NC}"
 msg "Веб-порт: ${CYAN}3000${NC}"
