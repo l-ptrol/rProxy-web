@@ -27,6 +27,42 @@ def header(text):
 def draw_separator():
     print(f"{DIM}──────────────────────────────────────────────────{NC}")
 
+def get_router_ip():
+    """Автоопределение IP роутера (ndmq / ip route / default)"""
+    import subprocess
+    import os
+    
+    # 1. ndmq (Keenetic)
+    try:
+        result = subprocess.run(['ndmq', '-p', 'show interface Bridge0', '-path', 'address'], capture_output=True, text=True)
+        if result.returncode == 0 and result.stdout.strip():
+            ip = result.stdout.strip()
+            if ip != "0.0.0.0": return ip
+    except: pass
+
+    # 2. ip route (General Linux)
+    try:
+        result = subprocess.run(['ip', 'route', 'show'], capture_output=True, text=True)
+        for line in result.stdout.splitlines():
+            if 'default via' in line:
+                return line.split()[2]
+    except: pass
+
+    return "192.168.1.1"
+
+def is_port_busy(port):
+    """Проверка занятости порта локально (ss / netstat)"""
+    import subprocess
+    try:
+        # ss (современный вариант)
+        res = subprocess.run(['ss', '-tln'], capture_output=True, text=True)
+        if f":{port} " in res.stdout: return True
+        # netstat (запасной вариант)
+        res = subprocess.run(['netstat', '-tnl'], capture_output=True, text=True)
+        if f":{port} " in res.stdout: return True
+    except: pass
+    return False
+
 def gen_htpasswd(user, password):
     import subprocess
     try:

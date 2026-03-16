@@ -1,12 +1,12 @@
 #!/opt/bin/python3
 import sys
 import os
-from core.utils import msg, warn, err, header, draw_separator, BOLD, NC, GREEN, RED, YELLOW, CYAN, DIM
+from core.utils import msg, warn, err, header, draw_separator, get_router_ip, BOLD, NC, GREEN, RED, YELLOW, CYAN, DIM
 from core.config import ConfigManager
 from core.vps import VPSManager
 from core.manager import ProcessManager
 
-VERSION = "6.2.0"
+VERSION = "6.2.1"
 
 class RProxyCLI:
     def __init__(self):

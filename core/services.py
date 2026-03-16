@@ -2,7 +2,7 @@ class ServiceTemplate:
     """Генератор конфигураций Nginx для удаленного VPS"""
 
     @staticmethod
-    def http_proxy(name, domain, local_port, auth_user=None, use_ssl=False):
+    def http_proxy(name, domain, local_port, ext_port=80, auth_user=None, use_ssl=False, target_host="127.0.0.1"):
         """Конфиг для HTTP/HTTPS прокси"""
         auth_config = ""
         if auth_user:
@@ -16,9 +16,9 @@ server {{
     listen 80;
     server_name {domain};
     return 301 https://$host$request_uri;
-}}""" if use_ssl and domain else ""
+}}""" if use_ssl and domain and ext_port == 443 else ""
 
-        listen_main = "listen 443 ssl;" if use_ssl else f"listen 80;"
+        listen_main = f"listen {ext_port} ssl;" if use_ssl else f"listen {ext_port};"
         ssl_config = f"""
     ssl_certificate /etc/letsencrypt/live/{domain}/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/{domain}/privkey.pem;
@@ -42,15 +42,17 @@ server {{
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
+        proxy_set_header Origin "";
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Forwarded-Port $server_port;
+        proxy_cookie_domain "{target_host}" "$host";
         proxy_read_timeout 7d;
         proxy_send_timeout 7d;
     }}
     
-    # Редирект с некорректного HTTPS порта (если используется нестандартный порт)
+    # Редирект с некорректного HTTPS порта (ошибка 497 -> 301)
     error_page 497 301 =307 https://$host:$server_port$request_uri;
 }}
 """
@@ -109,13 +111,16 @@ class ServiceManager:
         name = svc_cfg.get('SVC_NAME')
         domain = svc_cfg.get('SVC_DOMAIN', '')
         tunnel_port = svc_cfg.get('SVC_TUNNEL_PORT')
-        ext_port = svc_cfg.get('SVC_EXT_PORT')
+        ext_port = svc_cfg.get('SVC_EXT_PORT', 80)
+        target_host = svc_cfg.get('SVC_TARGET_HOST', '127.0.0.1')
         
         if svc_type in ['http', 'ttyd']:
             return ServiceTemplate.http_proxy(
                 name, domain, tunnel_port, 
-                svc_cfg.get('SVC_AUTH_USER'),
-                use_ssl=use_ssl_paths
+                ext_port=ext_port,
+                auth_user=svc_cfg.get('SVC_AUTH_USER'),
+                use_ssl=use_ssl_paths,
+                target_host=target_host
             )
         elif svc_type in ['tcp', 'ssh']:
             # Если это TCP и мы хотим SSL (через домен)
