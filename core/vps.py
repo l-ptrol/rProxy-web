@@ -1,6 +1,6 @@
 import os
 import subprocess
-from .utils import msg, warn, err
+from .utils import msg, warn, err, GREEN, RED, CYAN, DIM, NC
 
 class VPSManager:
     """Управление удаленными VPS серверами"""
@@ -132,3 +132,24 @@ class VPSManager:
             VPSManager.run_remote(vps_cfg, "nginx -t && systemctl reload nginx")
             return True, f"Deleted: {', '.join(deleted)}"
         return True, "VPS is clean"
+
+    @staticmethod
+    def health_check(vps_cfg):
+        """Проверка состояния VPS: Nginx, Диск, Доступность"""
+        results = []
+        # 1. Проверка Nginx
+        success, output = VPSManager.run_remote(vps_cfg, "systemctl is-active nginx")
+        nginx_status = f"{GREEN}Active{NC}" if success and "active" in output else f"{RED}Inactive{NC}"
+        results.append(f"Nginx: {nginx_status}")
+        
+        # 2. Проверка диска
+        success, output = VPSManager.run_remote(vps_cfg, "df -h / | tail -1 | awk '{print $4}'")
+        disk_space = output.strip() if success else "Error"
+        results.append(f"Free Disk: {CYAN}{disk_space}{NC}")
+        
+        # 3. ОС версия (кратко)
+        success, output = VPSManager.run_remote(vps_cfg, "cat /etc/os-release | grep PRETTY_NAME | cut -d'\"' -f2")
+        os_ver = output.strip() if success else "Unknown"
+        results.append(f"OS: {DIM}{os_ver}{NC}")
+        
+        return True, " | ".join(results)

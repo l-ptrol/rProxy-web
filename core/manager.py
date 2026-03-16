@@ -2,7 +2,8 @@ import os
 import subprocess
 import signal
 import time
-from .utils import msg, warn, err, gen_htpasswd
+import sys
+from .utils import msg, warn, err, gen_htpasswd, RED, NC
 from .config import ConfigManager
 from .vps import VPSManager
 from .services import ServiceManager
@@ -155,3 +156,40 @@ class ProcessManager:
         subprocess.run(["pkill", "-f", "ttyd"], stderr=subprocess.DEVNULL)
         msg(f"Сервис '{name}' остановлен.")
         return True
+
+    @staticmethod
+    def self_update():
+        """Самообновление через загрузку и запуск инсталлера"""
+        url = "https://raw.githubusercontent.com/l-ptrol/rProxy-web/master/install.sh"
+        msg("Загрузка обновления...")
+        cmd = f"curl -sL {url} -o /tmp/rproxy_update.sh && sh /tmp/rproxy_update.sh"
+        try:
+            # Запускаем в новом процессе, так как текущий будет убит инсталлером
+            subprocess.Popen(["sh", "-c", cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            msg("Инсталлятор запущен. Сессия будет перезапущена.")
+            return True
+        except Exception as e:
+            err(f"Ошибка обновления: {e}")
+            return False
+
+    @staticmethod
+    def hard_reset():
+        """Полная очистка всех конфигураций и данных rProxy"""
+        confirm = input(f"\n{RED}ВНИМАНИЕ! Это удалит ВСЕ настройки и ключи. Продолжить? (y/n): {NC}")
+        if confirm.lower() != 'y': return False
+        
+        msg("Выполнение глубокой очистки...")
+        # Останавливаем всё
+        subprocess.run(["pkill", "-f", "autossh"], stderr=subprocess.DEVNULL)
+        subprocess.run(["pkill", "-f", "ttyd"], stderr=subprocess.DEVNULL)
+        
+        # Удаляем директории
+        import shutil
+        paths = ["/opt/etc/rproxy", "/opt/var/run/rproxy", "/opt/share/rproxy-web"]
+        for p in paths:
+            if os.path.exists(p):
+                if os.path.isdir(p): shutil.rmtree(p)
+                else: os.remove(p)
+        
+        msg("Система очищена. Перезапустите инсталлятор для новой настройки.")
+        sys.exit(0)

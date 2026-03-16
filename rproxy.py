@@ -6,7 +6,7 @@ from core.config import ConfigManager
 from core.vps import VPSManager
 from core.manager import ProcessManager
 
-VERSION = "6.1.0"
+VERSION = "6.2.0"
 
 class RProxyCLI:
     def __init__(self):
@@ -47,6 +47,10 @@ class RProxyCLI:
             draw_separator()
             print(f"  {BOLD}8){NC}  🔒  Управление SSL (Certbot)")
             print(f"  {BOLD}9){NC}  ⚙️   Настройки VPS")
+            draw_separator()
+            print(f"  {BOLD}10){NC} 🚀  Обновить rProxy")
+            print(f"  {BOLD}11){NC} 🏥  Проверка VPS (Health)")
+            print(f"  {BOLD}99){NC} ☢️   Глубокая очистка (Hard Reset)")
             print(f"  {BOLD}0){NC}      Выход")
             
             choice = input(f"\n{BOLD}Выберите действие:{NC} ")
@@ -58,6 +62,9 @@ class RProxyCLI:
             elif choice == '6': self.stop_menu()
             elif choice == '7': self.restart_menu()
             elif choice == '9': self.vps_menu()
+            elif choice == '10': ProcessManager.self_update()
+            elif choice == '11': self.health_check_menu()
+            elif choice == '99': ProcessManager.hard_reset()
             elif choice == '0': break
             
             if choice != '0': input(f"\n{NC}Нажмите Enter для продолжения...")
@@ -183,11 +190,13 @@ class RProxyCLI:
             
             draw_separator()
             print(f"  {BOLD}901){NC} Добавить VPS")
+            print(f"  {BOLD}902){NC} Удалить VPS")
             print(f"  {BOLD}0){NC} Назад")
             
             choice = input(f"\n{BOLD}Выбор:{NC} ")
             if choice == '0': break
             elif choice == '901': self.add_vps()
+            elif choice == '902': self.remove_vps()
 
     def add_vps(self):
         header("Добавление нового VPS")
@@ -222,6 +231,41 @@ class RProxyCLI:
         }
         ConfigManager.save(os.path.join(self.vps_dir, f"{name}.conf"), cfg)
         msg(f"VPS '{name}' успешно добавлен.")
+
+    def remove_vps(self):
+        header("Удаление VPS")
+        files = sorted([f for f in os.listdir(self.vps_dir) if f.endswith(".conf")])
+        if not files:
+            warn("Нет VPS для удаления.")
+            return
+
+        for idx, f in enumerate(files, 1):
+            print(f"  {idx}) {f.replace('.conf', '')}")
+        
+        choice = input(f"\n{BOLD}Выберите номер для удаления (0 - отмена):{NC} ")
+        if choice == '0' or not choice.isdigit(): return
+        
+        idx = int(choice) - 1
+        if 0 <= idx < len(files):
+            name = files[idx].replace('.conf', '')
+            confirm = input(f"Удалить конфигурацию '{name}'? (y/n): ")
+            if confirm.lower() == 'y':
+                os.remove(os.path.join(self.vps_dir, files[idx]))
+                msg(f"VPS '{name}' удален.")
+
+    def health_check_menu(self):
+        header("Проверка состояния VPS (Health Check)")
+        files = sorted([f for f in os.listdir(self.vps_dir) if f.endswith(".conf")])
+        if not files:
+            warn("Нет добавленных VPS.")
+            return
+
+        for f in files:
+            name = f.replace(".conf", "")
+            cfg = ConfigManager.load(os.path.join(self.vps_dir, f))
+            print(f"\n{BOLD}[{name}]{NC} ({cfg.get('VPS_HOST')})")
+            success, info = VPSManager.health_check(cfg)
+            print(f"  {info}")
 
     def add_service(self, edit_name=None):
         header("Мастер настроек сервиса" if not edit_name else f"Редактирование: {edit_name}")

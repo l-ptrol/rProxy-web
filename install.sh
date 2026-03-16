@@ -1,6 +1,6 @@
 #!/bin/sh
 # rProxy Web & CLI (Python Core) Installer for Keenetic
-# VERSION: 6.1.0 - Modular Architecture (Full Core Parity)
+# VERSION: 6.2.0 - Modular Architecture (Full Core Parity)
 # Новое ядро на Python. 100% паритет с Bash + Модульность.
 
 set -e
@@ -15,7 +15,7 @@ warn() { printf "${YELLOW}⚠${NC} %b\n" "$*"; }
 err() { printf "${RED}✖${NC} %b\n" "$*" >&2; exit 1; }
 
 printf "\n${CYAN}==========================================${NC}\n"
-printf "${CYAN}    rProxy Python Core v6.1.0             ${NC}\n"
+printf "${CYAN}    rProxy Python Core v6.2.0             ${NC}\n"
 printf "${CYAN}==========================================${NC}\n\n"
 
 if [ ! -d "/opt/bin" ]; then
