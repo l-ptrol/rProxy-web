@@ -1,13 +1,6 @@
 import os
 import subprocess
-from typing import List, Optional
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
-
-app = FastAPI()
+from bottle import route, run, template, request, response, static_file, post, HTTPResponse
 
 # Константы путей rProxy
 RPROXY_ROOT = "/opt/etc/rproxy"
@@ -15,22 +8,25 @@ SERVICES_DIR = os.path.join(RPROXY_ROOT, "services")
 VPS_DIR = os.path.join(RPROXY_ROOT, "vps")
 GLOBAL_CONF = os.path.join(RPROXY_ROOT, "rproxy.conf")
 PID_DIR = "/opt/var/run/rproxy"
-
-# Настройка шаблонов
-templates = Jinja2Templates(directory="templates")
+TEMPLATES_DIR = "./templates"
 
 # Вспомогательная функция для парсинга bash-подобных конфигов
 def parse_config(file_path: str) -> dict:
     if not os.path.exists(file_path):
         return {}
     config = {}
-    with open(file_path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if line and not line.startswith("#"):
-                if "=" in line:
-                    key, value = line.split("=", 1)
-                    config[key.strip()] = value.strip().strip("'").strip('"')
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    if "=" in line:
+                        parts = line.split("=", 1)
+                        key = parts[0].strip()
+                        value = parts[1].strip().strip("'").strip('"')
+                        config[key] = value
+    except:
+        pass
     return config
 
 # Получение статуса сервиса
@@ -48,27 +44,12 @@ def get_service_status(service_name: str) -> str:
             return "offline"
     return "offline"
 
-class Service(BaseModel):
-    id: str
-    name: str
-    vpsId: str
-    targetHost: str
-    targetPort: str
-    extPort: str
-    tunnelPort: str
-    domain: str
-    type: str
-    enabled: bool
-    ssl: bool
-    auth: bool
-    status: str
+@route('/')
+def index():
+    return static_file("index.html", root=TEMPLATES_DIR)
 
-@app.get("/", response_class=HTMLResponse)
-async def read_root(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
-
-@app.get("/api/system")
-async def get_system(request: Request):
+@route('/api/system')
+def get_system():
     config = parse_config(GLOBAL_CONF)
     services = [f for f in os.listdir(SERVICES_DIR) if f.endswith(".conf")] if os.path.exists(SERVICES_DIR) else []
     
@@ -105,15 +86,18 @@ async def get_system(request: Request):
         </div>
     </div>
     """
-    return HTMLResponse(content=html)
+    return html
 
-@app.get("/api/services")
-async def get_services(request: Request):
+@route('/api/services')
+def get_services():
     if not os.path.exists(SERVICES_DIR):
-        return HTMLResponse(content='<div class="col-span-full py-20 text-center neon-glass text-gray-500">Сервисы не найдены</div>')
+        return '<div class="col-span-full py-20 text-center neon-glass text-gray-500">Сервисы не найдены</div>'
     
     services_html = ""
-    files = sorted([f for f in os.listdir(SERVICES_DIR) if f.endswith(".conf")])
+    try:
+        files = sorted([f for f in os.listdir(SERVICES_DIR) if f.endswith(".conf")])
+    except:
+        return '<div class="col-span-full py-20 text-center neon-glass text-gray-500">Ошибка доступа к директории</div>'
     
     for f in files:
         name = f[:-5]
@@ -171,21 +155,19 @@ async def get_services(request: Request):
         </div>
         """
     
-    return HTMLResponse(content=services_html)
+    return services_html
 
-@app.post("/api/services/{service_id}/{action}")
-async def service_action(service_id: str, action: str):
-    # Команды: start, stop, restart, remove
+@post('/api/services/<service_id>/<action>')
+def service_action(service_id, action):
     cmd = ["/opt/bin/rproxy", action, service_id]
     try:
         res = subprocess.run(cmd, capture_output=True, text=True)
         if res.returncode == 0:
-            return {"message": f"Действие {action} выполнено для {service_id}", "output": res.stdout}
+            return {"message": f"Действие {action} выполнено", "output": res.stdout}
         else:
-            return JSONResponse(status_code=500, content={"error": res.stderr})
+            return HTTPResponse(status=500, body={"error": res.stderr})
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return HTTPResponse(status=500, body={"error": str(e)})
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=3000)
+    run(host='0.0.0.0', port=3000, quiet=True)

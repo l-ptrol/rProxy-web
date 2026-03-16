@@ -1,6 +1,6 @@
 #!/bin/sh
-# rProxy Web (Python Edition) Installer for Keenetic
-# VERSION: 2.0.1
+# rProxy Web (Python/Bottle Edition) Installer for Keenetic
+# VERSION: 2.0.2
 
 set -e
 
@@ -15,7 +15,7 @@ err() { printf "${RED}✖${NC} %s\n" "$*" >&2; exit 1; }
 
 header() {
     printf "\n${GREEN}====================================${NC}\n"
-    printf "${GREEN}   rProxy Web (Python) Installer    ${NC}\n"
+    printf "${GREEN}   rProxy Web (Bottle) Installer    ${NC}\n"
     printf "${GREEN}====================================${NC}\n\n"
 }
 
@@ -26,14 +26,10 @@ if [ ! -d "/opt/bin" ]; then
     err "Entware не найден. Установите Entware на ваш роутер."
 fi
 
-# 2. Установка Python и зависимостей
-msg "Установка Python3 и необходимых библиотек..."
+# 2. Установка Python и зависимостей (только легкие пакеты из opkg)
+msg "Установка Python3 и библиотеки Bottle..."
 opkg update
-opkg install python3 python3-pip python3-asyncio
-
-# Установка FastAPI и Uvicorn через pip (легкие версии)
-msg "Установка FastAPI и Uvicorn (это может занять пару минут)..."
-pip3 install fastapi uvicorn jinja2
+opkg install python3 python3-bottle
 
 # 3. Установка файлов проекта
 INSTALL_DIR="/opt/share/rproxy-web"
@@ -51,7 +47,7 @@ else
     mkdir -p "$TMP_DIR"
     curl -L https://github.com/l-ptrol/rProxy-web/archive/refs/heads/master.tar.gz -o "$TMP_DIR/master.tar.gz"
     tar -xzf "$TMP_DIR/master.tar.gz" -C "$TMP_DIR"
-    cp -r "$TMP_DIR"/rProxy-web-master/*.py "$INSTALL_DIR/"
+    cp -r "$TMP_DIR"/rProxy-web-master/main.py "$INSTALL_DIR/"
     cp -r "$TMP_DIR"/rProxy-web-master/templates "$INSTALL_DIR/"
     rm -rf "$TMP_DIR"
 fi
@@ -64,12 +60,13 @@ cat > "$CAT_INIT" <<EOF
 
 case "\$1" in
     start)
-        echo "Starting rProxy Web (Python)..."
+        echo "Starting rProxy Web (Bottle)..."
         cd $INSTALL_DIR
+        # Запуск в фоновом режиме через nohup или просто &
         python3 main.py > /opt/var/log/rproxy-web.log 2>&1 &
         ;;
     stop)
-        echo "Stopping rProxy Web (Python)..."
+        echo "Stopping rProxy Web (Bottle)..."
         pkill -f "python3 main.py"
         ;;
     restart)
