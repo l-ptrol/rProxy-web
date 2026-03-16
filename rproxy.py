@@ -1,12 +1,13 @@
 #!/opt/bin/python3
 import sys
 import os
+import random
 from core.utils import msg, warn, err, header, draw_separator, get_router_ip, BOLD, NC, GREEN, RED, YELLOW, CYAN, DIM
 from core.config import ConfigManager
 from core.vps import VPSManager
 from core.manager import ProcessManager
 
-VERSION = "6.2.2"
+VERSION = "6.3.0"
 
 class RProxyCLI:
     def __init__(self):
@@ -268,118 +269,192 @@ class RProxyCLI:
             print(f"  {info}")
 
     def add_service(self, edit_name=None):
-        header("Мастер настроек сервиса" if not edit_name else f"Редактирование: {edit_name}")
+        header("Добавить новый сервис" if not edit_name else f"Редактирование: {edit_name}")
+        msg(f"{DIM}Введите 0 на любом шаге для возврата назад{NC}")
         
         old_cfg = {}
         if edit_name:
             old_cfg = ConfigManager.load(os.path.join(self.services_dir, f"{edit_name}.conf"))
 
-        # 1. Имя
-        if not edit_name:
-            name = input(f"{BOLD}Название (лат. без пробелов):{NC} ").strip()
-            if not name or os.path.exists(os.path.join(self.services_dir, f"{name}.conf")):
-                warn("Некорректное имя или сервис существует.")
-                return
-        else:
-            name = edit_name
-
-        # 2. Тип (Меню вариантов)
-        t_def = old_cfg.get('SVC_TYPE', 'http')
-        types = [
-            ("http", "веб"),
-            ("tcp", "вынос портов"),
-            ("ttyd", "веб-терминал"),
-            ("ssh", "удаленный доступ")
-        ]
-        
-        print(f"\n{BOLD}Выберите тип сервиса (по умолчанию {t_def}):{NC}")
-        for idx, (code, desc) in enumerate(types, 1):
-            mark = f"{GREEN}●{NC}" if code == t_def else " "
-            print(f"  {BOLD}{idx}){NC} {code:<6} {DIM}({desc}){NC} {mark}")
-        
-        t_choice = input(f"\n{BOLD}Вариант [1-4]:{NC} ").strip()
-        if not t_choice:
-            svc_type = t_def
-        else:
-            try:
-                idx = int(t_choice) - 1
-                if 0 <= idx < len(types):
-                    svc_type = types[idx][0]
-                else:
-                    svc_type = t_def
-            except:
-                svc_type = t_def
-        
-        msg(f"Выбран тип: {svc_type}")
-
-        # 3. Цель (Target)
-        h_def = old_cfg.get('SVC_TARGET_HOST', '127.0.0.1')
-        target_host = input(f"Локальный IP цели [{h_def}]: ").strip() or h_def
-        
-        p_def = old_cfg.get('SVC_TARGET_PORT', '80')
-        target_port = input(f"Локальный порт цели [{p_def}]: ").strip() or p_def
-
-        # 4. VPS
-        vps_files = [f.replace('.conf', '') for f in os.listdir(self.vps_dir) if f.endswith('.conf')]
-        if not vps_files:
-            err("Сначала добавьте VPS!")
-            return
-        
-        v_def = old_cfg.get('SVC_VPS', vps_files[0])
-        print(f"Доступные VPS: {', '.join(vps_files)}")
-        vps_id = input(f"Выберите VPS [{v_def}]: ").strip() or v_def
-
-        # 5. Внешний порт (на VPS)
-        ext_def = old_cfg.get('SVC_EXT_PORT', '80' if svc_type == 'http' else '26000')
-        ext_port = input(f"Внешний порт на VPS [{ext_def}]: ").strip() or ext_def
-
-        # 6. Домен и SSL
-        dom_def = old_cfg.get('SVC_DOMAIN', '')
-        domain = input(f"Домен (опционально) [{dom_def}]: ").strip() or dom_def
-        
-        use_ssl = 'no'
-        if domain:
-            ssl_def = old_cfg.get('SVC_SSL', 'yes')
-            use_ssl = input(f"Использовать SSL (Certbot)? (yes/no) [{ssl_def}]: ").strip() or ssl_def
-
-        # 7. Авторизация
-        auth_def = 'yes' if old_cfg.get('SVC_AUTH_USER') else 'no'
-        use_auth = input(f"Защитить паролем (Basic Auth)? (yes/no) [{auth_def}]: ").strip() or auth_def
-        
+        step = 1
+        name = edit_name or ""
+        svc_type = old_cfg.get('SVC_TYPE', 'http')
+        target_host = old_cfg.get('SVC_TARGET_HOST', '127.0.0.1')
+        target_port = old_cfg.get('SVC_TARGET_PORT', '80')
+        domain = old_cfg.get('SVC_DOMAIN', '')
+        ext_port = old_cfg.get('SVC_EXT_PORT', '')
+        use_ssl = old_cfg.get('SVC_SSL', 'no')
+        vps_id = old_cfg.get('SVC_VPS', '')
         auth_user = old_cfg.get('SVC_AUTH_USER', '')
         auth_pass = old_cfg.get('SVC_AUTH_PASS', '')
-        if use_auth == 'yes':
-            auth_user = input(f"Имя пользователя [admin]: ").strip() or "admin"
-            auth_pass = input(f"Пароль: ").strip()
-            if not auth_pass and edit_name: auth_pass = old_cfg.get('SVC_AUTH_PASS')
 
-        # 8. Финализация
-        import random
-        tunnel_port = old_cfg.get('SVC_TUNNEL_PORT', random.randint(10000, 15000))
+        while step > 0:
+            draw_separator()
+            if step == 1: # Имя
+                if edit_name:
+                    step = 2
+                    continue
+                res = input(f"{BOLD}Шаг 1. Название (лат. без пробелов):{NC} ").strip()
+                if res == "0": return
+                if not res or os.path.exists(os.path.join(self.services_dir, f"{res}.conf")):
+                    warn("Некорректное имя или сервис существует.")
+                else:
+                    name = res
+                    step = 2
+            
+            elif step == 2: # Тип
+                types = [("http", "веб"), ("tcp", "порты"), ("ttyd", "терминал"), ("ssh", "удаленный доступ")]
+                print(f"\n{BOLD}Шаг 2. Выберите тип сервиса (по умолчанию {svc_type}):{NC}")
+                for idx, (code, desc) in enumerate(types, 1):
+                    mark = f"{GREEN}●{NC}" if code == svc_type else " "
+                    print(f"  {BOLD}{idx}){NC} {code:<6} {DIM}({desc}){NC} {mark}")
+                
+                res = input(f"\nВариант [1-4]: ").strip()
+                if res == "0": 
+                    if edit_name: return
+                    step = 1; continue
+                if res:
+                    try:
+                        idx = int(res) - 1
+                        if 0 <= idx < len(types): svc_type = types[idx][0]
+                    except: pass
+                step = 3
 
-        new_cfg = {
-            "SVC_NAME": name,
-            "SVC_TYPE": svc_type,
-            "SVC_TARGET_HOST": target_host,
-            "SVC_TARGET_PORT": target_port,
-            "SVC_VPS": vps_id,
-            "SVC_EXT_PORT": ext_port,
-            "SVC_DOMAIN": domain,
-            "SVC_SSL": use_ssl,
-            "SVC_TUNNEL_PORT": tunnel_port,
-            "SVC_ENABLED": "yes"
-        }
-        if auth_user:
-            new_cfg["SVC_AUTH_USER"] = auth_user
-            new_cfg["SVC_AUTH_PASS"] = auth_pass
+            elif step == 3: # Цель
+                if svc_type == 'ttyd':
+                    target_host = "127.0.0.1"
+                    target_port = old_cfg.get('SVC_TARGET_PORT', random.randint(7681, 7781))
+                    msg(f"Для ttyd будет использован порт {target_port}")
+                    step = 4
+                    continue
+                
+                print(f"\n{BOLD}Шаг 3. Цель локально (IP:порт){NC}")
+                res = input(f"Адрес [{target_host}:{target_port}]: ").strip()
+                if res == "0": step = 2; continue
+                if res:
+                    if ":" in res:
+                        target_host, target_port = res.split(":", 1)
+                    else:
+                        target_port = res
+                step = 4
 
-        ConfigManager.save(os.path.join(self.services_dir, f"{name}.conf"), new_cfg)
-        msg(f"Сервис '{name}' успешно {'обновлен' if edit_name else 'сохранен'}.")
-        if not edit_name:
-            if input("\nЗапустить сейчас? (y/n): ").lower() == 'y':
-                v_path = os.path.join(self.vps_dir, f"{vps_id}.conf")
-                vps_cfg = ConfigManager.load(v_path)
-                ProcessManager.start_service(new_cfg, vps_cfg)
+            elif step == 4: # Режим (Домен или Порт)
+                print(f"\n{BOLD}Шаг 4. Режим публикации{NC}")
+                print(f"  {BOLD}1){NC} Домен (SSL, порт 443)")
+                print(f"  {BOLD}2){NC} Внешний порт (без SSL)")
+                mode = input(f"Ваш выбор [1]: ").strip() or "1"
+                if mode == "0": step = 3; continue
+                if mode == "1":
+                    step = 5
+                else:
+                    domain = ""
+                    use_ssl = "no"
+                    step = 6
+
+            elif step == 5: # Домен
+                print(f"\n{BOLD}Шаг 5. Доменное имя{NC}")
+                res = input(f"Введите домен [{domain}]: ").strip() or domain
+                if res == "0": step = 4; continue
+                if not res:
+                    warn("Домен обязателен для этого режима.")
+                    continue
+                domain = res
+                use_ssl = "yes"
+                ext_port = "443"
+                step = 6
+
+            elif step == 6: # Внешний порт (если не домен)
+                if domain: 
+                    step = 7
+                    continue
+                print(f"\n{BOLD}Шаг 6. Внешний порт на VPS{NC}")
+                def_port = ext_port or "26000"
+                res = input(f"Порт [{def_port}]: ").strip() or def_port
+                if res == "0": step = 4; continue
+                ext_port = res
+                step = 7
+
+            elif step == 7: # VPS
+                # Автоопределение если домен
+                if domain and not vps_id:
+                    msg(f"Проверяю резолв домена {domain}...")
+                    found = VPSManager.find_vps_by_domain(domain)
+                    if found:
+                        msg(f"Домен указывает на VPS: {GREEN}{found}{NC}")
+                        vps_id = found
+                
+                vps_files = [f.replace('.conf', '') for f in os.listdir(self.vps_dir) if f.endswith('.conf')]
+                if not vps_files:
+                    err("Сначала добавьте VPS в меню 9!"); return
+                
+                print(f"\n{BOLD}Шаг 7. Выбор VPS сервера{NC}")
+                v_def = vps_id or vps_files[0]
+                print(f"  Доступные: {', '.join(vps_files)}")
+                res = input(f"Выберите VPS [{v_def}]: ").strip() or v_def
+                if res == "0": 
+                    step = 5 if domain else 6
+                    continue
+                if res not in vps_files:
+                    warn("Такой VPS не найден.")
+                    continue
+                vps_id = res
+                step = 8
+
+            elif step == 8: # Авторизация
+                print(f"\n{BOLD}Шаг 8. Защита паролем (Basic Auth){NC}")
+                auth_now = "yes" if auth_user else "no"
+                res = input(f"Использовать защиту? (yes/no) [{auth_now}]: ").strip() or auth_now
+                if res == "0": step = 7; continue
+                if res == "yes":
+                    u_def = auth_user or "admin"
+                    auth_user = input(f"Логин [{u_def}]: ").strip() or u_def
+                    auth_pass = input(f"Пароль: ").strip() or auth_pass
+                else:
+                    auth_user = ""
+                    auth_pass = ""
+                step = 9
+
+            elif step == 9: # Итог и Сохранение
+                tunnel_port = old_cfg.get('SVC_TUNNEL_PORT', random.randint(10000, 15000))
+                
+                header("Итоговая конфигурация")
+                print(f"  Имя:           {CYAN}{name}{NC}")
+                print(f"  Тип:           {CYAN}{svc_type}{NC}")
+                print(f"  Цель:          {CYAN}{target_host}:{target_port}{NC}")
+                print(f"  VPS:           {CYAN}{vps_id}{NC}")
+                print(f"  Туннель порт:  {CYAN}{tunnel_port}{NC}")
+                print(f"  Внешний:       {CYAN}{domain or 'IP'}:{ext_port}{NC}")
+                print(f"  SSL/Auth:      {CYAN}SSL:{use_ssl} / Auth:{'yes' if auth_user else 'no'}{NC}")
+                draw_separator()
+                
+                res = input(f"\n{BOLD}Все верно? Сохранить? (y/n) [y]:{NC} ").strip().lower() or "y"
+                if res == "0": step = 8; continue
+                if res != "y": msg("Отменено"); return
+                
+                new_cfg = {
+                    "SVC_NAME": name,
+                    "SVC_TYPE": svc_type,
+                    "SVC_TARGET_HOST": target_host,
+                    "SVC_TARGET_PORT": target_port,
+                    "SVC_VPS": vps_id,
+                    "SVC_EXT_PORT": ext_port,
+                    "SVC_DOMAIN": domain,
+                    "SVC_SSL": use_ssl,
+                    "SVC_TUNNEL_PORT": tunnel_port,
+                    "SVC_ENABLED": "yes"
+                }
+                if auth_user:
+                    new_cfg["SVC_AUTH_USER"] = auth_user
+                    new_cfg["SVC_AUTH_PASS"] = auth_pass
+
+                ConfigManager.save(os.path.join(self.services_dir, f"{name}.conf"), new_cfg)
+                msg(f"Сервис '{name}' успешно сохранен.")
+                
+                if input("\nЗапустить сейчас? (y/n) [y]: ").lower() != 'n':
+                    v_path = os.path.join(self.vps_dir, f"{vps_id}.conf")
+                    vps_cfg = ConfigManager.load(v_path)
+                    ProcessManager.start_service(new_cfg, vps_cfg)
+                return
 
     def edit_service(self):
         names = self.select_service("Редактирование сервиса")

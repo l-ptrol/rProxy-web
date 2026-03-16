@@ -1,6 +1,8 @@
 import os
 import subprocess
-from .utils import msg, warn, err, GREEN, RED, CYAN, DIM, NC
+import socket
+from .utils import msg, warn, err, GREEN, RED, CYAN, DIM, NC, YELLOW
+from .config import ConfigManager
 
 class VPSManager:
     """Управление удаленными VPS серверами"""
@@ -32,7 +34,7 @@ class VPSManager:
                 err(f"Не удалось сгенерировать SSH-ключ: {e}")
 
     @staticmethod
-    def run_remote(vps_cfg, cmd, timeout=30):
+    def run_remote(vps_cfg, cmd, timeout=30, echo=False):
         """Выполняет команду на удаленном VPS через SSH"""
         ssh_bin = "/opt/bin/ssh"
         if not os.path.exists(ssh_bin):
@@ -46,6 +48,7 @@ class VPSManager:
             ssh_bin, 
             "-o", "StrictHostKeyChecking=no",
             "-o", "ConnectTimeout=10",
+            "-o", "LogLevel=ERROR",
             "-i", VPSManager.SSH_KEY,
             "-p", str(port),
             f"{user}@{host}",
@@ -54,13 +57,36 @@ class VPSManager:
         
         try:
             result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=timeout)
+            output = (result.stdout + result.stderr).strip()
+            if echo and output:
+                for line in output.splitlines():
+                    print(f"  {DIM}[vps]{NC} {line}")
+            
             if result.returncode != 0:
-                return False, result.stderr.strip()
+                return False, output
             return True, result.stdout.strip()
         except subprocess.TimeoutExpired:
             return False, "Превышено время ожидания SSH"
         except Exception as e:
             return False, str(e)
+
+    @staticmethod
+    def find_vps_by_domain(domain):
+        """Ищет VPS, на который указывает домен (аналог из bash)"""
+        try:
+            ip = socket.gethostbyname(domain)
+        except:
+            return None
+
+        if not os.path.exists(VPSManager.VPS_DIR):
+            return None
+
+        for f in os.listdir(VPSManager.VPS_DIR):
+            if f.endswith(".conf"):
+                cfg = ConfigManager.load(os.path.join(VPSManager.VPS_DIR, f))
+                if cfg.get('VPS_HOST') == ip:
+                    return f.replace(".conf", "")
+        return None
 
     @staticmethod
     def setup_vps(vps_cfg):
@@ -102,7 +128,7 @@ class VPSManager:
         # Экранируем кавычки для sh
         content_escaped = content.replace("'", "'\\''")
         cmd = f"printf '{content_escaped}' > {path}/rproxy_{name}.conf && nginx -t && systemctl reload nginx"
-        return VPSManager.run_remote(vps_cfg, cmd)
+        return VPSManager.run_remote(vps_cfg, cmd, echo=True)
 
     @staticmethod
     def run_certbot(vps_cfg, domain):

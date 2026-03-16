@@ -33,55 +33,6 @@ class ProcessManager:
                 os.remove(pid_file)
             return False
 
-    @staticmethod
-    def start_service(svc_cfg, vps_cfg):
-        """Комплексный запуск сервиса: SSL, Auth, Nginx и Туннель"""
-        name = svc_cfg.get('SVC_NAME')
-        if ProcessManager.is_running(name):
-            msg(f"Сервис '{name}' уже запущен.")
-            return True
-
-        os.makedirs(ProcessManager.PID_DIR, exist_ok=True)
-        
-        # 1. ОБРАБОТКА BASIC AUTH
-        auth_user = svc_cfg.get('SVC_AUTH_USER')
-        auth_pass = svc_cfg.get('SVC_AUTH_PASS')
-        if auth_user and auth_pass:
-            msg(f"Генерация доступа для {auth_user}...")
-            ht_content = gen_htpasswd(auth_user, auth_pass)
-            # Деплоим файл паролей на VPS
-            VPSManager.run_remote(vps_cfg, f"echo '{ht_content}' > /etc/nginx/rproxy_{name}.htpasswd")
-
-        # 2. ОБРАБОТКА SSL (CERTBOT)
-        domain = svc_cfg.get('SVC_DOMAIN')
-        use_ssl = svc_cfg.get('SVC_SSL') == 'yes'
-        has_certificate = False
-        
-        if use_ssl and domain:
-            msg(f"Проверка SSL для {domain}...")
-            if VPSManager.check_ssl_exists(vps_cfg, domain):
-                has_certificate = True
-                msg("Сертификат уже существует.")
-            else:
-                msg("Выпуск нового сертификата через Certbot...")
-                # Деплоим временный vhost для валидации
-                from .services import ServiceTemplate
-                v_content = ServiceTemplate.certbot_validation_vhost(domain)
-                VPSManager.deploy_vhost(vps_cfg, name, v_content)
-                
-                success, output = VPSManager.run_certbot(vps_cfg, domain)
-                if success:
-                    has_certificate = True
-                    msg("SSL сертификат успешно получен.")
-                else:
-                    err(f"Ошибка Certbot: {output}")
-                    # Продолжаем без SSL или отменяем? Оригинал продолжает попытку.
-
-        # 3. ДЕПЛОЙ NGINX
-        msg("Деплой конфигурации Nginx...")
-        nginx_conf = ServiceManager.generate_conf(svc_cfg, use_ssl_paths=has_certificate)
-        nginx_path = ServiceManager.get_nginx_path(svc_cfg.get('SVC_TYPE'))
-        VPSManager.deploy_vhost(vps_cfg, name, nginx_conf, path=nginx_path)
 
     @staticmethod
     def start_ttyd(port, cmd, name):
@@ -157,7 +108,7 @@ run()
         if auth_user and auth_pass:
             msg(f"Генерация доступа для {auth_user}...")
             ht_content = gen_htpasswd(auth_user, auth_pass)
-            VPSManager.run_remote(vps_cfg, f"echo '{ht_content}' > /etc/nginx/rproxy_{name}.htpasswd")
+            VPSManager.run_remote(vps_cfg, f"echo '{ht_content}' > /etc/nginx/rproxy_{name}.htpasswd", echo=True)
 
         # 2. ОБРАБОТКА SSL (CERTBOT)
         domain = svc_cfg.get('SVC_DOMAIN')

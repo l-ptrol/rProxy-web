@@ -2,7 +2,7 @@ class ServiceTemplate:
     """Генератор конфигураций Nginx для удаленного VPS"""
 
     @staticmethod
-    def http_proxy(name, domain, local_port, ext_port=80, auth_user=None, use_ssl=False, target_host="127.0.0.1"):
+    def http_proxy(name, domain, local_port, ext_port=80, auth_user=None, use_ssl=False, target_host="127.0.0.1", target_port=80):
         """Конфиг для HTTP/HTTPS прокси"""
         auth_config = ""
         if auth_user:
@@ -10,7 +10,6 @@ class ServiceTemplate:
     auth_basic "Restricted Access";
     auth_basic_user_file /etc/nginx/rproxy_{name}.htpasswd;
     """
-        
         listen_80 = f"""
 server {{
     listen 80;
@@ -25,6 +24,9 @@ server {{
     include /etc/letsencrypt/options-ssl-nginx.conf;
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
     """ if use_ssl else ""
+
+        stealth_host = f"{target_host}:{target_port}" if str(target_port) != "80" else target_host
+        host_header = "$host" if domain else stealth_host
 
         return f"""{listen_80}
 server {{
@@ -41,7 +43,7 @@ server {{
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
+        proxy_set_header Host {host_header};
         proxy_set_header Origin "";
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -113,6 +115,7 @@ class ServiceManager:
         tunnel_port = svc_cfg.get('SVC_TUNNEL_PORT')
         ext_port = svc_cfg.get('SVC_EXT_PORT', 80)
         target_host = svc_cfg.get('SVC_TARGET_HOST', '127.0.0.1')
+        target_port = svc_cfg.get('SVC_TARGET_PORT', 80)
         
         if svc_type in ['http', 'ttyd']:
             return ServiceTemplate.http_proxy(
@@ -120,7 +123,8 @@ class ServiceManager:
                 ext_port=ext_port,
                 auth_user=svc_cfg.get('SVC_AUTH_USER'),
                 use_ssl=use_ssl_paths,
-                target_host=target_host
+                target_host=target_host,
+                target_port=target_port
             )
         elif svc_type in ['tcp', 'ssh']:
             # Если это TCP и мы хотим SSL (через домен)
