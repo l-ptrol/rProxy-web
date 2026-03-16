@@ -1,7 +1,9 @@
-node_modules
-dist
-frontend_dist
+**/node_modules
+**/dist
+**/frontend_dist
 .env
 *.log
 .DS_Store
 .git/index.lock
+backend/package-lock.json
+frontend/package-lock.json
