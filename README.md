@@ -10,7 +10,7 @@
 
 ## Установка
 ```bash
-sh <(curl -sL https://raw.githubusercontent.com/l-ptrol/rProxy-web/master/install.sh)
+curl -sL https://raw.githubusercontent.com/l-ptrol/rProxy-web/master/install.sh -o /tmp/install.sh && sh /tmp/install.sh
 ```
 
 ## Использование
