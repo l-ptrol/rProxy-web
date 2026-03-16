@@ -1,5 +1,6 @@
 import os
 import subprocess
+import time
 from bottle import route, run, template, request, response, static_file, post, HTTPResponse
 
 # Константы путей rProxy
@@ -45,73 +46,82 @@ def get_system():
     vps_count = len(os.listdir(VPS_DIR)) if os.path.exists(VPS_DIR) else 0
     
     return f"""
-    <div class="stat-item">
-        <div class="stat-label"><i data-lucide="cpu" style="width:14px"></i> Version</div>
-        <div class="stat-value" style="color: var(--neon-cyan)">{config.get("VERSION", "2.0.3")}</div>
+    <div class="stat-card">
+        <div class="stat-label"><i data-lucide="cpu"></i> Version</div>
+        <div class="stat-value" style="color: var(--accent-main)">{config.get("VERSION", "3.0.0")}</div>
     </div>
-    <div class="stat-item">
-        <div class="stat-label"><i data-lucide="hard-drive" style="width:14px"></i> VPS Active</div>
+    <div class="stat-card">
+        <div class="stat-label"><i data-lucide="hard-drive"></i> Global VPS</div>
         <div class="stat-value">{vps_count}</div>
     </div>
-    <div class="stat-item">
-        <div class="stat-label"><i data-lucide="activity" style="width:14px"></i> Online</div>
-        <div class="stat-value" style="color: var(--neon-emerald)">{online_count}</div>
+    <div class="stat-card">
+        <div class="stat-label"><i data-lucide="activity"></i> Active Tunnels</div>
+        <div class="stat-value" style="color: var(--accent-success)">{online_count}</div>
     </div>
     """
 
 @route('/api/services')
 def get_services():
     if not os.path.exists(SERVICES_DIR):
-        return '<div class="custom-loader"><p>Сервисы не настроены</p></div>'
+        return '<div class="loading-state"><p>Конфигурации rProxy не найдены</p></div>'
     
     html = ""
     try:
         files = sorted([f for f in os.listdir(SERVICES_DIR) if f.endswith(".conf")])
-    except: return '<div class="custom-loader"><p>Ошибка доступа</p></div>'
+    except: return '<div class="loading-state"><p>Ошибка доступа к FS</p></div>'
+
+    if not files:
+        return '<div class="loading-state"><p>Список сервисов пуст</p></div>'
 
     for f in files:
         name = f[:-5]
         cfg = parse_config(os.path.join(SERVICES_DIR, f))
         status = get_service_status(name)
         is_online = status == "online"
-        icon = "terminal" if cfg.get('SVC_TYPE') == 'tcp' else "globe"
+        
+        # Визуальные настройки в зависимости от типа
+        is_tcp = cfg.get('SVC_TYPE') == 'tcp'
+        icon = "terminal" if is_tcp else "globe"
+        accent = "var(--accent-purple)" if is_tcp else "var(--accent-main)"
+        accent_glow = "rgba(192, 132, 252, 0.2)" if is_tcp else "rgba(0, 242, 255, 0.2)"
         
         html += f"""
-        <div class="glass svc-card {'online' if is_online else ''}">
+        <div class="glass service-card {'online' if is_online else ''}" style="--accent-color: {accent}; --accent-glow: {accent_glow}">
             <div class="svc-header">
-                <div class="svc-info">
-                    <div class="svc-icon"><i data-lucide="{icon}"></i></div>
-                    <div class="svc-name">
+                <div class="svc-visual">
+                    <div class="svc-icon-box"><i data-lucide="{icon}"></i></div>
+                    <div class="svc-name-group">
                         <h3>{name}</h3>
-                        <div class="svc-status">
-                            <span class="status-dot {'online' if is_online else 'offline'}"></span>
-                            <span class="status-text" style="color: {'var(--neon-emerald)' if is_online else 'var(--neon-red)'}">
-                                {'On-Air' if is_online else 'Standby'}
-                            </span>
+                        <div class="status-badge {'online' if is_online else 'offline'}">
+                            <span class="dot"></span>
+                            <span>{'On-Air' if is_online else 'Standby'}</span>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div class="svc-details">
-                <div class="detail-row">
-                    <div class="detail-label"><i data-lucide="server" style="width:12px"></i> Target</div>
-                    <div class="detail-value">{cfg.get('SVC_TARGET_HOST', '127.0.0.1')}:{cfg.get('SVC_TARGET_PORT', '')}</div>
+            <div class="svc-meta">
+                <div class="meta-row">
+                    <div class="meta-label"><i data-lucide="server" style="width:12px"></i> Target</div>
+                    <div class="meta-value">{cfg.get('SVC_TARGET_HOST', '127.0.0.1')}:{cfg.get('SVC_TARGET_PORT', '')}</div>
                 </div>
-                <div class="detail-row">
-                    <div class="detail-label"><i data-lucide="external-link" style="width:12px"></i> Public</div>
-                    <div class="detail-value" style="color: var(--neon-cyan); font-weight: bold;">{cfg.get('SVC_EXT_PORT', '')}</div>
+                <div class="meta-row">
+                    <div class="meta-label"><i data-lucide="external-link" style="width:12px"></i> Public Port</div>
+                    <div class="meta-value" style="color: var(--accent-main); font-weight: 900;">{cfg.get('SVC_EXT_PORT', '')}</div>
                 </div>
             </div>
 
             <div class="svc-actions">
                 <button hx-post="/api/services/{name}/{'stop' if is_online else 'start'}" hx-swap="none"
-                    class="action-btn power {'off' if is_online else 'on'}">
-                    <i data-lucide="power" style="width:14px"></i> {'Stop' if is_online else 'Start'}
+                    class="btn-action primary {'off' if is_online else 'on'}">
+                    <i data-lucide="power" style="width:16px"></i>
+                    <span>{'Stop Session' if is_online else 'Start Tunnel'}</span>
                 </button>
-                <button class="action-btn"><i data-lucide="file-text" style="width:16px"></i></button>
-                <button class="action-btn delete" hx-post="/api/services/{name}/remove" hx-confirm="Удалить {name}?" hx-swap="none">
-                    <i data-lucide="trash-2" style="width:16px"></i>
+                <button onclick="showLogs('{name}')" class="btn-action" title="View Logs">
+                    <i data-lucide="file-text" style="width:18px"></i>
+                </button>
+                <button class="btn-action danger" hx-post="/api/services/{name}/remove" hx-confirm="Вы уверены, что хотите удалить {name}?" hx-swap="none">
+                    <i data-lucide="trash-2" style="width:18px"></i>
                 </button>
             </div>
         </div>
@@ -121,9 +131,22 @@ def get_services():
 @post('/api/services/<service_id>/<action>')
 def service_action(service_id, action):
     try:
+        # Прямой вызов CLI rproxy
         subprocess.run(["/opt/bin/rproxy", action, service_id], capture_output=True)
-        return {"status": "ok"}
+        return {"status": "success"}
     except: return HTTPResponse(status=500)
+
+@route('/api/logs/<service_id>')
+def get_logs(service_id):
+    # Пытаемся прочитать лог ttyd если он есть
+    log_file = f"/tmp/rproxy_ttyd_{service_id}.log"
+    if os.path.exists(log_file):
+        try:
+            with open(log_file, "r") as f:
+                content = f.read().splitlines()[-50:] # Последние 50 строк
+                return "<br>".join(content) if content else "Лог пуст..."
+        except: return "Ошибка чтения лога."
+    return "Лог-файл не найден. Запустите сервис с ttyd."
 
 if __name__ == "__main__":
     run(host='0.0.0.0', port=3000, quiet=True)
