@@ -15,7 +15,7 @@ RPROXY_ROOT = "/opt/etc/rproxy"
 SERVICES_DIR = os.path.join(RPROXY_ROOT, "services")
 VPS_DIR = os.path.join(RPROXY_ROOT, "vps")
 
-VERSION = "6.6.2"
+VERSION = "6.6.3"
 
 # Настройка многопоточного сервера для Bottle (чтобы SSE не блокировал интерфейс)
 from wsgiref.simple_server import WSGIServer, WSGIRequestHandler
@@ -47,7 +47,7 @@ def get_stats():
         svc_count = len(files)
         for f in files:
             if ProcessManager.is_running(f.replace(".conf", "")):
-                online_count += 1
+                online_count = online_count + 1
     
     vps_count = 0
     if os.path.exists(VPS_DIR):

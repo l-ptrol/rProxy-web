@@ -9,8 +9,8 @@ class ServiceTemplate:
             auth_config = f"""
     auth_basic "rProxy: {name}";
     auth_basic_user_file /etc/nginx/rproxy_{name}.htpasswd;
-    # Сквозная авторизация: позволяем роутеру видеть данные входа
-    # proxy_set_header Authorization ""; 
+    # ТОТАЛЬНАЯ ИЗОЛЯЦИЯ: Бэкенд никогда не видит пароль Nginx
+    proxy_set_header Authorization ""; 
     proxy_set_header X-Forwarded-User $remote_user;
     """
         listen_80 = f"""
@@ -63,6 +63,7 @@ server {{
         
         proxy_hide_header 'Access-Control-Allow-Origin';
         proxy_hide_header WWW-Authenticate;
+        proxy_hide_header x-ndw2-interactive; # Для Keenetic
         
         # Предотвращаем конфликты сессий
         proxy_buffer_size 128k;
