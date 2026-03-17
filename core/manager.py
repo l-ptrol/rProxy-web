@@ -177,6 +177,14 @@ if __name__ == "__main__":
         os.makedirs(ProcessManager.PID_DIR, exist_ok=True)
         os.makedirs(ProcessManager.LOG_DIR, exist_ok=True)
         
+        # 0. ПРЕДВАРИТЕЛЬНАЯ ОЧИСТКА (Критично для Certbot и предотвращения конфликтов)
+        msg(f"Подготовка окружения для '{name}'...")
+        ProcessManager.stop_service(name, svc_cfg=svc_cfg)
+        
+        # Очистка старых конфигов Nginx на VPS, которые могут мешать валидации домена
+        vps_cleanup_cmd = f"rm -f /etc/nginx/sites-enabled/rproxy_{name}.conf /etc/nginx/streams-enabled/rproxy_{name}.conf && (nginx -t && systemctl reload nginx || true)"
+        VPSManager.run_remote(vps_cfg, vps_cleanup_cmd)
+        
         # 1. ОБРАБОТКА BASIC AUTH
         auth_user = svc_cfg.get('SVC_AUTH_USER')
         auth_pass = svc_cfg.get('SVC_AUTH_PASS')
@@ -198,6 +206,7 @@ if __name__ == "__main__":
         if use_ssl and domain:
             if VPSManager.check_ssl_exists(vps_cfg, domain):
                 has_certificate = True
+                msg(f"✅ Сертификат для {domain} уже существует. Пропускаю перевыпуск.")
             else:
                 msg("Выпуск нового сертификата через Certbot...")
                 from .services import ServiceTemplate
@@ -278,8 +287,7 @@ if __name__ == "__main__":
 
         try:
             msg(f"Запуск туннеля '{name}' (Target: {target_host}:{target_port})...")
-            # Остановка старого процесса если есть
-            ProcessManager.stop_service(name, svc_cfg=svc_cfg)
+            # stop_service перенесен в начало start_service()
             
             # Запуск в фоновом режиме через -f
             subprocess.run(cmd, env=env, check=True)
@@ -300,11 +308,8 @@ if __name__ == "__main__":
                 msg(f"Туннель '{name}' запущен (PID: {pid}). Ожидание сетевой готовности...")
                 time.sleep(3) 
                 
-                # 6. ПРЕДВАРИТЕЛЬНАЯ ОЧИСТКА VPS (от старых конфигов Nginx, которые могут мешать портам)
-                msg(f"Очистка старых конфигов на VPS...")
-                VPSManager.run_remote(vps_cfg, f"rm -f /etc/nginx/sites-enabled/rproxy_{name}.conf /etc/nginx/streams-enabled/rproxy_{name}.conf && (nginx -t && systemctl reload nginx || true)")
-
-                # 7. ДЕПЛОЙ NGINX / UDP BRIDGE
+                # 6. ДЕПЛОЙ NGINX / UDP BRIDGE
+                # Очистка перенесена в начало start_service()
                 if svc_cfg.get('SVC_TYPE') == 'udp':
                     # Для UDP запускаем мост
                     msg("Подготовка UDP-TCP моста...")
