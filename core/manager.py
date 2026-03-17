@@ -38,23 +38,27 @@ class ProcessManager:
     @staticmethod
     def start_ttyd(port, cmd, name):
         """Запуск ttyd с Watchdog-механизмом (авторестарт)"""
-        pid_file = os.path.join(ProcessManager.PID_DIR, f"ttyd_{name}.pid")
+        pid_file = os.path.join(ProcessManager.PID_DIR, f"ttyd_{port}.pid")
         log_file = os.path.join(ProcessManager.LOG_DIR, f"ttyd_{name}.log")
         
-        # Очистка старых процессов
-        ProcessManager.stop_ttyd(name)
+        # Очистка старых процессов на этом порту
+        ProcessManager.stop_ttyd(port)
         
+        # Агрессивная очистка порта перед запуском (как в Bash)
+        subprocess.run(["fuser", "-k", f"{port}/tcp"], stderr=subprocess.DEVNULL)
+        time.sleep(1)
+
         watchdog_script = f"""
 import subprocess, time, os, signal
 def run():
     while True:
         try:
-            # Запуск ttyd
-            proc = subprocess.Popen(['ttyd', '-W', '--max-clients', '10', '-i', '127.0.0.1', '-p', '{port}', '--', '{cmd}'], 
+            # Запуск ttyd на 0.0.0.0 (как в оригинале)
+            proc = subprocess.Popen(['ttyd', '-W', '--max-clients', '10', '-i', '0.0.0.0', '-p', '{port}', '--', '{cmd}'], 
                                      stdout=open('{log_file}', 'a'), stderr=subprocess.STDOUT)
             proc.wait()
-        except Exception as e:
-            with open('{log_file}', 'a') as f: f.write(f'Watchdog error: {{e}}\\n')
+        except Exception as f:
+            pass
         time.sleep(2)
 run()
 """
@@ -67,8 +71,8 @@ run()
                 f.write(str(proc.pid))
             
             # Верификация порта
+            from .utils import is_port_busy
             for _ in range(5):
-                from .utils import is_port_busy
                 if is_port_busy(port): return True
                 time.sleep(1)
             return False
@@ -77,9 +81,9 @@ run()
             return False
 
     @staticmethod
-    def stop_ttyd(name):
-        """Остановка Watchdog и процесса ttyd"""
-        pid_file = os.path.join(ProcessManager.PID_DIR, f"ttyd_{name}.pid")
+    def stop_ttyd(port):
+        """Остановка Watchdog и процесса ttyd по порту"""
+        pid_file = os.path.join(ProcessManager.PID_DIR, f"ttyd_{port}.pid")
         if os.path.exists(pid_file):
             try:
                 with open(pid_file, 'r') as f:
@@ -88,9 +92,9 @@ run()
             except: pass
             os.remove(pid_file)
         
-        # Агрессивно прибиваем ttyd на конкретном порту через pkill/fuser если нужно
-        # Но в идеале watchdog сам должен был это делать. Здесь просто pkill для надежности.
-        subprocess.run(["pkill", "-9", "-f", f"ttyd.*{name}"], stderr=subprocess.DEVNULL)
+        # Агрессивно прибиваем ttyd на конкретном порту (как в Bash)
+        subprocess.run(["pkill", "-9", "-f", f"ttyd.*-p {port}"], stderr=subprocess.DEVNULL)
+        subprocess.run(["fuser", "-k", f"{port}/tcp"], stderr=subprocess.DEVNULL)
 
     @staticmethod
     def start_service(svc_cfg, vps_cfg):
@@ -233,7 +237,7 @@ run()
             return False
 
     @staticmethod
-    def stop_service(name):
+    def stop_service(name, svc_cfg=None):
         """Остановка сервиса и очистка ресурсов"""
         # 1. Туннель
         pid_file = os.path.join(ProcessManager.PID_DIR, f"{name}.pid")
@@ -249,7 +253,12 @@ run()
             if os.path.exists(pid_file): os.remove(pid_file)
         
         # 2. TTYD
-        ProcessManager.stop_ttyd(name)
+        if svc_cfg:
+            ttyd_port = svc_cfg.get('SVC_TTYD_PORT', 7681)
+            ProcessManager.stop_ttyd(ttyd_port)
+        else:
+            # Если конфига нет, пробуем убить по стандартному порту (для очистки)
+            ProcessManager.stop_ttyd(7681)
         
         msg(f"Сервис '{name}' остановлен.")
         return True

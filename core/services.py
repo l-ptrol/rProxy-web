@@ -44,11 +44,11 @@ server {{
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-        proxy_set_header Host {stealth_host};
+        proxy_set_header Host "{stealth_host}";
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto http;
-        proxy_set_header X-Forwarded-Port $server_port;
+        proxy_set_header X-Forwarded-Port 80;
         
         # СТЕЛС-РЕЖИМ 2.0: Прикидываемся локальным браузером
         # Убираем внешнее имя хоста из X-Forwarded-Host, чтобы не смущать CSRF
