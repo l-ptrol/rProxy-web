@@ -296,16 +296,27 @@ if __name__ == "__main__":
                         VPSManager.run_remote(vps_cfg, "apt-get update && apt-get install -y socat || yum install -y socat")
 
                     # 2. Запуск на VPS (UDP -> TCP)
-                    socat_cmd_vps = f"nohup socat -lx {log_vps} UDP4-LISTEN:{ext_port},fork,reuseaddr TCP4:127.0.0.1:{remote_tunnel_port} > {log_vps} 2>&1 &"
+                    socat_cmd_vps = f"nohup socat -lf {log_vps} UDP4-LISTEN:{ext_port},fork,reuseaddr TCP4:127.0.0.1:{remote_tunnel_port} > {log_vps} 2>&1 &"
                     msg(f"Запуск socat на VPS (UDP:{ext_port} -> TCP:{remote_tunnel_port})...")
-                    VPSManager.run_remote(vps_cfg, f"pkill -f 'UDP4-LISTEN:{ext_port}' ; {socat_cmd_vps}")
+                    VPSManager.run_remote(vps_cfg, f"pkill -f 'UDP4-LISTEN:{ext_port}' || true")
+                    time.sleep(1)
+                    VPSManager.run_remote(vps_cfg, socat_cmd_vps)
                     
                     # 3. Запуск на Роутере (TCP -> UDP)
                     msg("Запуск socat на роутере...")
                     socat_path_router = "/opt/bin/socat" if os.path.exists("/opt/bin/socat") else "socat"
                     # Важно: pkill завершаем успешно (|| true)
-                    bash_cmd = f"pkill -f 'TCP4-LISTEN:{remote_tunnel_port}' || true; nohup {socat_path_router} -lx {log_router} TCP4-LISTEN:{remote_tunnel_port},fork,reuseaddr UDP4:{target_host}:{target_port} > {log_router} 2>&1 &"
+                    bash_cmd = f"pkill -f 'TCP4-LISTEN:{remote_tunnel_port}' || true; sleep 1; nohup {socat_path_router} -lf {log_router} TCP4-LISTEN:{remote_tunnel_port},fork,reuseaddr UDP4:{target_host}:{target_port} > {log_router} 2>&1 &"
                     subprocess.Popen(["sh", "-c", bash_cmd], start_new_session=True)
+                    
+                    # Проверка запуска на роутере
+                    time.sleep(2)
+                    pg_router = subprocess.run(["pgrep", "-f", f"TCP4-LISTEN:{remote_tunnel_port}"], capture_output=True)
+                    if pg_router.returncode == 0:
+                        msg(f"{GREEN}Мост на роутере успешно запущен.{NC}")
+                    else:
+                        warn(f"Мост на роутере не отвечает. Проверьте {log_router}")
+                        
                     msg(f"Лог моста на роутере: {log_router}")
                 else:
                     # Всегда сначала деплоим актуальный конфиг (с SSL или без)
@@ -448,6 +459,11 @@ if __name__ == "__main__":
             pgrep_socat = subprocess.run(["pgrep", "-f", f"TCP4-LISTEN:{tun_port}"], capture_output=True, text=True)
             s_status = f"{GREEN}ЗАПУЩЕН{NC}" if pgrep_socat.returncode == 0 else f"{RED}НЕ ЗАПУЩЕН{NC}"
             print(f"  - Мост на роутере (socat): {s_status}")
+            if pgrep_socat.returncode != 0:
+                log_router = f"/opt/var/log/rproxy_socat_{name}.log"
+                if os.path.exists(log_router):
+                    print(f"    {DIM}Последние ошибки роутера:{NC}")
+                    os.system(f"tail -n 5 {log_router} | sed 's/^/      /'")
             
             # Проверка socat на VPS
             has_soc_vps, _ = VPSManager.run_remote(vps_cfg, "which socat")
@@ -457,6 +473,10 @@ if __name__ == "__main__":
                 s_vps, o_vps = VPSManager.run_remote(vps_cfg, f"pgrep -f 'UDP4-LISTEN:{ext_port}'")
                 sv_status = f"{GREEN}ЗАПУЩЕН{NC}" if s_vps and o_vps else f"{RED}ОСТАНОВЛЕН{NC}"
                 print(f"  - Мост на VPS (socat): {sv_status}")
+                if not (s_vps and o_vps):
+                    log_vps = f"/tmp/rproxy_socat_{name}.log"
+                    print(f"    {DIM}Последние ошибки VPS:{NC}")
+                    VPSManager.run_remote(vps_cfg, f"tail -n 5 {log_vps}", echo=True)
             
             # Проверка WireGuard порта на роутере
             try:
