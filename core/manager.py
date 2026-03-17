@@ -585,13 +585,11 @@ if __name__ == "__main__":
 
     @staticmethod
     def self_update():
-        """Самообновление через загрузку и запуск инсталлера"""
-        url = "https://raw.githubusercontent.com/l-ptrol/rProxy-web/master/install.sh"
+        import time
+        url = f"https://raw.githubusercontent.com/l-ptrol/rProxy-web/master/install.sh?t={int(time.time())}"
         msg("Запуск процесса обновления...")
         
-        # Мы используем nohup и фоновый запуск, чтобы инсталлер выжил после выхода из текущего процесса
-        # Также добавляем вывод в лог для отладки
-        updater_cmd = f"curl -sL {url} -o /tmp/rproxy_update.sh && sh /tmp/rproxy_update.sh"
+        updater_cmd = f"curl -sL '{url}' -o /tmp/rproxy_update.sh && sh /tmp/rproxy_update.sh"
         
         try:
             print(f"\n{CYAN}▸{NC} Загрузка и запуск инсталлера...")

@@ -1,7 +1,7 @@
 #!/bin/sh
 # rProxy Web & CLI (Python Core) Installer for Keenetic
-# rProxy Installer v7.0.7
-VERSION="7.0.7"
+# rProxy Installer v7.0.8
+VERSION="7.0.8"
 # - Fixed Version Sync & SSH Reliability
 # Новое ядро на Python. 100% паритет с Bash + Модульность.
 
@@ -17,7 +17,7 @@ warn() { printf "${YELLOW}⚠${NC} %b\n" "$*"; }
 err() { printf "${RED}✖${NC} %b\n" "$*" >&2; exit 1; }
 
 printf "\n${CYAN}==========================================${NC}\n"
-printf "${CYAN}    rProxy Python Core v7.0.7             ${NC}\n"
+printf "${CYAN}    rProxy Python Core v7.0.8             ${NC}\n"
 printf "${CYAN}==========================================${NC}\n\n"
 
 if [ ! -d "/opt/bin" ]; then
@@ -46,11 +46,12 @@ if [ -d "./core" ] && [ -f "./main.py" ]; then
     cp -r templates "$INSTALL_DIR/"
     cp main.py rproxy.py "$INSTALL_DIR/"
 else
-    msg "Загрузка v6.6.9 из GitHub..."
-    TMP_DIR="/tmp/rproxy-web-v6"
+    msg "Загрузка последней версии из GitHub..."
+    TMP_DIR="/tmp/rproxy-web-v7"
     rm -rf "$TMP_DIR"
     mkdir -p "$TMP_DIR"
-    curl -sL https://github.com/l-ptrol/rProxy-web/archive/refs/heads/master.tar.gz -o "$TMP_DIR/master.tar.gz"
+    T_STAMP=$(date +%s)
+    curl -sL "https://github.com/l-ptrol/rProxy-web/archive/refs/heads/master.tar.gz?t=$T_STAMP" -o "$TMP_DIR/master.tar.gz"
     tar -xzf "$TMP_DIR/master.tar.gz" -C "$TMP_DIR"
     SRC_DIR=$(find "$TMP_DIR" -maxdepth 1 -name "rProxy-web*" -type d)
     cp -r "$SRC_DIR/core" "$INSTALL_DIR/"
@@ -69,7 +70,7 @@ cat > "$CAT_INIT" <<EOF
 #!/bin/sh
 case "\$1" in
     start)
-        echo "Starting rProxy Web v7.0.7..."
+        echo "Starting rProxy Web v7.0.8..."
         cd "$INSTALL_DIR"
         /opt/bin/python3 main.py > /opt/var/log/rproxy-web.log 2>&1 &
         ;;

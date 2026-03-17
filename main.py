@@ -15,7 +15,7 @@ RPROXY_ROOT = "/opt/etc/rproxy"
 SERVICES_DIR = os.path.join(RPROXY_ROOT, "services")
 VPS_DIR = os.path.join(RPROXY_ROOT, "vps")
 
-VERSION = "7.0.7"
+VERSION = "7.0.8"
 
 # Настройка многопоточного сервера для Bottle (чтобы SSE не блокировал интерфейс)
 from wsgiref.simple_server import WSGIServer, WSGIRequestHandler
