@@ -7,7 +7,7 @@ from core.config import ConfigManager
 from core.vps import VPSManager
 from core.manager import ProcessManager
 
-VERSION = "6.8.4"
+VERSION = "6.8.5"
 
 class RProxyCLI:
     def __init__(self):
@@ -259,7 +259,7 @@ class RProxyCLI:
         msg(f"VPS '{name}' успешно добавлен.")
         
         # Инициализация VPS (установка Nginx, socat и т.д.)
-        VPSManager.prepare_vps(cfg)
+        VPSManager.setup_vps(cfg)
 
     def remove_vps(self):
         header("Удаление VPS")
