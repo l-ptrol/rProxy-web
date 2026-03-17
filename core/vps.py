@@ -117,18 +117,14 @@ class VPSManager:
         fi
         
         systemctl enable nginx && systemctl restart nginx
-        """
-        msg(f"Настройка окружения на VPS {vps_cfg.get('VPS_HOST')}...")
-        success, output = VPSManager.run_remote(vps_cfg, setup_script, timeout=300)
-        if not success:
-            err(f"Ошибка настройки VPS: {output}")
-        return success, output
         
         # Настройка автообновления SSL (cron)
         (crontab -l 2>/dev/null; echo "0 0,12 * * * certbot renew -q --deploy-hook 'systemctl reload nginx'") | sort -u | crontab -
         """
         msg(f"Настройка окружения на VPS {vps_cfg.get('VPS_HOST')}...")
         success, output = VPSManager.run_remote(vps_cfg, setup_script, timeout=300)
+        if not success:
+            err(f"Ошибка настройки VPS: {output}")
         return success, output
 
     @staticmethod
