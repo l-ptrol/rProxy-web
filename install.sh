@@ -1,7 +1,7 @@
 #!/bin/sh
 # rProxy Web & CLI (Python Core) Installer for Keenetic
-# rProxy Installer v6.7.8
-VERSION="6.7.8"
+# rProxy Installer v6.7.9
+VERSION="6.7.9"
 # - ttyd Compatibility Fix
 # Новое ядро на Python. 100% паритет с Bash + Модульность.
 
@@ -123,7 +123,7 @@ chmod +x "$SVC_INIT"
 msg "Перезапуск веб-интерфейса..."
 $CAT_INIT restart
 
-msg "Установка rProxy v6.6.9 успешно завершена!"
+msg "Установка rProxy v${VERSION} успешно завершена!"
 printf "\n"
 msg "Консоль:  ${CYAN}rproxy${NC}"
 msg "Веб-порт: ${CYAN}3000${NC}"

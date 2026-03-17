@@ -7,7 +7,7 @@ from core.config import ConfigManager
 from core.vps import VPSManager
 from core.manager import ProcessManager
 
-VERSION = "6.7.8"
+VERSION = "6.7.9"
 
 class RProxyCLI:
     def __init__(self):
@@ -145,11 +145,15 @@ class RProxyCLI:
         names = self.select_service("Запустить туннель", 'stopped')
         for name in names:
             msg(f"Запуск {name}...")
-            cfg = ConfigManager.load(os.path.join(self.services_dir, f"{name}.conf"))
+            cfg_path = os.path.join(self.services_dir, f"{name}.conf")
+            cfg = ConfigManager.load(cfg_path)
             vps_id = cfg.get('SVC_VPS')
             vps_cfg = ConfigManager.load(os.path.join(self.vps_dir, f"{vps_id}.conf"))
             if vps_cfg:
                 ProcessManager.start_service(cfg, vps_cfg)
+                # Сохраняем статус для автозагрузки
+                cfg['SVC_ENABLED'] = 'yes'
+                ConfigManager.save(cfg_path, cfg)
             else:
                 err(f"VPS {vps_id} не найден.")
 
@@ -158,6 +162,13 @@ class RProxyCLI:
         for name in names:
             msg(f"Остановка {name}...")
             ProcessManager.stop_service(name)
+            
+            # Сохраняем статус для автозагрузки
+            cfg_path = os.path.join(self.services_dir, f"{name}.conf")
+            if os.path.exists(cfg_path):
+                cfg = ConfigManager.load(cfg_path)
+                cfg['SVC_ENABLED'] = 'no'
+                ConfigManager.save(cfg_path, cfg)
 
     def restart_menu(self):
         names = self.select_service("Перезапустить туннель")
