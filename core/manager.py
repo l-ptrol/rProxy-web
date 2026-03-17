@@ -4,6 +4,7 @@ import subprocess
 import signal
 import time
 import sys
+import shutil
 from .utils import msg, warn, err, gen_htpasswd, RED, GREEN, YELLOW, CYAN, NC, DIM
 from .config import ConfigManager
 from .vps import VPSManager
@@ -50,7 +51,6 @@ class ProcessManager:
         time.sleep(1)
 
         # Проверка наличия ttyd
-        import shutil
         if not shutil.which('ttyd'):
             err("Бинарный файл 'ttyd' не найден в PATH. Установите его через opkg (Entware).")
             return False
@@ -123,7 +123,6 @@ if __name__ == "__main__":
         
         # Агрессивно прибиваем ttyd на конкретном порту (как в Bash)
         subprocess.run(["pkill", "-9", "-f", f"ttyd.*-p {port}"], stderr=subprocess.DEVNULL)
-        import shutil
         if shutil.which('fuser'):
             subprocess.run(["fuser", "-k", f"{port}/tcp"], stderr=subprocess.DEVNULL)
 
@@ -373,7 +372,6 @@ if __name__ == "__main__":
         subprocess.run(["pkill", "-f", "ttyd"], stderr=subprocess.DEVNULL)
         
         # Удаляем директории
-        import shutil
         paths = ["/opt/etc/rproxy", "/opt/var/run/rproxy", "/opt/share/rproxy-web"]
         for p in paths:
             if os.path.exists(p):
