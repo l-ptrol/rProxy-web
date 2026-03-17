@@ -504,10 +504,12 @@ if __name__ == "__main__":
             
             # Проверка WireGuard порта на роутере
             try:
-                # Пробуем найти кто слушает UDP порт
                 ns = subprocess.run(["netstat", "-unlp"], capture_output=True, text=True)
-                if f":{t_port}" in ns.stdout:
-                    print(f"  - Порт {t_port} (UDP): {GREEN}СЛУШАЕТСЯ (WireGuard активен){NC}")
+                target_str = f":{t_port}"
+                match = [line for line in ns.stdout.split('\n') if target_str in line]
+                if match:
+                    print(f"  - Порт {t_port} (UDP): {GREEN}СЛУШАЕТСЯ{NC}")
+                    print(f"    {DIM}Привязка: {match[0].strip()}{NC}")
                 else:
                     warn(f"Порт {t_port} (UDP) не найден в netstat. Убедитесь, что WireGuard включен на роутере!")
             except: pass
