@@ -7,7 +7,7 @@ from core.config import ConfigManager
 from core.vps import VPSManager
 from core.manager import ProcessManager
 
-VERSION = "6.8.7"
+VERSION = "6.8.8"
 
 class RProxyCLI:
     def __init__(self):
@@ -258,8 +258,38 @@ class RProxyCLI:
         ConfigManager.save(os.path.join(self.vps_dir, f"{name}.conf"), cfg)
         msg(f"VPS '{name}' успешно добавлен.")
         
-        # Инициализация VPS (установка Nginx, socat и т.д.)
-        VPSManager.setup_vps(cfg)
+        # Проверка авторизации
+        success, _ = VPSManager.run_remote(cfg, "echo OK")
+        if not success:
+            warn("SSH-ключ не принят сервером (Permission denied).")
+            res = input(f"{BOLD}Хотите попробовать добавить ключ повторно? [Y/n]:{NC} ").strip().lower()
+            if res != 'n':
+                self.add_ssh_key_manually(cfg)
+                # Перепроверка
+                success, _ = VPSManager.run_remote(cfg, "echo OK")
+
+        if success:
+            # Инициализация VPS (установка Nginx, socat и т.д.)
+            VPSManager.setup_vps(cfg)
+        else:
+            err("Не удалось установить SSH-доступ. Дальнейшая настройка невозможна.")
+
+    def add_ssh_key_manually(self, cfg):
+        """Повторная попытка проброса SSH ключа"""
+        host = cfg.get('VPS_HOST')
+        user = cfg.get('VPS_USER')
+        port = cfg.get('VPS_PORT')
+        pub_key_path = "/opt/etc/rproxy/id_ed25519.pub"
+        
+        try:
+            with open(pub_key_path, 'r') as f:
+                pub_key = f.read().strip()
+            
+            msg(f"Пробрасываю ключ на {host} (потребуется пароль)...")
+            cmd = f"mkdir -p ~/.ssh && echo '{pub_key}' >> ~/.ssh/authorized_keys && chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys"
+            os.system(f"ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p {port} {user}@{host} \"{cmd}\"")
+        except Exception as e:
+            err(f"Ошибка: {e}")
 
     def remove_vps(self):
         header("Удаление VPS")

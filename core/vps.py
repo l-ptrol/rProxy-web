@@ -93,31 +93,36 @@ class VPSManager:
     def setup_vps(vps_cfg):
         """Первичная настройка окружения на удаленном VPS"""
         setup_script = r"""
-        if ! command -v nginx >/dev/null 2>&1; then
-            apt-get update -qq && apt-get install -y -qq nginx psmisc || (yum update -y && yum install -y nginx psmisc)
-        else
-            apt-get update -qq && apt-get install -y -qq psmisc || yum install -y psmisc
-        fi
+        export DEBIAN_FRONTEND=noninteractive
+        # Создаем директории заранее
         mkdir -p /etc/nginx/sites-enabled
-        grep -q 'sites-enabled' /etc/nginx/nginx.conf || sed -i '/http {/a\    include /etc/nginx/sites-enabled/*.conf;' /etc/nginx/nginx.conf
-        command -v certbot >/dev/null 2>&1 || (apt-get update -qq && apt-get install -y -qq certbot python3-certbot-nginx || yum install -y certbot python3-certbot-nginx)
-        
-        # Настройка Nginx Stream
         mkdir -p /etc/nginx/streams-enabled
+        
+        # Обновление и установка базовых пакетов
+        if command -v apt-get >/dev/null 2>&1; then
+            apt-get update -qq && apt-get install -y -qq nginx certbot python3-certbot-nginx psmisc socat curl
+        elif command -v yum >/dev/null 2>&1; then
+            yum install -y epel-release && yum install -y nginx certbot python3-certbot-nginx psmisc socat curl
+        fi
+
+        # Проверка/Настройка nginx.conf для подключения конфигов
+        grep -q 'sites-enabled' /etc/nginx/nginx.conf || sed -i '/http {/a\    include /etc/nginx/sites-enabled/*.conf;' /etc/nginx/nginx.conf
+        
         if ! grep -q 'streams-enabled' /etc/nginx/nginx.conf; then
             if grep -q 'stream {' /etc/nginx/nginx.conf; then
                  echo "include /etc/nginx/streams-enabled/*.conf;" >> /etc/nginx/nginx.conf
             else
-                 printf "\\nstream {\\n    include /etc/nginx/streams-enabled/*.conf;\\n}\\n" >> /etc/nginx/nginx.conf
+                 printf "\nstream {\n    include /etc/nginx/streams-enabled/*.conf;\n}\n" >> /etc/nginx/nginx.conf
             fi
         fi
         
-        # Установка socat для UDP моста
-        if ! command -v socat >/dev/null 2>&1; then
-            apt-get update -qq && apt-get install -y -qq socat || yum install -y socat
-        fi
-        
-        systemctl enable nginx && systemctl start nginx
+        systemctl enable nginx && systemctl restart nginx
+        """
+        msg(f"Настройка окружения на VPS {vps_cfg.get('VPS_HOST')}...")
+        success, output = VPSManager.run_remote(vps_cfg, setup_script, timeout=300)
+        if not success:
+            err(f"Ошибка настройки VPS: {output}")
+        return success, output
         
         # Настройка автообновления SSL (cron)
         (crontab -l 2>/dev/null; echo "0 0,12 * * * certbot renew -q --deploy-hook 'systemctl reload nginx'") | sort -u | crontab -
