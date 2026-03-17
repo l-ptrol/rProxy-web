@@ -7,7 +7,7 @@ from core.config import ConfigManager
 from core.vps import VPSManager
 from core.manager import ProcessManager
 
-VERSION = "6.4.2"
+VERSION = "6.4.3"
 
 class RProxyCLI:
     def __init__(self):
@@ -175,11 +175,21 @@ class RProxyCLI:
         if confirm != 'y': return
         
         for name in names:
+            cfg = ConfigManager.load(os.path.join(self.services_dir, f"{name}.conf"))
             ProcessManager.stop_service(name)
+            
+            # Удаление с VPS
+            if cfg:
+                vps_id = cfg.get('SVC_VPS')
+                vps_cfg = ConfigManager.load(os.path.join(self.vps_dir, f"{vps_id}.conf"))
+                if vps_cfg:
+                    msg(f"Удаление конфигурации Nginx на VPS для {name}...")
+                    VPSManager.remove_vhost(vps_cfg, name)
+
             path = os.path.join(self.services_dir, f"{name}.conf")
             if os.path.exists(path):
                 os.remove(path)
-            msg(f"Сервис {name} удален.")
+            msg(f"Сервис {name} полностью удален.")
 
     def vps_menu(self):
         while True:

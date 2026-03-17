@@ -166,6 +166,12 @@ class VPSManager:
         return False, err_msg
 
     @staticmethod
+    def remove_vhost(vps_cfg, name):
+        """Удаляет конфиг Nginx с VPS"""
+        cmd = f"rm -f /etc/nginx/sites-enabled/rproxy_{name}.conf /etc/nginx/streams-enabled/rproxy_{name}.conf && (nginx -t && systemctl reload nginx || true)"
+        return VPSManager.run_remote(vps_cfg, cmd)
+
+    @staticmethod
     def run_certbot(vps_cfg, domain):
         """Запускает Certbot для получения SSL"""
         import re

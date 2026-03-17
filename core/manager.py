@@ -133,18 +133,8 @@ run()
                 else:
                     warn(f"Certbot не смог выпустить сертификат: {output}")
 
-        # 3. ДЕПЛОЙ NGINX
-        # Радикальное изменение (как в shell): сначала ВСЕГДА деплоим конфиг БЕЗ SSL, 
-        # чтобы Nginx на VPS корректно запустился.
-        nginx_conf = ServiceManager.generate_conf(svc_cfg, use_ssl_paths=False)
+        # 3. ПОДГОТОВКА ПАРАМЕТРОВ (Деплой будет после запуска туннеля)
         nginx_path = ServiceManager.get_nginx_path(svc_cfg.get('SVC_TYPE'))
-        VPSManager.deploy_vhost(vps_cfg, name, nginx_conf, path=nginx_path)
-
-        # Если есть сертификат и выбран SSL - деплоим второй раз уже с SSL
-        if has_certificate and use_ssl:
-            msg("Обнаружен сертификат, включаю SSL в Nginx...")
-            nginx_conf_ssl = ServiceManager.generate_conf(svc_cfg, use_ssl_paths=True)
-            VPSManager.deploy_vhost(vps_cfg, name, nginx_conf_ssl, path=nginx_path)
 
         # 4. ЗАПУСК TTYD (если нужно)
         target_host = svc_cfg.get('SVC_TARGET_HOST', '127.0.0.1')
@@ -219,7 +209,22 @@ run()
             if started:
                 # Даем время на установку SSH соединения
                 msg(f"Туннель '{name}' запущен (PID: {pid}). Ожидание сетевой готовности...")
-                time.sleep(3) 
+                time.sleep(4) 
+                
+                # 6. ДЕПЛОЙ NGINX (Теперь, когда порт точно слушается autossh)
+                # Всегда сначала деплоим актуальный конфиг (с SSL или без)
+                use_ssl_final = has_certificate and use_ssl
+                msg(f"Применение конфигурации Nginx (SSL: {use_ssl_final})...")
+                nginx_conf = ServiceManager.generate_conf(svc_cfg, use_ssl_paths=use_ssl_final)
+                
+                # Перед деплоем удалим старые конфиги с таким же именем (если они были под другим типом)
+                VPSManager.run_remote(vps_cfg, f"rm -f /etc/nginx/sites-enabled/rproxy_{name}.conf /etc/nginx/streams-enabled/rproxy_{name}.conf")
+                
+                success, output = VPSManager.deploy_vhost(vps_cfg, name, nginx_conf, path=nginx_path)
+                if not success:
+                    warn(f"Nginx reload warning: {output}")
+                
+                msg(f"Сервис '{name}' успешно запущен. 502 ошибка должна исчезнуть.")
                 return True
             else:
                 err(f"Туннель '{name}' не запустился за {max_wait} сек.")

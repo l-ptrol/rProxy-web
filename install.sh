@@ -1,6 +1,6 @@
 #!/bin/sh
 # rProxy Web & CLI (Python Core) Installer for Keenetic
-# VERSION="6.4.2" - Update System Fix
+# VERSION="6.4.3" - Final Stability & Cleanup fix
 # Новое ядро на Python. 100% паритет с Bash + Модульность.
 
 set -e
@@ -15,7 +15,7 @@ warn() { printf "${YELLOW}⚠${NC} %b\n" "$*"; }
 err() { printf "${RED}✖${NC} %b\n" "$*" >&2; exit 1; }
 
 printf "\n${CYAN}==========================================${NC}\n"
-printf "${CYAN}    rProxy Python Core v6.4.2             ${NC}\n"
+printf "${CYAN}    rProxy Python Core v6.4.3             ${NC}\n"
 printf "${CYAN}==========================================${NC}\n\n"
 
 if [ ! -d "/opt/bin" ]; then
@@ -44,7 +44,7 @@ if [ -d "./core" ] && [ -f "./main.py" ]; then
     cp -r templates "$INSTALL_DIR/"
     cp main.py rproxy.py "$INSTALL_DIR/"
 else
-    msg "Загрузка v6.4.2 из GitHub..."
+    msg "Загрузка v6.4.3 из GitHub..."
     TMP_DIR="/tmp/rproxy-web-v6"
     rm -rf "$TMP_DIR"
     mkdir -p "$TMP_DIR"
@@ -67,7 +67,7 @@ cat > "$CAT_INIT" <<EOF
 #!/bin/sh
 case "\$1" in
     start)
-        echo "Starting rProxy Web v6.4.2..."
+        echo "Starting rProxy Web v6.4.3..."
         cd "$INSTALL_DIR"
         /opt/bin/python3 main.py > /opt/var/log/rproxy-web.log 2>&1 &
         ;;
@@ -121,7 +121,7 @@ chmod +x "$SVC_INIT"
 msg "Перезапуск веб-интерфейса..."
 $CAT_INIT restart
 
-msg "Установка rProxy v6.4.2 завершена!"
+msg "Установка rProxy v6.4.3 завершена!"
 printf "\n"
 msg "Консоль:  ${CYAN}rproxy${NC}"
 msg "Веб-порт: ${CYAN}3000${NC}"
