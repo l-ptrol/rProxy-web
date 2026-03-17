@@ -242,7 +242,7 @@ if __name__ == "__main__":
         log_path = os.path.join(ProcessManager.LOG_DIR, f"tunnel_{name}.log")
         
         cmd = [
-            "autossh", "-M", str(mon_port), "-N",
+            "autossh", "-M", str(mon_port), "-f", "-N",
             "-o", "ConnectTimeout=10",
             "-o", "ServerAliveInterval=30",
             "-o", "ServerAliveCountMax=3",
@@ -250,6 +250,7 @@ if __name__ == "__main__":
             "-o", "StrictHostKeyChecking=no",
             "-o", "UserKnownHostsFile=/dev/null",
             "-o", "BatchMode=yes",
+            "-E", log_path, # Пишем логи SSH в файл
             "-i", ssh_key,
             "-p", str(vps_port),
             f"-R", tunnel_spec,
@@ -261,36 +262,23 @@ if __name__ == "__main__":
             # Остановка старого процесса если есть
             ProcessManager.stop_service(name, svc_cfg=svc_cfg)
             
-            # Запуск в лог-файл
-            log_handle = open(log_path, 'a')
-            log_handle.write(f"\n--- Tunnel starting at {time.ctime()} ---\n")
-            log_handle.write(f"Command: {' '.join(cmd)}\n")
-            log_handle.flush()
+            # Запуск в фоновом режиме через -f
+            subprocess.run(cmd, env=env, check=True)
             
-            proc = subprocess.Popen(cmd, env=env, stdout=log_handle, stderr=log_handle, start_new_session=True)
+            # Даем время на инициализацию
+            time.sleep(2)
             
-            max_wait = 20
-            started = False
-            for i in range(max_wait):
-                time.sleep(1)
-                # Проверяем PID через pgrep
-                pgrep = subprocess.run(["pgrep", "-f", f"autossh.*-M {mon_port}"], capture_output=True, text=True)
-                if pgrep.returncode == 0:
-                    pid = pgrep.stdout.strip().split('\n')[0]
-                    with open(os.path.join(ProcessManager.PID_DIR, f"{name}.pid"), 'w') as f:
-                        f.write(pid)
-                    
-                    # Проверяем, что процесс живой
-                    try:
-                        os.kill(int(pid), 0)
-                        started = True
-                        break
-                    except OSError: pass
-                
-            if started:
-                # Даем время на установку SSH соединения
+            # Ищем PID нового процесса
+            pid = None
+            pgrep = subprocess.run(["pgrep", "-f", f"autossh.*-M {mon_port}"], capture_output=True, text=True)
+            if pgrep.returncode == 0:
+                pid = pgrep.stdout.strip().split('\n')[0]
+                with open(os.path.join(ProcessManager.PID_DIR, f"{name}.pid"), 'w') as f:
+                    f.write(pid)
+            
+            if pid:
                 msg(f"Туннель '{name}' запущен (PID: {pid}). Ожидание сетевой готовности...")
-                time.sleep(4) 
+                time.sleep(3) 
                 
                 # 6. ПРЕДВАРИТЕЛЬНАЯ ОЧИСТКА VPS (от старых конфигов Nginx, которые могут мешать портам)
                 msg(f"Очистка старых конфигов на VPS...")
