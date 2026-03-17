@@ -9,6 +9,10 @@ class ServiceTemplate:
             auth_config = f"""
     auth_basic "Restricted Access";
     auth_basic_user_file /etc/nginx/rproxy_{name}.htpasswd;
+    # Если включен пароль в rProxy, подавляем авторизацию бэкенда для избежания петли
+    proxy_set_header Authorization "";
+    proxy_hide_header WWW-Authenticate;
+    proxy_set_header X-Forwarded-User $remote_user;
     """
         listen_80 = f"""
 server {{
@@ -58,13 +62,9 @@ server {{
         proxy_set_header Origin "http://{stealth_host}";
         proxy_set_header Referer "http://{stealth_host}/";
         
-        # Глубокий стелс: скрываем учетные данные Nginx и авторизацию бэкенда
-        proxy_set_header Authorization "";
-        proxy_hide_header WWW-Authenticate;
         proxy_hide_header 'Access-Control-Allow-Origin';
-        proxy_set_header X-Forwarded-User $remote_user;
         
-        # Предотвращаем конфликты сессий при 401 ошибках бэкенда
+        # Предотвращаем конфликты сессий
         proxy_buffer_size 128k;
         proxy_buffers 4 256k;
         proxy_busy_buffers_size 256k;
@@ -73,10 +73,6 @@ server {{
         proxy_cookie_domain "{target_host}" "$host";
         proxy_read_timeout 7d;
         proxy_send_timeout 7d;
-        
-        # ТОТАЛЬНЫЙ СТЕЛС: ловим 401 от роутера и превращаем в 403, чтобы не было окон ввода
-        proxy_intercept_errors on;
-        error_page 401 =403 /;
     }}
     
     # Редирект с некорректного HTTPS порта (ошибка 497 -> 301)

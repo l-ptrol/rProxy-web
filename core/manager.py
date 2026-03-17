@@ -360,8 +360,10 @@ if __name__ == "__main__":
         success, output = VPSManager.deploy_vhost(vps_cfg, name, nginx_conf, path=nginx_path)
         if success:
             msg(f"Конфигурация Nginx для '{name}' успешно обновлена.")
-            msg(f"Перезапуск сервиса для синхронизации...")
-            # Перезапуск туннеля, чтобы всё работало в связке
+            msg(f"Принудительный перезапуск сервиса...")
+            # Сначала полностью останавливаем, затем запускаем
+            ProcessManager.stop_service(name)
+            time.sleep(1)
             ProcessManager.start_service(svc_cfg, vps_cfg)
         else:
             err(f"Ошибка при обновлении Nginx: {output}")
