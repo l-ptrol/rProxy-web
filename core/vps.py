@@ -101,9 +101,9 @@ class VPSManager:
         
         # Обновление и установка базовых пакетов
         if command -v apt-get >/dev/null 2>&1; then
-            apt-get update -qq && apt-get install -y -qq nginx certbot python3-certbot-nginx psmisc socat curl
+            apt-get update -qq && apt-get install -y -qq nginx libnginx-mod-stream certbot python3-certbot-nginx psmisc socat curl
         elif command -v yum >/dev/null 2>&1; then
-            yum install -y epel-release && yum install -y nginx certbot python3-certbot-nginx psmisc socat curl
+            yum install -y epel-release && yum install -y nginx nginx-mod-stream certbot python3-certbot-nginx psmisc socat curl
         fi
 
         # Проверка/Настройка nginx.conf для подключения конфигов
