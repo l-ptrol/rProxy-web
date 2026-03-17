@@ -7,7 +7,7 @@ from core.config import ConfigManager
 from core.vps import VPSManager
 from core.manager import ProcessManager
 
-VERSION = "6.8.1"
+VERSION = "6.8.2"
 
 class RProxyCLI:
     def __init__(self):
@@ -441,11 +441,26 @@ class RProxyCLI:
                 
                 print(f"\n{BOLD}Шаг 7/9. Выбор VPS сервера{NC}")
                 v_def = vps_id or vps_files[0]
-                print(f"  Доступные: {', '.join(vps_files)}")
-                res = input(f"\n{BOLD}Выберите VPS [{v_def}]:{NC} ").strip() or v_def
+                
+                # Вывод нумерованного списка
+                for idx, v_name in enumerate(vps_files, 1):
+                    star = f"{GREEN}*{NC}" if v_name == v_def else " "
+                    print(f"  {BOLD}{idx}){NC} {v_name:<15} {star}")
+                
+                res = input(f"\n{BOLD}Выберите номер или название [{v_def}]:{NC} ").strip() or v_def
                 if res == "0": 
                     step = 5 if domain else 6
                     continue
+                
+                # Обработка выбора по номеру
+                if res.isdigit():
+                    idx = int(res) - 1
+                    if 0 <= idx < len(vps_files):
+                        res = vps_files[idx]
+                    else:
+                        warn("Неверный номер сервера.")
+                        continue
+                
                 if res not in vps_files:
                     warn("Такой VPS не найден.")
                     continue
