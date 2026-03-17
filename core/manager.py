@@ -533,8 +533,15 @@ if __name__ == "__main__":
             t_port = svc_cfg.get('SVC_TUNNEL_PORT')
             # Используем ss или netstat для проверки, слушает ли порт localhost
             success, output = VPSManager.run_remote(vps_cfg, f"ss -ltn | grep ':{t_port}' || netstat -ltn | grep ':{t_port}'")
-            p_status = f"{GREEN}СЛУШАЕТСЯ{NC}" if success and output else f"{RED}ОТСУТСТВУЕТ (Туннель не работает){NC}"
-            print(f"  - Порт туннеля на VPS ({t_port}): {p_status}")
+            if success and output:
+                print(f"  - Порт туннеля на VPS ({t_port}): {GREEN}СЛУШАЕТСЯ{NC}")
+            else:
+                print(f"  - Порт туннеля на VPS ({t_port}): {RED}ОТСУТСТВУЕТ (Туннель не работает){NC}")
+                # Выводим что вообще слушается на VPS для понимания проблемы
+                _, all_ports = VPSManager.run_remote(vps_cfg, "ss -ltn | grep -v '127.0.0.53' || netstat -ltn")
+                print(f"    {DIM}Слушающие порты на VPS:{NC}")
+                for line in all_ports.split('\n')[:10]: # Только первые 10 строк
+                    if line.strip(): print(f"      {line.strip()}")
 
     @staticmethod
     def self_update():
