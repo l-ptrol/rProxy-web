@@ -47,14 +47,19 @@ server {{
         proxy_set_header Host {stealth_host};
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto http;
         proxy_set_header X-Forwarded-Port $server_port;
-        proxy_set_header X-Forwarded-Host $host;
         
-        # Фикс для Keenetic и CSRF: Origin и Referer приводим к виду бэкенда
+        # СТЕЛС-РЕЖИМ 2.0: Прикидываемся локальным браузером
+        # Убираем внешнее имя хоста из X-Forwarded-Host, чтобы не смущать CSRF
+        proxy_set_header X-Forwarded-Host "";
+        
+        # Origin и Referer строго на внутренний IP
         proxy_set_header Origin "http://{stealth_host}";
         proxy_set_header Referer "http://{stealth_host}/";
+        
         proxy_hide_header X-Frame-Options;
+        proxy_hide_header Content-Security-Policy;
         proxy_cookie_domain "{target_host}" "$host";
         proxy_read_timeout 7d;
         proxy_send_timeout 7d;

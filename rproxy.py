@@ -7,7 +7,7 @@ from core.config import ConfigManager
 from core.vps import VPSManager
 from core.manager import ProcessManager
 
-VERSION = "6.4.5"
+VERSION = "6.4.6"
 
 class RProxyCLI:
     def __init__(self):

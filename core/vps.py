@@ -162,7 +162,9 @@ class VPSManager:
         remote_path = f"{path}/rproxy_{name}.conf"
         success, err_msg = VPSManager.upload_content(vps_cfg, content, remote_path)
         if success:
-            return VPSManager.run_remote(vps_cfg, "nginx -t && systemctl reload nginx", echo=True)
+            res = VPSManager.run_remote(vps_cfg, "nginx -t && systemctl reload nginx", echo=True)
+            # res может быть (bool, str) или None при ошибке
+            return res if res else (False, "Ошибка выполнения ssh")
         return False, err_msg
 
     @staticmethod
