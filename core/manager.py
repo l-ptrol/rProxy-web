@@ -306,18 +306,24 @@ if __name__ == "__main__":
                     # 3. Запуск на Роутере (TCP -> UDP)
                     msg("Запуск socat на роутере...")
                     socat_path_router = "/opt/bin/socat" if os.path.exists("/opt/bin/socat") else "socat"
-                    pkill_cmd = f"pkill -f 'TCP4-LISTEN:{remote_tunnel_port}' || true"
-                    socat_cmd_router = f"nohup {socat_path_router} TCP4-LISTEN:{remote_tunnel_port},fork,reuseaddr UDP4:{target_host}:{target_port} > {log_router} 2>&1 &"
                     
-                    subprocess.Popen(["sh", "-c", f"{pkill_cmd}; sleep 1; {socat_cmd_router}"], start_new_session=True)
-                    
-                    # Проверка запуска на роутере
-                    time.sleep(2)
-                    pg_router = subprocess.run(["pgrep", "-f", f"TCP4-LISTEN:{remote_tunnel_port}"], capture_output=True)
-                    if pg_router.returncode == 0:
-                        msg(f"{GREEN}Мост на роутере успешно запущен.{NC}")
+                    # Проверка наличия socat
+                    has_soc_router = subprocess.run(["which", socat_path_router], capture_output=True).returncode == 0
+                    if not has_soc_router:
+                        err("Утилита socat не найдена на роутере! Установите её: opkg install socat")
                     else:
-                        warn(f"Мост на роутере не отвечает. Проверьте {log_router}")
+                        pkill_cmd = f"pkill -f 'TCP4-LISTEN:{remote_tunnel_port}' || true"
+                        socat_cmd_router = f"nohup {socat_path_router} TCP4-LISTEN:{remote_tunnel_port},fork,reuseaddr UDP4:{target_host}:{target_port} > {log_router} 2>&1 &"
+                        
+                        subprocess.Popen(["sh", "-c", f"{pkill_cmd}; sleep 1; {socat_cmd_router}"], start_new_session=True)
+                        
+                        # Проверка запуска на роутере
+                        time.sleep(2)
+                        pg_router = subprocess.run(["pgrep", "-f", f"TCP4-LISTEN:{remote_tunnel_port}"], capture_output=True)
+                        if pg_router.returncode == 0:
+                            msg(f"{GREEN}Мост на роутере успешно запущен.{NC}")
+                        else:
+                            warn(f"Мост на роутере не отвечает. Проверьте {log_router}")
                         
                     msg(f"Логи моста: VPS:/tmp/..., Роутер:{log_router}")
                 else:
@@ -508,11 +514,11 @@ if __name__ == "__main__":
         
         try:
             print(f"\n{CYAN}▸{NC} Загрузка и запуск инсталлера...")
-            # Запускаем через os.system для немедленного выполнения команды в текущем окружении перед выходом
-            # Но так как инсталлер убьет этот процесс, используем конструкцию, которая позволит ему продолжить работу
-            os.system(f"nohup sh -c '{updater_cmd}' > /opt/var/log/rproxy_updater.log 2>&1 &")
+            # Исправлен путь лога на /tmp/ для надежности
+            log_upd = "/tmp/rproxy_updater.log"
+            os.system(f"nohup sh -c '{updater_cmd}' > {log_upd} 2>&1 &")
             msg("Инсталлер запущен в фоне. Сессия будет прервана.")
-            msg("Лог обновления: /opt/var/log/rproxy_updater.log")
+            msg(f"Лог обновления: {log_upd}")
             time.sleep(1)
             sys.exit(0)
         except Exception as e:
