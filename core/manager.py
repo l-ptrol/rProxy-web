@@ -235,14 +235,18 @@ if __name__ == "__main__":
 
         # Настройка окружения для autossh
         env = os.environ.copy()
+        # Принудительно добавляем пути Entware в начало PATH
+        env["PATH"] = "/opt/bin:/opt/sbin:" + env.get("PATH", "")
         env["AUTOSSH_GATETIME"] = "0"
-        env["AUTOSSH_PATH"] = "/opt/bin/ssh" if os.path.exists("/opt/bin/ssh") else "ssh"
+        ssh_bin = "/opt/bin/ssh" if os.path.exists("/opt/bin/ssh") else "ssh"
+        env["AUTOSSH_PATH"] = ssh_bin
         env["AUTOSSH_LOGFILE"] = os.path.join(ProcessManager.LOG_DIR, f"autossh_{name}.log")
 
         log_path = os.path.join(ProcessManager.LOG_DIR, f"tunnel_{name}.log")
         
+        autossh_bin = "/opt/bin/autossh" if os.path.exists("/opt/bin/autossh") else "autossh"
         cmd = [
-            "autossh", "-M", str(mon_port), "-f", "-N",
+            autossh_bin, "-M", str(mon_port), "-f", "-N",
             "-o", "ConnectTimeout=10",
             "-o", "ServerAliveInterval=30",
             "-o", "ServerAliveCountMax=3",
@@ -367,7 +371,7 @@ if __name__ == "__main__":
                 msg(f"Сервис '{name}' успешно проброшен!")
                 return True
             else:
-                err(f"Туннель '{name}' не запустился за {max_wait} сек.")
+                err(f"Туннель '{name}' не запустился за 20 сек.")
                 return False
         except Exception as e:
             err(f"Ошибка при запуске туннеля '{name}': {e}")
