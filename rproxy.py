@@ -7,7 +7,7 @@ from core.config import ConfigManager
 from core.vps import VPSManager
 from core.manager import ProcessManager
 
-VERSION = "6.3.1"
+VERSION = "6.3.2"
 
 class RProxyCLI:
     def __init__(self):
@@ -58,10 +58,12 @@ class RProxyCLI:
             
             if choice == '1': self.show_status()
             elif choice == '2': self.add_service()
+            elif choice == '3': self.edit_service()
             elif choice == '4': self.remove_service()
             elif choice == '5': self.start_menu()
             elif choice == '6': self.stop_menu()
             elif choice == '7': self.restart_menu()
+            elif choice == '8': self.ssl_menu()
             elif choice == '9': self.vps_menu()
             elif choice == '10': ProcessManager.self_update()
             elif choice == '11': self.health_check_menu()
@@ -460,6 +462,27 @@ class RProxyCLI:
         names = self.select_service("Редактирование сервиса")
         if names:
             self.add_service(edit_name=names[0])
+
+    def ssl_menu(self):
+        header("Управление SSL (Certbot)")
+        names = self.select_service("Выберите сервис для настройки SSL", 'all')
+        if not names: return
+        
+        for name in names:
+            cfg = ConfigManager.load(os.path.join(self.services_dir, f"{name}.conf"))
+            domain = cfg.get('SVC_DOMAIN')
+            if not domain:
+                warn(f"Сервис {name} не имеет привязанного домена.")
+                continue
+            
+            vps_id = cfg.get('SVC_VPS')
+            vps_cfg = ConfigManager.load(os.path.join(self.vps_dir, f"{vps_id}.conf"))
+            if not vps_cfg:
+                err(f"VPS {vps_id} не найден.")
+                continue
+            
+            msg(f"Запуск Certbot для {domain}...")
+            ProcessManager.run_certbot(cfg, vps_cfg)
 
 if __name__ == "__main__":
     cli = RProxyCLI()
