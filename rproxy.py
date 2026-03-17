@@ -7,7 +7,7 @@ from core.config import ConfigManager
 from core.vps import VPSManager
 from core.manager import ProcessManager
 
-VERSION = "6.3.2"
+VERSION = "6.3.3"
 
 class RProxyCLI:
     def __init__(self):
@@ -354,7 +354,6 @@ class RProxyCLI:
                     step = 6
 
             elif step == 5: # Домен
-                print(f"\n{BOLD}Шаг 5. Доменное имя{NC}")
                 res = input(f"Введите домен [{domain}]: ").strip() or domain
                 if res == "0": step = 4; continue
                 if not res:
@@ -362,7 +361,12 @@ class RProxyCLI:
                     continue
                 domain = res
                 use_ssl = "yes"
-                ext_port = "443"
+                
+                # Синхронизация с shell: ввод порта даже для домена
+                ext_def = ext_port or "443"
+                res_port = input(f"Внешний порт [{ext_def}]: ").strip() or ext_def
+                if res_port == "0": step = 4; continue
+                ext_port = res_port
                 step = 6
 
             elif step == 6: # Внешний порт (если не домен)
@@ -460,8 +464,31 @@ class RProxyCLI:
 
     def edit_service(self):
         names = self.select_service("Редактирование сервиса")
-        if names:
-            self.add_service(edit_name=names[0])
+        if not names: return
+        name = names[0]
+        
+        while True:
+            self.clear()
+            header(f"Редактирование: {name}")
+            print(f"  {BOLD}1){NC} Изменить параметры (IP, Порты, SSL...)")
+            print(f"  {BOLD}2){NC} Исправить (перезаписать) конфигурацию nginx")
+            print(f"  {BOLD}0){NC} Назад")
+            
+            choice = input(f"\n{BOLD}Выбор:{NC} ")
+            if choice == '1':
+                self.add_service(edit_name=name)
+                break
+            elif choice == '2':
+                cfg = ConfigManager.load(os.path.join(self.services_dir, f"{name}.conf"))
+                vps_id = cfg.get('SVC_VPS')
+                vps_cfg = ConfigManager.load(os.path.join(self.vps_dir, f"{vps_id}.conf"))
+                if vps_cfg:
+                    ProcessManager.redeploy_nginx(cfg, vps_cfg)
+                else:
+                    err(f"VPS {vps_id} не найден.")
+                input(f"\n{NC}Нажмите Enter для продолжения...")
+            elif choice == '0':
+                break
 
     def ssl_menu(self):
         header("Управление SSL (Certbot)")

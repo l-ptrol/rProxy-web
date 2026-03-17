@@ -19,9 +19,10 @@ interface ServiceCardProps {
   service: Service;
   onStart: () => void;
   onStop: () => void;
+  onRedeployNginx: () => void;
 }
 
-const ServiceCard: React.FC<ServiceCardProps> = ({ service, onStart, onStop }) => {
+const ServiceCard: React.FC<ServiceCardProps> = ({ service, onStart, onStop, onRedeployNginx }) => {
   const isOnline = service.status === 'online';
 
   const getTypeIcon = () => {
@@ -132,7 +133,11 @@ const ServiceCard: React.FC<ServiceCardProps> = ({ service, onStart, onStop }) =
             <Power size={16} /> ЗАПУСТИТЬ
           </button>
         )}
-        <button className="px-4 py-2 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all">
+        <button 
+          onClick={onRedeployNginx}
+          title="Исправить (перезаписать) конфигурацию nginx"
+          className="px-4 py-2 bg-white/5 hover:bg-cyan-500/10 text-white hover:text-cyan-400 rounded-xl transition-all"
+        >
           <RefreshCw size={16} className={isOnline ? 'animate-spin-slow' : ''} />
         </button>
       </div>

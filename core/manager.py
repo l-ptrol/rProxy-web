@@ -124,6 +124,7 @@ run()
             else:
                 msg("Выпуск нового сертификата через Certbot...")
                 from .services import ServiceTemplate
+                # Сначала деплоим базовый конфиг на 80 порт для Certbot
                 v_content = ServiceTemplate.certbot_validation_vhost(domain)
                 VPSManager.deploy_vhost(vps_cfg, name, v_content)
                 success, output = VPSManager.run_certbot(vps_cfg, domain)
@@ -133,9 +134,17 @@ run()
                     warn(f"Certbot не смог выпустить сертификат: {output}")
 
         # 3. ДЕПЛОЙ NGINX
-        nginx_conf = ServiceManager.generate_conf(svc_cfg, use_ssl_paths=has_certificate)
+        # Радикальное изменение (как в shell): сначала ВСЕГДА деплоим конфиг БЕЗ SSL, 
+        # чтобы Nginx на VPS корректно запустился.
+        nginx_conf = ServiceManager.generate_conf(svc_cfg, use_ssl_paths=False)
         nginx_path = ServiceManager.get_nginx_path(svc_cfg.get('SVC_TYPE'))
         VPSManager.deploy_vhost(vps_cfg, name, nginx_conf, path=nginx_path)
+
+        # Если есть сертификат и выбран SSL - деплоим второй раз уже с SSL
+        if has_certificate and use_ssl:
+            msg("Обнаружен сертификат, включаю SSL в Nginx...")
+            nginx_conf_ssl = ServiceManager.generate_conf(svc_cfg, use_ssl_paths=True)
+            VPSManager.deploy_vhost(vps_cfg, name, nginx_conf_ssl, path=nginx_path)
 
         # 4. ЗАПУСК TTYD (если нужно)
         target_host = svc_cfg.get('SVC_TARGET_HOST', '127.0.0.1')
@@ -161,6 +170,11 @@ run()
         import random
         mon_port = random.randint(20000, 21000)
 
+        # Настройка окружения для autossh
+        env = os.environ.copy()
+        env["AUTOSSH_GATETIME"] = "0"
+        env["AUTOSSH_PATH"] = "/opt/bin/ssh" if os.path.exists("/opt/bin/ssh") else "ssh"
+
         cmd = [
             "autossh", "-M", str(mon_port), "-f", "-N",
             "-o", "ConnectTimeout=10",
@@ -176,7 +190,7 @@ run()
 
         try:
             msg(f"Запуск туннеля '{name}' (Mon:{mon_port})...")
-            subprocess.run(cmd, check=True)
+            subprocess.run(cmd, check=True, env=env)
             time.sleep(2)
             # Ищем PID
             pgrep = subprocess.run(["pgrep", "-f", f"autossh.*-M {mon_port}"], capture_output=True, text=True)
@@ -212,6 +226,31 @@ run()
         
         msg(f"Сервис '{name}' остановлен.")
         return True
+
+    @staticmethod
+    def redeploy_nginx(svc_cfg, vps_cfg):
+        """Перезапись конфигурации Nginx без остановки туннеля"""
+        name = svc_cfg.get('SVC_NAME')
+        domain = svc_cfg.get('SVC_DOMAIN')
+        use_ssl = svc_cfg.get('SVC_SSL') == 'yes'
+        
+        msg(f"Перезапись конфигурации Nginx для '{name}'...")
+        
+        # 1. Проверяем наличие сертификата для SSL
+        has_certificate = False
+        if use_ssl and domain:
+             has_certificate = VPSManager.check_ssl_exists(vps_cfg, domain)
+        
+        # 2. Деплоим конфиг
+        nginx_conf = ServiceManager.generate_conf(svc_cfg, use_ssl_paths=has_certificate)
+        nginx_path = ServiceManager.get_nginx_path(svc_cfg.get('SVC_TYPE'))
+        
+        success, output = VPSManager.deploy_vhost(vps_cfg, name, nginx_conf, path=nginx_path)
+        if success:
+            msg(f"Конфигурация Nginx для '{name}' успешно обновлена.")
+        else:
+            err(f"Ошибка при обновлении Nginx: {output}")
+        return success
 
     @staticmethod
     def self_update():

@@ -15,7 +15,7 @@ server {{
     listen 80;
     server_name {domain};
     return 301 https://$host$request_uri;
-}}""" if use_ssl and domain and ext_port == 443 else ""
+}}""" if use_ssl and domain and str(ext_port) == "443" else ""
 
         listen_main = f"listen {ext_port} ssl;" if use_ssl else f"listen {ext_port};"
         ssl_config = f"""
@@ -25,8 +25,11 @@ server {{
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
     """ if use_ssl else ""
 
-        stealth_host = f"{target_host}:{target_port}" if str(target_port) != "80" else target_host
-        host_header = "$host" if domain else stealth_host
+        # Синхронизация логики Host заголовка с shell-версией
+        if domain:
+            host_header = "$host"
+        else:
+            host_header = f"{target_host}:{target_port}" if str(target_port) != "80" else target_host
 
         return f"""{listen_80}
 server {{

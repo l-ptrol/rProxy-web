@@ -13,7 +13,7 @@ RPROXY_ROOT = "/opt/etc/rproxy"
 SERVICES_DIR = os.path.join(RPROXY_ROOT, "services")
 VPS_DIR = os.path.join(RPROXY_ROOT, "vps")
 
-VERSION = "6.3.2"
+VERSION = "6.3.3"
 
 # Настройка Bottle
 bottle.TEMPLATE_PATH.insert(0, './templates')
@@ -118,6 +118,9 @@ def service_action(name, action):
         ProcessManager.stop_service(name)
         time.sleep(1)
         ProcessManager.start_service(cfg, vps_cfg)
+    elif action == 'redeploy_nginx':
+        if not vps_cfg: return HTTPResponse(status=400, body="VPS config missing")
+        ProcessManager.redeploy_nginx(cfg, vps_cfg)
     elif action == 'delete':
         ProcessManager.stop_service(name)
         os.remove(svc_path)

@@ -111,6 +111,9 @@ class VPSManager:
             fi
         fi
         systemctl enable nginx && systemctl start nginx
+        
+        # Настройка автообновления SSL (cron)
+        (crontab -l 2>/dev/null; echo "0 0,12 * * * certbot renew -q --deploy-hook 'systemctl reload nginx'") | sort -u | crontab -
         """
         msg(f"Настройка окружения на VPS {vps_cfg.get('VPS_HOST')}...")
         success, output = VPSManager.run_remote(vps_cfg, setup_script, timeout=300)
@@ -165,7 +168,11 @@ class VPSManager:
     @staticmethod
     def run_certbot(vps_cfg, domain):
         """Запускает Certbot для получения SSL"""
-        cmd = f"certbot certonly --nginx -d {domain} --non-interactive --agree-tos --register-unsafely-without-email"
+        import re
+        is_ip = re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", domain)
+        
+        profile = "--cert-profile shortlived" if is_ip else ""
+        cmd = f"certbot certonly --nginx -d {domain} {profile} --non-interactive --agree-tos --register-unsafely-without-email"
         return VPSManager.run_remote(vps_cfg, cmd, timeout=120)
 
     @staticmethod

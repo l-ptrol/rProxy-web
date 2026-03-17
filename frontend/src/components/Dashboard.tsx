@@ -183,6 +183,7 @@ const Dashboard: React.FC = () => {
                 service={service} 
                 onStart={() => executeCommand('start', service.name)}
                 onStop={() => executeCommand('stop', service.name)}
+                onRedeployNginx={() => executeCommand('redeploy_nginx', service.name)}
               />
             </motion.div>
           ))}
@@ -283,6 +284,26 @@ const Dashboard: React.FC = () => {
                       className="glass-input w-24"
                       value={newSvc.targetPort}
                       onChange={e => setNewSvc({...newSvc, targetPort: e.target.value})}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-4 gap-4">
+                  <div className="col-span-3 space-y-1">
+                    <label className="text-xs font-bold text-white/40 uppercase">Домен (опционально)</label>
+                    <input 
+                      placeholder="myapp.example.com"
+                      className="glass-input w-full" 
+                      value={newSvc.domain}
+                      onChange={e => setNewSvc({...newSvc, domain: e.target.value, ssl: e.target.value ? 'yes' : 'no'})}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-white/40 uppercase">Вн. Порт</label>
+                    <input 
+                      placeholder="443"
+                      className="glass-input w-full"
+                      value={newSvc.extPort}
+                      onChange={e => setNewSvc({...newSvc, extPort: e.target.value})}
                     />
                   </div>
                 </div>
