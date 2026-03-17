@@ -294,10 +294,15 @@ if __name__ == "__main__":
                     if not s_soc:
                         warn("socat не найден на VPS. Установка...")
                         VPSManager.run_remote(vps_cfg, "apt-get update && apt-get install -y socat || yum install -y socat", timeout=300)
+                        # Перепроверка
+                        s_soc, _ = VPSManager.run_remote(vps_cfg, "which socat")
+                        if not s_soc:
+                            err("НЕ УДАЛОСЬ установить socat на VPS! Проверьте интернет/репозитории на сервере.")
+                            return False
 
                     # 2. Запуск на VPS (UDP -> TCP)
-                    # Используем только перенаправление для логов
-                    socat_cmd_vps = f"nohup socat UDP4-LISTEN:{ext_port},fork,reuseaddr TCP4:127.0.0.1:{remote_tunnel_port} > {log_vps} 2>&1 &"
+                    # Создаем лог заранее и используем nohup
+                    socat_cmd_vps = f"touch {log_vps} && nohup socat UDP4-LISTEN:{ext_port},fork,reuseaddr TCP4:127.0.0.1:{remote_tunnel_port} >> {log_vps} 2>&1 &"
                     msg(f"Запуск socat на VPS (UDP:{ext_port} -> TCP:{remote_tunnel_port})...")
                     VPSManager.run_remote(vps_cfg, f"pkill -f 'UDP4-LISTEN:{ext_port}' || true")
                     time.sleep(1)
@@ -491,17 +496,18 @@ if __name__ == "__main__":
                     os.system(f"tail -n 5 {log_router} | sed 's/^/      /'")
             
             # Проверка socat на VPS
-            has_soc_vps, _ = VPSManager.run_remote(vps_cfg, "which socat")
-            if not has_soc_vps:
-                print(f"  - Мост на VPS (socat): {RED}КОМАНДА SOCAT НЕ НАЙДЕНА{NC}")
+            log_vps = f"/tmp/rproxy_socat_{name}.vps.log"
+            s_soc_vps, _ = VPSManager.run_remote(vps_cfg, "which socat")
+            if not s_soc_vps:
+                print(f"  - Мост на VPS (socat): {RED}НЕ УСТАНОВЛЕН{NC}")
             else:
                 s_vps, o_vps = VPSManager.run_remote(vps_cfg, f"pgrep -f 'UDP4-LISTEN:{ext_port}'")
-                sv_status = f"{GREEN}ЗАПУЩЕН{NC}" if s_vps and o_vps else f"{RED}ОСТАНОВЛЕН{NC}"
-                print(f"  - Мост на VPS (socat): {sv_status}")
-                if not (s_vps and o_vps):
-                    log_vps = f"/tmp/rproxy_socat_{name}.vps.log"
+                vps_s = f"{GREEN}ЗАПУЩЕН{NC}" if s_vps else f"{RED}ОСТАНОВЛЕН{NC}"
+                print(f"  - Мост на VPS (socat): {vps_s}")
+                if not s_vps:
                     print(f"    {DIM}Последние ошибки VPS:{NC}")
-                    VPSManager.run_remote(vps_cfg, f"tail -n 5 {log_vps}", echo=True)
+                    _, o_log = VPSManager.run_remote(vps_cfg, f"tail -n 5 {log_vps} 2>/dev/null || echo 'Лог пуст или не создан'")
+                    print(f"    {o_log}")
             
             # Проверка WireGuard порта на роутере
             try:
