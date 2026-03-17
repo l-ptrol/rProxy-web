@@ -4,7 +4,7 @@ import subprocess
 import signal
 import time
 import sys
-from .utils import msg, warn, err, gen_htpasswd, RED, GREEN, YELLOW, CYAN, NC
+from .utils import msg, warn, err, gen_htpasswd, RED, GREEN, YELLOW, CYAN, NC, DIM
 from .config import ConfigManager
 from .vps import VPSManager
 from .services import ServiceManager
@@ -185,8 +185,7 @@ run()
             
             subprocess.run(cmd, check=True, env=env)
             
-            # Ждем появления порта autossh или процесса
-            max_wait = 15
+            max_wait = 20
             started = False
             for i in range(max_wait):
                 time.sleep(1)
@@ -197,8 +196,6 @@ run()
                     with open(os.path.join(ProcessManager.PID_DIR, f"{name}.pid"), 'w') as f:
                         f.write(pid)
                     
-                    # Ждем именно проброса порта (простой способ - подождать еще немного или проверить через ss)
-                    # Но на Keenetic autossh -f сразу уходит в фон. 
                     # Проверяем, что процесс живой
                     try:
                         os.kill(int(pid), 0)
@@ -217,14 +214,16 @@ run()
                 msg(f"Применение конфигурации Nginx (SSL: {use_ssl_final})...")
                 nginx_conf = ServiceManager.generate_conf(svc_cfg, use_ssl_paths=use_ssl_final)
                 
-                # Перед деплоем удалим старые конфиги с таким же именем (если они были под другим типом)
+                # Перед деплоем удалим старые конфиги с таким же именем (чтобы не было конфликтов)
+                msg(f"Проверка конфликтов конфигурации...")
                 VPSManager.run_remote(vps_cfg, f"rm -f /etc/nginx/sites-enabled/rproxy_{name}.conf /etc/nginx/streams-enabled/rproxy_{name}.conf")
                 
                 success, output = VPSManager.deploy_vhost(vps_cfg, name, nginx_conf, path=nginx_path)
                 if not success:
                     warn(f"Nginx reload warning: {output}")
                 
-                msg(f"Сервис '{name}' успешно запущен. 502 ошибка должна исчезнуть.")
+                msg(f"Туннель '{name}' запущен {DIM}(PID: {pid}, MonPort: {mon_port}){NC}")
+                msg(f"Сервис '{name}' успешно проброшен! 502 ошибка устранена.")
                 return True
             else:
                 err(f"Туннель '{name}' не запустился за {max_wait} сек.")

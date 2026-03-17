@@ -7,7 +7,7 @@ from core.config import ConfigManager
 from core.vps import VPSManager
 from core.manager import ProcessManager
 
-VERSION = "6.4.4"
+VERSION = "6.4.5"
 
 class RProxyCLI:
     def __init__(self):
@@ -281,8 +281,8 @@ class RProxyCLI:
             print(f"  {info}")
 
     def add_service(self, edit_name=None):
-        header("Добавить новый сервис" if not edit_name else f"Редактирование: {edit_name}")
-        msg(f"{DIM}Введите 0 на любом шаге для возврата назад{NC}")
+        header("Добавить сервис" if not edit_name else f"Редактирование: {edit_name}")
+        print(f"  {DIM}Введите 0 на любом шаге для возврата назад{NC}")
         
         old_cfg = {}
         if edit_name:
@@ -306,7 +306,7 @@ class RProxyCLI:
                 if edit_name:
                     step = 2
                     continue
-                res = input(f"{BOLD}Шаг 1. Название (лат. без пробелов):{NC} ").strip()
+                res = input(f"\n{BOLD}Шаг 1/9. Название (лат. без пробелов):{NC} ").strip()
                 if res == "0": return
                 if not res or os.path.exists(os.path.join(self.services_dir, f"{res}.conf")):
                     warn("Некорректное имя или сервис существует.")
@@ -315,13 +315,18 @@ class RProxyCLI:
                     step = 2
             
             elif step == 2: # Тип
-                types = [("http", "веб"), ("tcp", "порты"), ("ttyd", "терминал"), ("ssh", "удаленный доступ")]
-                print(f"\n{BOLD}Шаг 2. Выберите тип сервиса (по умолчанию {svc_type}):{NC}")
+                types = [
+                    ("http", "Веб (HTTP) — сайты, панели управления"),
+                    ("tcp",  "Порт (TCP) — SSH (22), БД, сырой трафик"),
+                    ("ttyd", "Терминал (ttyd) — консоль в браузере"),
+                    ("ssh",  "SSH Access — прямое управление")
+                ]
+                print(f"\n{BOLD}Шаг 2/9. Выберите тип сервиса (сейчас: {svc_type}):{NC}")
                 for idx, (code, desc) in enumerate(types, 1):
                     mark = f"{GREEN}●{NC}" if code == svc_type else " "
-                    print(f"  {BOLD}{idx}){NC} {code:<6} {DIM}({desc}){NC} {mark}")
+                    print(f"  {BOLD}{idx}){NC} {desc} {mark}")
                 
-                res = input(f"\nВариант [1-4]: ").strip()
+                res = input(f"\n{BOLD}▸ Выберите [1-4]:{NC} ").strip()
                 if res == "0": 
                     if edit_name: return
                     step = 1; continue
@@ -340,7 +345,7 @@ class RProxyCLI:
                     step = 4
                     continue
                 
-                print(f"\n{BOLD}Шаг 3. Цель локально (IP:порт){NC}")
+                print(f"\n{BOLD}Шаг 3/9. Цель локально (IP:порт){NC}")
                 res = input(f"Адрес [{target_host}:{target_port}]: ").strip()
                 if res == "0": step = 2; continue
                 if res:
@@ -351,10 +356,10 @@ class RProxyCLI:
                 step = 4
 
             elif step == 4: # Режим (Домен или Порт)
-                print(f"\n{BOLD}Шаг 4. Режим публикации{NC}")
+                print(f"\n{BOLD}Шаг 4/9. Режим публикации{NC}")
                 print(f"  {BOLD}1){NC} Домен (SSL, порт 443)")
-                print(f"  {BOLD}2){NC} Внешний порт (без SSL)")
-                mode = input(f"Ваш выбор [1]: ").strip() or "1"
+                print(f"  {BOLD}2){NC} Внешний порт (IP, без SSL)")
+                mode = input(f"\n{BOLD}Ваш выбор [1]:{NC} ").strip() or "1"
                 if mode == "0": step = 3; continue
                 if mode == "1":
                     step = 5
@@ -364,17 +369,22 @@ class RProxyCLI:
                     step = 6
 
             elif step == 5: # Домен
-                res = input(f"Введите домен [{domain}]: ").strip() or domain
+                import re
+                print(f"\n{BOLD}Шаг 5/9. Внешний адрес (домен или IP){NC}")
+                res = input(f"Введите адрес [{domain}]: ").strip() or domain
                 if res == "0": step = 4; continue
                 if not res:
-                    warn("Домен обязателен для этого режима.")
+                    warn("Адрес обязателен для этого режима.")
                     continue
                 domain = res
                 use_ssl = "yes"
                 
+                if re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", domain):
+                    msg(f"{YELLOW}Замечен IP адрес. Будет предложен 6-дневный SSL сертификат.{NC}")
+
                 # Синхронизация с shell: ввод порта даже для домена
                 ext_def = ext_port or "443"
-                res_port = input(f"Внешний порт [{ext_def}]: ").strip() or ext_def
+                res_port = input(f"Внешний порт (на VPS) [{ext_def}]: ").strip() or ext_def
                 if res_port == "0": step = 4; continue
                 ext_port = res_port
                 step = 6
@@ -383,7 +393,7 @@ class RProxyCLI:
                 if domain: 
                     step = 7
                     continue
-                print(f"\n{BOLD}Шаг 6. Внешний порт на VPS{NC}")
+                print(f"\n{BOLD}Шаг 6/9. Внешний порт на VPS{NC}")
                 def_port = ext_port or "26000"
                 res = input(f"Порт [{def_port}]: ").strip() or def_port
                 if res == "0": step = 4; continue
@@ -391,22 +401,27 @@ class RProxyCLI:
                 step = 7
 
             elif step == 7: # VPS
-                # Автоопределение если домен
-                if domain and not vps_id:
-                    msg(f"Проверяю резолв домена {domain}...")
-                    found = VPSManager.find_vps_by_domain(domain)
-                    if found:
-                        msg(f"Домен указывает на VPS: {GREEN}{found}{NC}")
-                        vps_id = found
-                
                 vps_files = [f.replace('.conf', '') for f in os.listdir(self.vps_dir) if f.endswith('.conf')]
                 if not vps_files:
                     err("Сначала добавьте VPS в меню 9!"); return
                 
-                print(f"\n{BOLD}Шаг 7. Выбор VPS сервера{NC}")
+                # Автоопределение если домен
+                if domain and not vps_id:
+                    print(f"\n{BOLD}Шаг 7/9. Выбор сервера{NC}")
+                    msg(f"Проверяю куда направлен домен {domain}...")
+                    found = VPSManager.find_vps_by_domain(domain)
+                    if found:
+                        msg(f"Домен {domain} указывает на ваш VPS: {GREEN}{found}{NC}")
+                        ans = input(f"▸ Использовать этот сервер? (y/n) [y]: ").strip().lower() or "y"
+                        if ans == "y":
+                            vps_id = found
+                            step = 8
+                            continue
+                
+                print(f"\n{BOLD}Шаг 7/9. Выбор VPS сервера{NC}")
                 v_def = vps_id or vps_files[0]
                 print(f"  Доступные: {', '.join(vps_files)}")
-                res = input(f"Выберите VPS [{v_def}]: ").strip() or v_def
+                res = input(f"\n{BOLD}Выберите VPS [{v_def}]:{NC} ").strip() or v_def
                 if res == "0": 
                     step = 5 if domain else 6
                     continue
@@ -417,33 +432,45 @@ class RProxyCLI:
                 step = 8
 
             elif step == 8: # Авторизация
-                print(f"\n{BOLD}Шаг 8. Защита паролем (Basic Auth){NC}")
-                auth_now = "yes" if auth_user else "no"
-                res = input(f"Использовать защиту? (yes/no) [{auth_now}]: ").strip() or auth_now
-                if res == "0": step = 7; continue
-                if res == "yes":
-                    u_def = auth_user or "admin"
-                    auth_user = input(f"Логин [{u_def}]: ").strip() or u_def
-                    auth_pass = input(f"Пароль: ").strip() or auth_pass
-                else:
+                print(f"\n{BOLD}Шаг 8/9. Защита доступа (Basic Auth){NC}")
+                print(f"  Выберите метод защиты для сервиса:")
+                print(f"  {BOLD}1){NC} Стандартные данные rproxy: Petro1990")
+                print(f"  {BOLD}2){NC} Ввести логин и пароль вручную")
+                print(f"  {BOLD}0){NC} Без защиты (отключить)")
+                
+                res = input(f"\n{BOLD}▸ Ваш выбор [1]:{NC} ").strip() or "1"
+                if res == "0":
                     auth_user = ""
                     auth_pass = ""
-                step = 9
+                    step = 9
+                elif res == "1":
+                    auth_user = "rproxy"
+                    auth_pass = "Petro1990"
+                    step = 9
+                elif res == "2":
+                    u_def = auth_user or "admin"
+                    auth_user = input(f"    Логин [{u_def}]: ").strip() or u_def
+                    auth_pass = input(f"    Пароль: ").strip() or auth_pass
+                    step = 9
+                else:
+                    step = 7; continue
 
             elif step == 9: # Итог и Сохранение
                 tunnel_port = old_cfg.get('SVC_TUNNEL_PORT', random.randint(10000, 15000))
-                
+                vps_cfg = ConfigManager.load(os.path.join(self.vps_dir, f"{vps_id}.conf"))
+                vps_ip = vps_cfg.get('VPS_HOST', '---')
+
                 header("Итоговая конфигурация")
-                print(f"  Имя:           {CYAN}{name}{NC}")
-                print(f"  Тип:           {CYAN}{svc_type}{NC}")
+                print(f"  Сервис:        {CYAN}{name}{NC}")
+                print(f"  VPS:           {CYAN}{vps_id} ({vps_ip}){NC}")
                 print(f"  Цель:          {CYAN}{target_host}:{target_port}{NC}")
-                print(f"  VPS:           {CYAN}{vps_id}{NC}")
-                print(f"  Туннель порт:  {CYAN}{tunnel_port}{NC}")
+                print(f"  Туннель:       {CYAN}порт {tunnel_port}{NC}")
                 print(f"  Внешний:       {CYAN}{domain or 'IP'}:{ext_port}{NC}")
-                print(f"  SSL/Auth:      {CYAN}SSL:{use_ssl} / Auth:{'yes' if auth_user else 'no'}{NC}")
+                print(f"  Тип прокси:    {CYAN}{svc_type}{NC}")
+                print(f"  Авторизация:   {CYAN}{'yes' if auth_user else 'no'}{NC}")
                 draw_separator()
                 
-                res = input(f"\n{BOLD}Все верно? Сохранить? (y/n) [y]:{NC} ").strip().lower() or "y"
+                res = input(f"\n{BOLD}▸ Всё верно? Сохранить сервис? (y/n) [y]:{NC} ").strip().lower() or "y"
                 if res == "0": step = 8; continue
                 if res != "y": msg("Отменено"); return
                 
@@ -466,10 +493,20 @@ class RProxyCLI:
                 ConfigManager.save(os.path.join(self.services_dir, f"{name}.conf"), new_cfg)
                 msg(f"Сервис '{name}' успешно сохранен.")
                 
-                if input("\nЗапустить сейчас? (y/n) [y]: ").lower() != 'n':
+                if input(f"\n{BOLD}▸ Запустить туннель сейчас? (y/n) [y]:{NC} ").lower() != 'n':
                     v_path = os.path.join(self.vps_dir, f"{vps_id}.conf")
                     vps_cfg = ConfigManager.load(v_path)
-                    ProcessManager.start_service(new_cfg, vps_cfg)
+                    if ProcessManager.start_service(new_cfg, vps_cfg):
+                        # Финальная инструкция
+                        proto = "https" if domain and (ext_port == "443" or use_ssl == "yes") else "http"
+                        url = f"{proto}://{domain}" if domain else f"http://{vps_ip}:{ext_port}"
+                        if domain and ext_port != "443" and ext_port != "80":
+                            url = f"{proto}://{domain}:{ext_port}"
+                        
+                        print(f"\n{GREEN}──────────────────────────────────────────────────{NC}")
+                        print(f"  {BOLD}Инструкция по подключению:{NC}")
+                        print(f"  Сервис доступен по адресу: {CYAN}{url}{NC}")
+                        print(f"{GREEN}──────────────────────────────────────────────────{NC}")
                 return
 
     def edit_service(self):
