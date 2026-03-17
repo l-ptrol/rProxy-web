@@ -185,13 +185,14 @@ if __name__ == "__main__":
         target_port = svc_cfg.get('SVC_TARGET_PORT')
         
         if svc_cfg.get('SVC_TYPE') == 'ttyd':
-            ttyd_port = svc_cfg.get('SVC_TTYD_PORT', 7681)
+            ttyd_port = svc_cfg.get('SVC_TARGET_PORT', 7681)
             ttyd_cmd = svc_cfg.get('SVC_TTYD_CMD', 'login')
             if ProcessManager.start_ttyd(ttyd_port, ttyd_cmd, name):
                 target_host = "127.0.0.1"
                 target_port = ttyd_port
             else:
-                err("Не удалось запустить ttyd.")
+                log_path = os.path.join(ProcessManager.LOG_DIR, f"ttyd_{name}.log")
+                err(f"Не удалось запустить ttyd. Подробности см. в логе: {log_path}")
                 return False
 
         # 5. ЗАПУСК ТУННЕЛИ (AUTOSSH)
