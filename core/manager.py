@@ -222,9 +222,13 @@ if __name__ == "__main__":
         mon_port = random.randint(20000, 21000)
 
         # 5.1 СПЕЦИФИКАЦИЯ ТУННЕЛЯ
-        # HTTP всегда биндим на 127.0.0.1 на VPS (потому что Nginx там же), а TCP/UDP - на 0.0.0.0
-        remote_bind = "127.0.0.1" if svc_cfg.get('SVC_TYPE') in ['http', 'ttyd'] else "0.0.0.0"
-        tunnel_spec = f"{remote_bind}:{remote_tunnel_port}:{target_host}:{target_port}"
+        # HTTP всегда биндим на localhost на VPS (неявно, пропуская bind addr), а TCP/UDP - на 0.0.0.0
+        # Опыт показывает, что некоторые SSH клиенты плохо переваривают явный 127.0.0.1: в -R
+        if svc_cfg.get('SVC_TYPE') in ['http', 'ttyd']:
+            tunnel_spec = f"{remote_tunnel_port}:{target_host}:{target_port}"
+        else:
+            tunnel_spec = f"0.0.0.0:{remote_tunnel_port}:{target_host}:{target_port}"
+            
         if svc_cfg.get('SVC_TYPE') == 'udp':
             # Для UDP пробрасываем порт туннеля для моста socat
             tunnel_spec = f"{remote_tunnel_port}:127.0.0.1:{remote_tunnel_port}"
@@ -233,14 +237,19 @@ if __name__ == "__main__":
         env = os.environ.copy()
         env["AUTOSSH_GATETIME"] = "0"
         env["AUTOSSH_PATH"] = "/opt/bin/ssh" if os.path.exists("/opt/bin/ssh") else "ssh"
+        env["AUTOSSH_LOGFILE"] = os.path.join(ProcessManager.LOG_DIR, f"autossh_{name}.log")
 
+        log_path = os.path.join(ProcessManager.LOG_DIR, f"tunnel_{name}.log")
+        
         cmd = [
-            "autossh", "-M", str(mon_port), "-f", "-N",
+            "autossh", "-M", str(mon_port), "-N",
             "-o", "ConnectTimeout=10",
             "-o", "ServerAliveInterval=30",
             "-o", "ServerAliveCountMax=3",
             "-o", "ExitOnForwardFailure=yes",
             "-o", "StrictHostKeyChecking=no",
+            "-o", "UserKnownHostsFile=/dev/null",
+            "-o", "BatchMode=yes",
             "-i", ssh_key,
             "-p", str(vps_port),
             f"-R", tunnel_spec,
@@ -252,7 +261,13 @@ if __name__ == "__main__":
             # Остановка старого процесса если есть
             ProcessManager.stop_service(name, svc_cfg=svc_cfg)
             
-            subprocess.run(cmd, check=True, env=env)
+            # Запуск в лог-файл
+            log_handle = open(log_path, 'a')
+            log_handle.write(f"\n--- Tunnel starting at {time.ctime()} ---\n")
+            log_handle.write(f"Command: {' '.join(cmd)}\n")
+            log_handle.flush()
+            
+            proc = subprocess.Popen(cmd, env=env, stdout=log_handle, stderr=log_handle, start_new_session=True)
             
             max_wait = 20
             started = False
@@ -542,6 +557,15 @@ if __name__ == "__main__":
                 print(f"    {DIM}Слушающие порты на VPS:{NC}")
                 for line in all_ports.split('\n')[:10]: # Только первые 10 строк
                     if line.strip(): print(f"      {line.strip()}")
+                
+                # НОВОЕ: Читаем лог туннеля на роутере
+                log_path = os.path.join(ProcessManager.LOG_DIR, f"tunnel_{name}.log")
+                if os.path.exists(log_path):
+                    print(f"    {DIM}Лог туннеля (router):{NC}")
+                    with open(log_path, 'r') as f:
+                        lines = f.readlines()
+                        for line in lines[-10:]: # Последние 10 строк
+                            print(f"      {line.strip()}")
 
     @staticmethod
     def self_update():
