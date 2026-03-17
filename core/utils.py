@@ -51,17 +51,16 @@ def get_router_ip():
     return "192.168.1.1"
 
 def is_port_busy(port):
-    """Проверка занятости порта локально (ss / netstat)"""
-    import subprocess
+    """Надежная проверка занятости порта через системные сокеты"""
+    import socket
     try:
-        # ss (современный вариант)
-        res = subprocess.run(['ss', '-tln'], capture_output=True, text=True)
-        if f":{port} " in res.stdout: return True
-        # netstat (запасной вариант)
-        res = subprocess.run(['netstat', '-tnl'], capture_output=True, text=True)
-        if f":{port} " in res.stdout: return True
-    except: pass
-    return False
+        # Проверяем TCP порт на 0.0.0.0
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.5)
+            # Если connect_ex возвращает 0, порт открыт (занят процессом)
+            return s.connect_ex(('127.0.0.1', int(port))) == 0
+    except:
+        return False
 
 def gen_htpasswd(user, password):
     import subprocess

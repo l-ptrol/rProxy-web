@@ -79,7 +79,20 @@ def run():
             with open(log_path, 'a') as f:
                 f.write(f'[{{time.ctime()}}] Starting ttyd on port {port}...\\n')
                 f.flush()
+            # Проверка бинарника прямо перед запуском
+            import shutil as sh
+            binary = sh.which('ttyd')
+            with open(log_path, 'a') as f:
+                f.write(f'[{{time.ctime()}}] Binary check: {{binary}}\\n')
+                f.flush()
             
+            if not binary:
+                with open(log_path, 'a') as f:
+                    f.write(f'[{{time.ctime()}}] ERROR: ttyd not found in PATH!\\n')
+                    f.flush()
+                time.sleep(5)
+                continue
+
             proc = subprocess.Popen(['ttyd', '-W', '--max-clients', '10', '-i', '0.0.0.0', '-p', '{port}', '--', '{cmd}'], 
                                      stdout=open(log_path, 'a'), stderr=subprocess.STDOUT)
             proc.wait()
