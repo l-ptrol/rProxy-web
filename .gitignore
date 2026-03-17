@@ -7,3 +7,6 @@
 .git/index.lock
 backend/package-lock.json
 frontend/package-lock.json
+
+# Gemini Rules
+GEMINI.md
