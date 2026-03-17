@@ -167,7 +167,10 @@ if __name__ == "__main__":
             msg(f"Генерация доступа для {auth_user}...")
             ht_content = gen_htpasswd(auth_user, auth_pass)
             success, ht_err = VPSManager.upload_content(vps_cfg, ht_content + "\n", f"/etc/nginx/rproxy_{name}.htpasswd")
-            if not success:
+            if success:
+                # Устанавливаем права 644, чтобы Nginx мог прочитать файл
+                VPSManager.run_remote(vps_cfg, f"chmod 644 /etc/nginx/rproxy_{name}.htpasswd")
+            else:
                 warn(f"Не удалось загрузить файл авторизации: {ht_err}")
 
         # 2. ОБРАБОТКА SSL (CERTBOT)
