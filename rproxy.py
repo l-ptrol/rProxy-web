@@ -2,11 +2,12 @@
 import sys
 import os
 import random
-from core.utils import msg, pause, warn, err, header, draw_separator, get_router_ip, BOLD, NC, GREEN, RED, YELLOW, CYAN, DIM
+import subprocess
+from core.utils import msg, pause, warn, err, header, draw_separator, get_router_ip, BOLD, NC, GREEN, RED, YELLOW, CYAN, DIM, _resolve_bin, _get_ssh_args
 from core.config import ConfigManager
 from core.vps import VPSManager
 from core.manager import ProcessManager
-VERSION = "7.0.4"
+VERSION = "7.0.5"
 
 class RProxyCLI:
     def __init__(self):
@@ -292,7 +293,12 @@ class RProxyCLI:
                 pub_key = f.read().strip()
             
             cmd = f"mkdir -p ~/.ssh && echo '{pub_key}' >> ~/.ssh/authorized_keys && chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys"
-            os.system(f"ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p {port} {user}@{host} \"{cmd}\"")
+            
+            ssh_bin = _resolve_bin("ssh")
+            args = _get_ssh_args(ssh_bin, host, user, port)
+            ssh_cmd = [ssh_bin] + args + [f"{user}@{host}", cmd]
+            
+            subprocess.run(ssh_cmd, env=ProcessManager._get_env())
         except Exception as e:
             err(f"Ошибка настройки ключей: {e}")
             return
@@ -335,7 +341,12 @@ class RProxyCLI:
             
             msg(f"Пробрасываю ключ на {host} (потребуется пароль)...")
             cmd = f"mkdir -p ~/.ssh && echo '{pub_key}' >> ~/.ssh/authorized_keys && chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys"
-            os.system(f"ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p {port} {user}@{host} \"{cmd}\"")
+            
+            ssh_bin = _resolve_bin("ssh")
+            args = _get_ssh_args(ssh_bin, host, user, port)
+            ssh_cmd = [ssh_bin] + args + [f"{user}@{host}", cmd]
+            
+            subprocess.run(ssh_cmd, env=ProcessManager._get_env())
         except Exception as e:
             err(f"Ошибка: {e}")
 

@@ -1,7 +1,7 @@
 #!/bin/sh
 # rProxy Web & CLI (Python Core) Installer for Keenetic
-# rProxy Installer v7.0.4
-VERSION="7.0.4"
+# rProxy Installer v7.0.5
+VERSION="7.0.5"
 # - ttyd Compatibility Fix
 # Новое ядро на Python. 100% паритет с Bash + Модульность.
 
@@ -17,7 +17,7 @@ warn() { printf "${YELLOW}⚠${NC} %b\n" "$*"; }
 err() { printf "${RED}✖${NC} %b\n" "$*" >&2; exit 1; }
 
 printf "\n${CYAN}==========================================${NC}\n"
-printf "${CYAN}    rProxy Python Core v7.0.4             ${NC}\n"
+printf "${CYAN}    rProxy Python Core v7.0.5             ${NC}\n"
 printf "${CYAN}==========================================${NC}\n\n"
 
 if [ ! -d "/opt/bin" ]; then
@@ -26,7 +26,7 @@ fi
 
 msg "Установка зависимостей (autossh, pkill, psmisc, ttyd, socat)..."
 opkg update >/dev/null 2>&1
-opkg install python3 python3-pip autossh psmisc procps-ng-pkill openssh-keygen openssl-util ttyd socat >/dev/null 2>&1
+opkg install python3 python3-pip autossh psmisc procps-ng-pkill openssh-keygen openssh-client openssh-scp openssl-util ttyd socat curl grep sed >/dev/null 2>&1
 
 INSTALL_DIR="/opt/share/rproxy-web"
 mkdir -p "$INSTALL_DIR"
@@ -69,7 +69,7 @@ cat > "$CAT_INIT" <<EOF
 #!/bin/sh
 case "\$1" in
     start)
-        echo "Starting rProxy Web v7.0.3..."
+        echo "Starting rProxy Web v7.0.5..."
         cd "$INSTALL_DIR"
         /opt/bin/python3 main.py > /opt/var/log/rproxy-web.log 2>&1 &
         ;;

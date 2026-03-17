@@ -20,6 +20,53 @@ def _resolve_bin(name):
             return full
     return name
 
+def _get_ssh_type(bin_path):
+    """Определяет, является ли бинарник OpenSSH или Dropbear (dbclient)"""
+    import subprocess
+    try:
+        proc = subprocess.run([bin_path, "-V"], capture_output=True, text=True)
+        if "Dropbear" in (proc.stdout + proc.stderr):
+            return "dropbear"
+    except: pass
+    
+    try:
+        proc = subprocess.run([bin_path, "-h"], capture_output=True, text=True)
+        if "dbclient" in (proc.stdout + proc.stderr) or "Dropbear" in (proc.stdout + proc.stderr):
+            return "dropbear"
+    except: pass
+    
+    return "openssh"
+
+def _get_ssh_args(bin_path, host, user, port, key_path=None, scp=False):
+    """Формирует список аргументов в зависимости от типа SSH-клиента"""
+    ssh_type = _get_ssh_type(bin_path)
+    args = []
+    
+    if ssh_type == "dropbear":
+        args.append("-y") # Accept host key
+        if key_path:
+            args.extend(["-i", key_path])
+        if scp:
+            args.extend(["-P", str(port)])
+        else:
+            args.extend(["-p", str(port)])
+    else:
+        args.extend([
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "UserKnownHostsFile=/dev/null",
+            "-o", "BatchMode=yes" if key_path else "PasswordAuthentication=yes",
+            "-o", "ConnectTimeout=10",
+            "-o", "LogLevel=ERROR"
+        ])
+        if key_path:
+            args.extend(["-i", key_path])
+        if scp:
+            args.extend(["-P", str(port)])
+        else:
+            args.extend(["-p", str(port)])
+    
+    return args
+
 def msg(text):
     print(f"{GREEN}▸{NC} {text}")
 
