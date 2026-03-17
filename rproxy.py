@@ -7,7 +7,7 @@ from core.config import ConfigManager
 from core.vps import VPSManager
 from core.manager import ProcessManager
 
-VERSION = "6.6.3"
+VERSION = "6.6.7"
 
 class RProxyCLI:
     def __init__(self):
@@ -319,7 +319,8 @@ class RProxyCLI:
                     ("http", "Веб (HTTP) — сайты, панели управления"),
                     ("tcp",  "Порт (TCP) — SSH (22), БД, сырой трафик"),
                     ("ttyd", "Терминал (ttyd) — консоль в браузере"),
-                    ("ssh",  "SSH Access — прямое управление")
+                    ("ssh",  "SSH Access — прямое управление"),
+                    ("udp",  "UDP Port — WireGuard, игры, VPN")
                 ]
                 print(f"\n{BOLD}Шаг 2/9. Выберите тип сервиса (сейчас: {svc_type}):{NC}")
                 for idx, (code, desc) in enumerate(types, 1):
@@ -356,6 +357,13 @@ class RProxyCLI:
                 step = 4
 
             elif step == 4: # Режим (Домен или Порт)
+                if svc_type == 'udp':
+                    msg("UDP поддерживает только публикацию через внешний порт.")
+                    domain = ""
+                    use_ssl = "no"
+                    step = 6
+                    continue
+                
                 print(f"\n{BOLD}Шаг 4/9. Режим публикации{NC}")
                 print(f"  {BOLD}1){NC} Домен (SSL, порт 443)")
                 print(f"  {BOLD}2){NC} Внешний порт (IP, без SSL)")

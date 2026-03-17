@@ -82,9 +82,11 @@ server {{
 """
 
     @staticmethod
-    def tcp_proxy(port, local_port, domain=None):
-        """Конфиг для TCP (Stream) прокси. Если есть домен — используем SSL."""
-        if domain:
+    def stream_proxy(port, local_port, domain=None, proto="tcp"):
+        """Конфиг для TCP/UDP (Stream) прокси. Если есть домен — используем SSL (только для TCP)."""
+        listen_opts = f"{port} {proto}" if proto == "udp" else str(port)
+        
+        if domain and proto == "tcp":
             return f"""
 server {{
     listen {port} ssl;
@@ -102,7 +104,7 @@ server {{
 """
         return f"""
 server {{
-    listen {port};
+    listen {listen_opts};
     proxy_pass 127.0.0.1:{local_port};
 }}
 """
@@ -148,8 +150,13 @@ class ServiceManager:
                 target_host=target_host,
                 target_port=target_port
             )
-        elif svc_type in ['tcp', 'ssh']:
+        elif svc_type in ['tcp', 'ssh', 'udp']:
             # Если это TCP и мы хотим SSL (через домен)
-            return ServiceTemplate.tcp_proxy(ext_port, tunnel_port, domain if use_ssl_paths else None)
+            proto = "udp" if svc_type == "udp" else "tcp"
+            return ServiceTemplate.stream_proxy(
+                ext_port, tunnel_port, 
+                domain if use_ssl_paths else None,
+                proto=proto
+            )
         
         return ""
