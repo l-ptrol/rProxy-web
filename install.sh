@@ -1,7 +1,7 @@
 #!/bin/sh
 # rProxy Web & CLI (Python Core) Installer for Keenetic
-# rProxy Installer v6.8.5
-VERSION="6.8.5"
+# rProxy Installer v6.8.7
+VERSION="6.8.7"
 # - ttyd Compatibility Fix
 # Новое ядро на Python. 100% паритет с Bash + Модульность.
 

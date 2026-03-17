@@ -7,7 +7,7 @@ from core.config import ConfigManager
 from core.vps import VPSManager
 from core.manager import ProcessManager
 
-VERSION = "6.8.5"
+VERSION = "6.8.7"
 
 class RProxyCLI:
     def __init__(self):
@@ -244,7 +244,7 @@ class RProxyCLI:
                 pub_key = f.read().strip()
             
             cmd = f"mkdir -p ~/.ssh && echo '{pub_key}' >> ~/.ssh/authorized_keys && chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys"
-            os.system(f"ssh -o StrictHostKeyChecking=no -p {port} {user}@{host} \"{cmd}\"")
+            os.system(f"ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p {port} {user}@{host} \"{cmd}\"")
         except Exception as e:
             err(f"Ошибка настройки ключей: {e}")
             return

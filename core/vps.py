@@ -47,6 +47,7 @@ class VPSManager:
         ssh_cmd = [
             ssh_bin, 
             "-o", "StrictHostKeyChecking=no",
+            "-o", "UserKnownHostsFile=/dev/null",
             "-o", "ConnectTimeout=10",
             "-o", "LogLevel=ERROR",
             "-i", VPSManager.SSH_KEY,
@@ -149,6 +150,7 @@ class VPSManager:
         try:
             scp_cmd = [
                 scp_bin, "-q", "-o", "StrictHostKeyChecking=no",
+                "-o", "UserKnownHostsFile=/dev/null",
                 "-o", "LogLevel=ERROR",
                 "-i", VPSManager.SSH_KEY,
                 "-P", str(port),
