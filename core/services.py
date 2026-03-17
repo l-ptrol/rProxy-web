@@ -61,7 +61,13 @@ server {{
         # Глубокий стелс: скрываем учетные данные Nginx и авторизацию бэкенда
         proxy_set_header Authorization "";
         proxy_hide_header WWW-Authenticate;
+        proxy_hide_header 'Access-Control-Allow-Origin';
         proxy_set_header X-Forwarded-User $remote_user;
+        
+        # Предотвращаем конфликты сессий при 401 ошибках бэкенда
+        proxy_buffer_size 128k;
+        proxy_buffers 4 256k;
+        proxy_busy_buffers_size 256k;
         proxy_hide_header X-Frame-Options;
         proxy_hide_header Content-Security-Policy;
         proxy_cookie_domain "{target_host}" "$host";
