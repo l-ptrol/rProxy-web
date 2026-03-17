@@ -251,6 +251,25 @@ run()
         return True
 
     @staticmethod
+    def run_certbot(svc_cfg, vps_cfg):
+        """Ручной запуск выпуска сертификата через Certbot"""
+        name = svc_cfg.get('SVC_NAME')
+        domain = svc_cfg.get('SVC_DOMAIN')
+        if not domain:
+            warn(f"Сервис '{name}' не имеет домена.")
+            return False
+            
+        msg(f"Запуск Certbot для домена '{domain}'...")
+        success, output = VPSManager.run_certbot(vps_cfg, domain)
+        if success:
+            msg(f"Сертификат для '{domain}' успешно получен.")
+            # Передеплоим конфиг Nginx, так как теперь SSL файлы точно на месте
+            ProcessManager.redeploy_nginx(svc_cfg, vps_cfg)
+        else:
+            err(f"Ошибка Certbot: {output}")
+        return success
+
+    @staticmethod
     def redeploy_nginx(svc_cfg, vps_cfg):
         """Перезапись конфигурации Nginx без остановки туннеля"""
         name = svc_cfg.get('SVC_NAME')
