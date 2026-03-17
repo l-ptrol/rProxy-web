@@ -150,13 +150,12 @@ class ServiceManager:
                 target_host=target_host,
                 target_port=target_port
             )
-        elif svc_type in ['tcp', 'ssh', 'udp']:
+        elif svc_type in ['tcp', 'ssh']:
             # Если это TCP и мы хотим SSL (через домен)
-            proto = "udp" if svc_type == "udp" else "tcp"
             return ServiceTemplate.stream_proxy(
                 ext_port, tunnel_port, 
                 domain if use_ssl_paths else None,
-                proto=proto
+                proto="tcp"
             )
         
         return ""

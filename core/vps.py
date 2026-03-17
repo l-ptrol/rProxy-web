@@ -110,6 +110,12 @@ class VPSManager:
                  printf "\\nstream {\\n    include /etc/nginx/streams-enabled/*.conf;\\n}\\n" >> /etc/nginx/nginx.conf
             fi
         fi
+        
+        # Установка socat для UDP моста
+        if ! command -v socat >/dev/null 2>&1; then
+            apt-get update -qq && apt-get install -y -qq socat || yum install -y socat
+        fi
+        
         systemctl enable nginx && systemctl start nginx
         
         # Настройка автообновления SSL (cron)

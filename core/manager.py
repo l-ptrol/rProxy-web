@@ -269,22 +269,32 @@ if __name__ == "__main__":
                 msg(f"Туннель '{name}' запущен (PID: {pid}). Ожидание сетевой готовности...")
                 time.sleep(4) 
                 
-                # 6. ДЕПЛОЙ NGINX (Теперь, когда порт точно слушается autossh)
-                # Всегда сначала деплоим актуальный конфиг (с SSL или без)
-                use_ssl_final = has_certificate and use_ssl
-                msg(f"Применение конфигурации Nginx (SSL: {use_ssl_final})...")
-                nginx_conf = ServiceManager.generate_conf(svc_cfg, use_ssl_paths=use_ssl_final)
-                
-                # Перед деплоем удалим старые конфиги с таким же именем (чтобы не было конфликтов)
-                msg(f"Проверка конфликтов конфигурации...")
-                VPSManager.run_remote(vps_cfg, f"rm -f /etc/nginx/sites-enabled/rproxy_{name}.conf /etc/nginx/streams-enabled/rproxy_{name}.conf")
-                
-                success, output = VPSManager.deploy_vhost(vps_cfg, name, nginx_conf, path=nginx_path)
-                if not success:
-                    warn(f"Nginx reload warning: {output}")
+                # 6. ДЕПЛОЙ NGINX / UDP BRIDGE
+                if svc_cfg.get('SVC_TYPE') == 'udp':
+                    # Для UDP запускаем мост
+                    msg("Запуск UDP моста через socat...")
+                    socat_cmd_vps = f"nohup socat UDP4-LISTEN:{svc_cfg.get('SVC_EXT_PORT')},fork,reuseaddr TCP4:127.0.0.1:{remote_tunnel_port} > /dev/null 2>&1 &"
+                    VPSManager.run_remote(vps_cfg, f"pkill -f 'UDP4-LISTEN:{svc_cfg.get('SVC_EXT_PORT')}' ; {socat_cmd_vps}")
+                    
+                    socat_cmd_router = f"socat TCP4-LISTEN:{target_port},fork,reuseaddr UDP4:{target_host}:{target_port}"
+                    # Запускаем локальный socat в фоне
+                    subprocess.Popen(["sh", "-c", f"pkill -f 'TCP4-LISTEN:{target_port}' ; nohup {socat_cmd_router} > /dev/null 2>&1 &"], start_new_session=True)
+                else:
+                    # Всегда сначала деплоим актуальный конфиг (с SSL или без)
+                    use_ssl_final = has_certificate and use_ssl
+                    msg(f"Применение конфигурации Nginx (SSL: {use_ssl_final})...")
+                    nginx_conf = ServiceManager.generate_conf(svc_cfg, use_ssl_paths=use_ssl_final)
+                    
+                    # Перед деплоем удалим старые конфиги с таким же именем (чтобы не было конфликтов)
+                    msg(f"Проверка конфликтов конфигурации...")
+                    VPSManager.run_remote(vps_cfg, f"rm -f /etc/nginx/sites-enabled/rproxy_{name}.conf /etc/nginx/streams-enabled/rproxy_{name}.conf")
+                    
+                    success, output = VPSManager.deploy_vhost(vps_cfg, name, nginx_conf, path=nginx_path)
+                    if not success:
+                        warn(f"Nginx reload warning: {output}")
                 
                 msg(f"Туннель '{name}' запущен {DIM}(PID: {pid}, MonPort: {mon_port}){NC}")
-                msg(f"Сервис '{name}' успешно проброшен! 502 ошибка устранена.")
+                msg(f"Сервис '{name}' успешно проброшен!")
                 return True
             else:
                 err(f"Туннель '{name}' не запустился за {max_wait} сек.")
@@ -313,6 +323,17 @@ if __name__ == "__main__":
         if svc_cfg:
             ttyd_port = svc_cfg.get('SVC_TTYD_PORT', 7681)
             ProcessManager.stop_ttyd(ttyd_port)
+            
+            # 3. SOCAT (UDP мост)
+            if svc_cfg.get('SVC_TYPE') == 'udp':
+                t_port = svc_cfg.get('SVC_TARGET_PORT')
+                ext_port = svc_cfg.get('SVC_EXT_PORT')
+                v_id = svc_cfg.get('SVC_VPS')
+                v_path = os.path.join("/opt/etc/rproxy/vps", f"{v_id}.conf")
+                if os.path.exists(v_path):
+                    v_cfg = ConfigManager.load(v_path)
+                    VPSManager.run_remote(v_cfg, f"pkill -f 'UDP4-LISTEN:{ext_port}'")
+                subprocess.run(["pkill", "-f", f"TCP4-LISTEN:{t_port}"], stderr=subprocess.DEVNULL)
         else:
             # Если конфига нет, пробуем убить по стандартному порту (для очистки)
             ProcessManager.stop_ttyd(7681)
