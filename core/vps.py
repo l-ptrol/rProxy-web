@@ -208,21 +208,47 @@ class VPSManager:
 
     @staticmethod
     def health_check(vps_cfg):
-        """Проверка состояния VPS: Nginx, Диск, Доступность"""
-        results = []
+        """Проверка состояния VPS: Nginx, SSL, Certbot"""
+        results = {
+            'nginx': 'Unknown',
+            'ssl_timer': 'Unknown',
+            'certs': [] # List of {domains: str, expiry: str, days: int}
+        }
+        
         # 1. Проверка Nginx
         success, output = VPSManager.run_remote(vps_cfg, "systemctl is-active nginx")
-        nginx_status = f"{GREEN}Active{NC}" if success and "active" in output else f"{RED}Inactive{NC}"
-        results.append(f"Nginx: {nginx_status}")
+        results['nginx'] = "Запущен" if success and "active" in output else "Остановлен"
         
-        # 2. Проверка диска
-        success, output = VPSManager.run_remote(vps_cfg, "df -h / | tail -1 | awk '{print $4}'")
-        disk_space = output.strip() if success else "Error"
-        results.append(f"Free Disk: {CYAN}{disk_space}{NC}")
-        
-        # 3. ОС версия (кратко)
-        success, output = VPSManager.run_remote(vps_cfg, "cat /etc/os-release | grep PRETTY_NAME | cut -d'\"' -f2")
-        os_ver = output.strip() if success else "Unknown"
-        results.append(f"OS: {DIM}{os_ver}{NC}")
-        
-        return True, " | ".join(results)
+        # 2. Проверка Certbot Timer
+        success, output = VPSManager.run_remote(vps_cfg, "systemctl list-timers | grep certbot")
+        if success and "certbot" in output:
+            results['ssl_timer'] = "Активен (Systemd)"
+            # Пытаемся вытащить дату следующего запуска
+            parts = output.split()
+            if len(parts) > 1:
+                results['next_run'] = f"{parts[0]} {parts[1]}"
+        else:
+            results['ssl_timer'] = "Не найден"
+
+        # 3. Список сертификатов
+        success, output = VPSManager.run_remote(vps_cfg, "certbot certificates")
+        if success and "Found the following certs" in output:
+            import re
+            
+            # Парсим сертификаты
+            blocks = output.split("Certificate Name:")
+            for block in blocks[1:]:
+                cert = {}
+                domains_match = re.search(r"Domains:\s+(.*)", block)
+                expiry_match = re.search(r"Expiry Date:\s+(.*?)\s+\(VALID:\s+(\d+)\s+days\)", block)
+                
+                if domains_match:
+                    cert['domains'] = domains_match.group(1).strip()
+                if expiry_match:
+                    cert['expiry'] = expiry_match.group(1).strip()
+                    cert['days'] = int(expiry_match.group(2))
+                
+                if cert:
+                    results['certs'].append(cert)
+                    
+        return results

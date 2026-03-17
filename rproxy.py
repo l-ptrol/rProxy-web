@@ -7,7 +7,7 @@ from core.config import ConfigManager
 from core.vps import VPSManager
 from core.manager import ProcessManager
 
-VERSION = "6.4.6"
+VERSION = "6.4.7"
 
 class RProxyCLI:
     def __init__(self):
@@ -557,6 +557,68 @@ class RProxyCLI:
             
             msg(f"Запуск Certbot для {domain}...")
             ProcessManager.run_certbot(cfg, vps_cfg)
+
+    def health_check_menu(self):
+        self.clear()
+        header("Проверка VPS (Health)")
+        
+        vps_files = sorted([f for f in os.listdir(self.vps_dir) if f.endswith(".conf")])
+        if not vps_files:
+            warn("Нет настроенных VPS для проверки.")
+            return
+
+        for f in vps_files:
+            vps_id = f.replace(".conf", "")
+            vps_cfg = ConfigManager.load(os.path.join(self.vps_dir, f))
+            v_host = vps_cfg.get('VPS_HOST', '---')
+            
+            print(f"\n{BOLD}Сервер: {CYAN}{vps_id}{NC} ({v_host})")
+            
+            print(f"{DIM}▸ Проверяю Nginx...{NC}")
+            status = VPSManager.health_check(vps_cfg)
+            nx_status = status.get('nginx', 'Unknown')
+            nx_color = GREEN if nx_status == "Запущен" else RED
+            print(f"  Nginx:        {nx_color}{nx_status}{NC}")
+            
+            print(f"{DIM}▸ Проверяю автопродление SSL (Certbot)...{NC}")
+            timer = status.get('ssl_timer', 'Unknown')
+            timer_color = GREEN if "Активен" in timer else YELLOW
+            print(f"  SSL Timer:    {timer_color}{timer}{NC}")
+            
+            next_run = status.get('next_run')
+            if next_run:
+                print(f"  Следующее:    {CYAN}{next_run}{NC}")
+
+            print(f"{DIM}▸ Действующие сертификаты:{NC}")
+            certs = status.get('certs', [])
+            if not certs:
+                print(f"  {YELLOW}Сертификаты не найдены{NC}")
+            else:
+                for cert in certs:
+                    domains = cert.get('domains', '---')
+                    expiry = cert.get('expiry', '---')
+                    days = cert.get('days', 0)
+                    day_color = GREEN if days > 10 else RED
+                    print(f"  {BOLD}Domains:{NC} {CYAN}{domains}{NC}")
+                    print(f"  Expiry Date: {expiry} ({day_color}VALID: {days} days{NC})")
+
+        draw_separator()
+        print(f"\n{BOLD}▸ Утилиты на роутере:{NC}")
+        
+        # Проверка SSH утилит
+        entware_ssh = "/opt/bin/ssh"
+        system_ssh = "ssh"
+        
+        e_status = f"{GREEN}Entware OK{NC}" if os.path.exists(entware_ssh) else f"{RED}Missing{NC}"
+        print(f"  SSH:          {e_status}")
+        
+        try:
+            import subprocess
+            subprocess.run(["ssh", "-V"], capture_output=True, check=True)
+            s_status = f"{GREEN}System OK{NC}"
+        except:
+            s_status = f"{RED}Missing{NC}"
+        print(f"  SSH:          {s_status}")
 
 if __name__ == "__main__":
     cli = RProxyCLI()
