@@ -15,7 +15,20 @@ RPROXY_ROOT = "/opt/etc/rproxy"
 SERVICES_DIR = os.path.join(RPROXY_ROOT, "services")
 VPS_DIR = os.path.join(RPROXY_ROOT, "vps")
 
-VERSION = "6.3.5"
+VERSION = "6.4.0"
+
+# Настройка многопоточного сервера для Bottle (чтобы SSE не блокировал интерфейс)
+from wsgiref.simple_server import WSGIServer, WSGIRequestHandler
+from socketserver import ThreadingMixIn
+
+class ThreadingWSGIServer(ThreadingMixIn, WSGIServer):
+    daemon_threads = True
+
+class ThreadingServer(bottle.ServerAdapter):
+    def run(self, handler):
+        from wsgiref.simple_server import make_server
+        srv = make_server(self.host, self.port, handler, server_class=ThreadingWSGIServer)
+        srv.serve_forever()
 
 # Настройка Bottle
 bottle.TEMPLATE_PATH.insert(0, './templates')
@@ -191,6 +204,5 @@ def execute_command_simple(command):
     return execute_command(command)
 
 if __name__ == "__main__":
-    # Для работы SSE с Bottle желательно использовать сервер, поддерживающий потоковую передачу
-    # Например, 'gevent' или встроенный 'wsgiref' (но он медленный)
-    run(host='0.0.0.0', port=3000, quiet=True, debug=True)
+    # Используем ThreadingServer для поддержки многопоточности и SSE
+    run(host='0.0.0.0', port=3000, server=ThreadingServer, quiet=True, debug=False)

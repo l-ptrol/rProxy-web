@@ -189,18 +189,41 @@ run()
         ]
 
         try:
-            msg(f"Запуск туннеля '{name}' (Mon:{mon_port})...")
+            msg(f"Запуск туннеля '{name}' (Target: {target_host}:{target_port})...")
+            # Остановка старого процесса если есть
+            ProcessManager.stop_service(name)
+            
             subprocess.run(cmd, check=True, env=env)
-            time.sleep(2)
-            # Ищем PID
-            pgrep = subprocess.run(["pgrep", "-f", f"autossh.*-M {mon_port}"], capture_output=True, text=True)
-            pid = ""
-            if pgrep.returncode == 0:
-                pid = pgrep.stdout.strip().split('\n')[0]
-                with open(os.path.join(ProcessManager.PID_DIR, f"{name}.pid"), 'w') as f:
-                    f.write(pid)
-            msg(f"Сервис '{name}' запущен (PID: {pid}).")
-            return True
+            
+            # Ждем появления порта autossh или процесса
+            max_wait = 15
+            started = False
+            for i in range(max_wait):
+                time.sleep(1)
+                # Проверяем PID через pgrep
+                pgrep = subprocess.run(["pgrep", "-f", f"autossh.*-M {mon_port}"], capture_output=True, text=True)
+                if pgrep.returncode == 0:
+                    pid = pgrep.stdout.strip().split('\n')[0]
+                    with open(os.path.join(ProcessManager.PID_DIR, f"{name}.pid"), 'w') as f:
+                        f.write(pid)
+                    
+                    # Ждем именно проброса порта (простой способ - подождать еще немного или проверить через ss)
+                    # Но на Keenetic autossh -f сразу уходит в фон. 
+                    # Проверяем, что процесс живой
+                    try:
+                        os.kill(int(pid), 0)
+                        started = True
+                        break
+                    except OSError: pass
+                
+            if started:
+                # Даем время на установку SSH соединения
+                msg(f"Туннель '{name}' запущен (PID: {pid}). Ожидание сетевой готовности...")
+                time.sleep(3) 
+                return True
+            else:
+                err(f"Туннель '{name}' не запустился за {max_wait} сек.")
+                return False
         except Exception as e:
             err(f"Ошибка при запуске туннеля '{name}': {e}")
             return False

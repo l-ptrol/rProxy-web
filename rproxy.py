@@ -7,7 +7,7 @@ from core.config import ConfigManager
 from core.vps import VPSManager
 from core.manager import ProcessManager
 
-VERSION = "6.3.5"
+VERSION = "6.4.0"
 
 class RProxyCLI:
     def __init__(self):
@@ -515,7 +515,19 @@ if __name__ == "__main__":
     cli = RProxyCLI()
     if len(sys.argv) > 1:
         cmd = sys.argv[1]
-        if cmd == 'start': 
+        if cmd == 'boot':
+            msg("Автозапуск включенных сервисов (boot)...")
+            if os.path.exists(cli.services_dir):
+                for f in sorted(os.listdir(cli.services_dir)):
+                    if f.endswith(".conf"):
+                        cfg = ConfigManager.load(os.path.join(cli.services_dir, f))
+                        if cfg.get('SVC_ENABLED') == 'yes':
+                            vps_id = cfg.get('SVC_VPS')
+                            vps_cfg = ConfigManager.load(os.path.join(cli.vps_dir, f"{vps_id}.conf"))
+                            if vps_cfg:
+                                msg(f"Автозапуск сервиса: {cfg.get('SVC_NAME')}...")
+                                ProcessManager.start_service(cfg, vps_cfg)
+        elif cmd == 'start': 
             if len(sys.argv) > 2:
                 name = sys.argv[2]
                 cfg = ConfigManager.load(os.path.join(cli.services_dir, f"{name}.conf"))
