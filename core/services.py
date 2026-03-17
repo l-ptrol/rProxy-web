@@ -7,11 +7,11 @@ class ServiceTemplate:
         auth_config = ""
         if auth_user:
             auth_config = f"""
-    auth_basic "Restricted Access";
+    auth_basic "rProxy: {name}";
     auth_basic_user_file /etc/nginx/rproxy_{name}.htpasswd;
-    # Если включен пароль в rProxy, подавляем авторизацию бэкенда для избежания петли
-    proxy_set_header Authorization "";
-    proxy_hide_header WWW-Authenticate;
+    # Сквозная авторизация: позволяем роутеру видеть данные входа
+    # proxy_set_header Authorization ""; 
+    # proxy_hide_header WWW-Authenticate;
     proxy_set_header X-Forwarded-User $remote_user;
     """
         listen_80 = f"""
