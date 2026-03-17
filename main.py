@@ -1,5 +1,7 @@
 import os
 import time
+import sys
+import json
 import bottle
 from bottle import route, run, template, request, response, static_file, post, get, HTTPResponse, debug
 
@@ -13,7 +15,7 @@ RPROXY_ROOT = "/opt/etc/rproxy"
 SERVICES_DIR = os.path.join(RPROXY_ROOT, "services")
 VPS_DIR = os.path.join(RPROXY_ROOT, "vps")
 
-VERSION = "6.3.3"
+VERSION = "6.3.4"
 
 # Настройка Bottle
 bottle.TEMPLATE_PATH.insert(0, './templates')
@@ -127,8 +129,68 @@ def service_action(name, action):
     
     return {"status": "success"}
 
-if __name__ == "__main__":
-    run(host='0.0.0.0', port=3000, quiet=True)
+@get('/api/execute/<command:path>')
+@get('/api/execute/<command>/<target:path>')
+def execute_command(command, target=None):
+    """Эндпоинт для выполнения команд с потоковой передачей логов (SSE)"""
+    response.content_type = 'text/event-stream'
+    response.cache_control = 'no-cache'
+    response.headers['Access-Control-Allow-Origin'] = '*'
+
+    def stream():
+        import subprocess
+        
+        # Маппинг команд фронтенда на CLI аргументы
+        cmd_map = {
+            'start': ['start'],
+            'stop': ['stop'],
+            'restart': ['restart'],
+            'redeploy_nginx': ['redeploy_nginx'],
+            'add-service': ['add-service']
+        }
+        
+        args = cmd_map.get(command, [command])
+        if target:
+            args.append(target)
+            
+        rproxy_bin = "/opt/bin/rproxy"
+        if not os.path.exists(rproxy_bin):
+            rproxy_bin = sys.executable + " " + os.path.join(os.getcwd(), "rproxy.py")
+
+        full_cmd = f"python3 rproxy.py {' '.join(args)}" if not os.path.exists("/opt/bin/rproxy") else f"rproxy {' '.join(args)}"
+        
+        yield f"data: {{\"type\": \"log\", \"message\": \"Запуск: {full_cmd}\"}}\n\n"
+        
+        try:
+            # Используем subprocess.Popen для отслеживания вывода
+            # Внимание: для реального SSE в Bottle нужно использовать gevent или специальный сервер
+            # но для простых команд достаточно запустить процесс и прочитать вывод
+            proc = subprocess.Popen(
+                ["python3", "rproxy.py"] + args,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                universal_newlines=True
+            )
+            
+            for line in proc.stdout:
+                if line.strip():
+                    yield f"data: {json.dumps({'type': 'log', 'message': line.strip()})}\n\n"
+            
+            proc.wait()
+            yield f"data: {{\"type\": \"done\", \"code\": {proc.returncode}}}\n\n"
+        except Exception as e:
+            import json
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+    return stream()
+
+@get('/api/execute/<command>')
+def execute_command_simple(command):
+    return execute_command(command)
 
 if __name__ == "__main__":
-    run(host='0.0.0.0', port=3000, quiet=True)
+    # Для работы SSE с Bottle желательно использовать сервер, поддерживающий потоковую передачу
+    # Например, 'gevent' или встроенный 'wsgiref' (но он медленный)
+    run(host='0.0.0.0', port=3000, quiet=True, debug=True)
