@@ -7,7 +7,7 @@ from core.config import ConfigManager
 from core.vps import VPSManager
 from core.manager import ProcessManager
 
-VERSION = "6.5.0"
+VERSION = "6.5.1"
 
 class RProxyCLI:
     def __init__(self):
@@ -432,15 +432,23 @@ class RProxyCLI:
                 step = 8
 
             elif step == 8: # Авторизация
-                # Загружаем глобальный конфиг для получения дефолтных учетных данных
-                g_cfg = ConfigManager.load(os.path.join(self.root, "rproxy.conf"))
-                def_user = g_cfg.get('DEFAULT_AUTH_USER', 'rproxy')
-                def_pass = g_cfg.get('DEFAULT_AUTH_PASS', 'Petro1990')
+                # Загружаем глобальный конфиг
+                g_path = os.path.join(self.root, "rproxy.conf")
+                g_cfg = ConfigManager.load(g_path)
                 
+                has_defaults = 'DEFAULT_AUTH_USER' in g_cfg and 'DEFAULT_AUTH_PASS' in g_cfg
+                def_user = g_cfg.get('DEFAULT_AUTH_USER', '')
+                def_pass = g_cfg.get('DEFAULT_AUTH_PASS', '')
+
                 print(f"\n{BOLD}Шаг 8/9. Защита доступа (Basic Auth){NC}")
-                print(f"  Выберите метод защиты для сервиса:")
-                print(f"  {BOLD}1){NC} Данные по умолчанию: {def_user} / {def_pass}")
-                print(f"  {BOLD}2){NC} Ввести логин и пароль вручную")
+                if has_defaults:
+                    print(f"  {GREEN}✔ Найдены сохраненные данные{NC}")
+                    print(f"  {BOLD}1){NC} Использовать: {CYAN}{def_user}{NC} / {CYAN}{def_pass}{NC}")
+                else:
+                    print(f"  {YELLOW}⚠ Сохраненные данные не найдены{NC}")
+                    print(f"  {BOLD}1){NC} Заполнить стандартные данные (сохранить в конфиг)")
+                
+                print(f"  {BOLD}2){NC} Ввести логин и пароль вручную (только для этого сервиса)")
                 print(f"  {BOLD}0){NC} Без защиты (отключить)")
                 
                 res = input(f"\n{BOLD}▸ Ваш выбор [1]:{NC} ").strip() or "1"
@@ -449,8 +457,23 @@ class RProxyCLI:
                     auth_pass = ""
                     step = 9
                 elif res == "1":
-                    auth_user = def_user
-                    auth_pass = def_pass
+                    if not has_defaults:
+                        # Предлагаем заполнить
+                        print(f"\n{CYAN}▸ Настройка стандартных данных для всех новых сервисов{NC}")
+                        u = input(f"    Логин [rproxy]: ").strip() or "rproxy"
+                        p = input(f"    Пароль: ").strip()
+                        if not p: 
+                            warn("Пароль не может быть пустым.")
+                            continue
+                        g_cfg['DEFAULT_AUTH_USER'] = u
+                        g_cfg['DEFAULT_AUTH_PASS'] = p
+                        ConfigManager.save(g_path, g_cfg)
+                        msg("Данные сохранены в rproxy.conf")
+                        auth_user = u
+                        auth_pass = p
+                    else:
+                        auth_user = def_user
+                        auth_pass = def_pass
                     step = 9
                 elif res == "2":
                     u_def = auth_user or "admin"
