@@ -312,10 +312,26 @@ if __name__ == "__main__":
                     if not has_soc_router:
                         err("Утилита socat не найдена на роутере! Установите её: opkg install socat")
                     else:
-                        pkill_cmd = f"pkill -f 'TCP4-LISTEN:{remote_tunnel_port}' || true"
-                        socat_cmd_router = f"nohup {socat_path_router} TCP4-LISTEN:{remote_tunnel_port},fork,reuseaddr UDP4:{target_host}:{target_port} > {log_router} 2>&1 &"
+                        subprocess.run(["pkill", "-f", f"TCP4-LISTEN:{remote_tunnel_port}"])
+                        time.sleep(1)
                         
-                        subprocess.Popen(["sh", "-c", f"{pkill_cmd}; sleep 1; {socat_cmd_router}"], start_new_session=True)
+                        try:
+                            log_file = open(log_router, 'w')
+                            # Тестовая запись для проверки прав
+                            log_file.write(f"--- rProxy UDP Bridge Log Start ---\n")
+                            log_file.write(f"Socat Path: {socat_path_router}\n")
+                            log_file.flush()
+                            
+                            # Прямой запуск процесса без оболочки
+                            soc_args = [
+                                socat_path_router,
+                                f"TCP4-LISTEN:{remote_tunnel_port},fork,reuseaddr",
+                                f"UDP4:{target_host}:{target_port}"
+                            ]
+                            subprocess.Popen(soc_args, stdout=log_file, stderr=log_file, start_new_session=True)
+                            msg(f"{GREEN}Процесс socat инициирован.{NC}")
+                        except Exception as e:
+                            err(f"Не удалось открыть лог или запустить socat: {e}")
                         
                         # Проверка запуска на роутере
                         time.sleep(2)
@@ -323,7 +339,7 @@ if __name__ == "__main__":
                         if pg_router.returncode == 0:
                             msg(f"{GREEN}Мост на роутере успешно запущен.{NC}")
                         else:
-                            warn(f"Мост на роутере не отвечает. Проверьте {log_router}")
+                            warn(f"Мост на роутере не отвечает. Проверьте лог: {log_router}")
                         
                     msg(f"Логи моста: VPS:/tmp/..., Роутер:{log_router}")
                 else:
