@@ -25,11 +25,9 @@ server {{
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
     """ if use_ssl else ""
 
-        # Синхронизация логики Host заголовка с shell-версией
-        if domain:
-            host_header = "$host"
-        else:
-            host_header = f"{target_host}:{target_port}" if str(target_port) != "80" else target_host
+        # "Стелс-режим": для бэкенда прикидываемся, что зашли по его внутреннему IP
+        # Это критично для Keenetic и других систем с защитой от DNS Rebinding
+        stealth_host = f"{target_host}:{target_port}" if str(target_port) != "80" else target_host
 
         return f"""{listen_80}
 server {{
@@ -46,13 +44,16 @@ server {{
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-        proxy_set_header Host {host_header};
+        proxy_set_header Host {stealth_host};
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Forwarded-Port $server_port;
         proxy_set_header X-Forwarded-Host $host;
-        proxy_set_header Origin "";
+        
+        # Фикс для Keenetic и CSRF: Origin и Referer приводим к виду бэкенда
+        proxy_set_header Origin "http://{stealth_host}";
+        proxy_set_header Referer "http://{stealth_host}/";
         proxy_hide_header X-Frame-Options;
         proxy_cookie_domain "{target_host}" "$host";
         proxy_read_timeout 7d;
