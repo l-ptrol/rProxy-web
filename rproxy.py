@@ -7,7 +7,7 @@ from core.config import ConfigManager
 from core.vps import VPSManager
 from core.manager import ProcessManager
 
-VERSION = "6.7.0"
+VERSION = "6.7.1"
 
 class RProxyCLI:
     def __init__(self):
@@ -662,18 +662,19 @@ class RProxyCLI:
         self.clear()
         header("Тестирование и отладка сервиса")
         
-        name = self.select_service("Выберите сервис для тестирования")
-        if not name: return
+        names = self.select_service("Выберите сервис для тестирования")
+        if not names: return
         
-        cfg = ConfigManager.load(os.path.join(self.services_dir, f"{name}.conf"))
-        vps_id = cfg.get('SVC_VPS')
-        vps_cfg = ConfigManager.load(os.path.join(self.vps_dir, f"{vps_id}.conf"))
-        
-        if not vps_cfg:
-            err(f"Конфигурация VPS '{vps_id}' не найдена!")
-            return
+        for name in names:
+            cfg = ConfigManager.load(os.path.join(self.services_dir, f"{name}.conf"))
+            vps_id = cfg.get('SVC_VPS')
+            vps_cfg = ConfigManager.load(os.path.join(self.vps_dir, f"{vps_id}.conf")) if vps_id else None
             
-        ProcessManager.test_service(cfg, vps_cfg)
+            if not vps_cfg:
+                err(f"Конфигурация VPS '{vps_id}' для сервиса '{name}' не найдена!")
+                continue
+                
+            ProcessManager.test_service(cfg, vps_cfg)
 
 if __name__ == "__main__":
     cli = RProxyCLI()
