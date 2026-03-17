@@ -1,7 +1,7 @@
 #!/bin/sh
 # rProxy Web & CLI (Python Core) Installer for Keenetic
-# rProxy Installer v7.1.3
-VERSION="7.1.3"
+# rProxy Installer v7.1.4
+VERSION="7.1.4"
 # - Fixed Version Sync & SSH Reliability
 # Новое ядро на Python. 100% паритет с Bash + Модульность.
 
@@ -26,8 +26,9 @@ fi
 
 msg "Установка зависимостей (autossh, pkill, psmisc, ttyd, socat)..."
 set +e
-opkg update
-opkg install python3 python3-pip autossh psmisc procps-ng-pkill openssh-keygen openssh-client openssh-scp openssl-util ttyd socat curl grep sed
+opkg update >/dev/null 2>&1
+opkg install python3 python3-pip autossh psmisc procps-ng-pkill openssh-keygen openssh-client openssh-scp openssl-util ttyd socat curl grep sed >/dev/null 2>&1
+opkg install python3 python3-pip autossh psmisc procps-ng-pkill openssh-keygen openssh-client openssh-openssl-util ttyd socat curl grep sed
 set -e
 
 INSTALL_DIR="/opt/share/rproxy-web"
