@@ -58,6 +58,9 @@ server {{
         proxy_set_header Origin "http://{stealth_host}";
         proxy_set_header Referer "http://{stealth_host}/";
         
+        # Фикс бесконечной авторизации: не передаем учетные данные Nginx бэкенду
+        proxy_set_header Authorization "";
+        
         proxy_hide_header X-Frame-Options;
         proxy_hide_header Content-Security-Policy;
         proxy_cookie_domain "{target_host}" "$host";
