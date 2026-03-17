@@ -10,3 +10,8 @@ frontend/package-lock.json
 
 # Gemini Rules
 GEMINI.md
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
