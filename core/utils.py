@@ -13,6 +13,9 @@ NC = '\033[0m'
 def msg(text):
     print(f"{GREEN}▸{NC} {text}")
 
+def pause():
+    input(f"\n{BOLD}Нажмите Enter, чтобы продолжить...{NC}")
+
 def warn(text):
     print(f"{YELLOW}⚠{NC} {text}")
 

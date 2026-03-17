@@ -2,12 +2,12 @@
 import sys
 import os
 import random
-from core.utils import msg, warn, err, header, draw_separator, get_router_ip, BOLD, NC, GREEN, RED, YELLOW, CYAN, DIM
+from core.utils import msg, pause, warn, err, header, draw_separator, get_router_ip, BOLD, NC, GREEN, RED, YELLOW, CYAN, DIM
 from core.config import ConfigManager
 from core.vps import VPSManager
 from core.manager import ProcessManager
 
-VERSION = "6.9.0"
+VERSION = "6.9.1"
 
 class RProxyCLI:
     def __init__(self):
