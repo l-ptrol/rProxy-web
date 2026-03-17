@@ -52,8 +52,18 @@ class ProcessManager:
 
         # Проверка наличия ttyd
         if not shutil.which('ttyd'):
-            err("Бинарный файл 'ttyd' не найден в PATH. Установите его через opkg (Entware).")
-            return False
+            msg("ttyd не найден. Пытаюсь установить автоматически через opkg...")
+            try:
+                # Обновляем списки и ставим ttyd
+                subprocess.run(["opkg", "update"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.run(["opkg", "install", "ttyd"], check=True)
+                if not shutil.which('ttyd'):
+                    err("Не удалось установить ttyd автоматически. Установите его вручную: opkg install ttyd")
+                    return False
+                msg("ttyd успешно установлен.")
+            except Exception as e:
+                err(f"Ошибка при автоматической установке ttyd: {e}")
+                return False
 
         watchdog_script = f"""
 import subprocess, time, os, signal, traceback, sys
