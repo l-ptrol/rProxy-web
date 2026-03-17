@@ -7,7 +7,7 @@ from core.utils import msg, pause, warn, err, header, draw_separator, get_router
 from core.config import ConfigManager
 from core.vps import VPSManager
 from core.manager import ProcessManager
-VERSION = "7.1.5"
+VERSION = "7.1.6"
 
 class RProxyCLI:
     def __init__(self):
@@ -257,13 +257,13 @@ class RProxyCLI:
             elif choice == '2':
                 warn("Начинаю ремонт доступа...")
                 self.add_ssh_key_manually(cfg)
-                success, _ = VPSManager.run_remote(cfg, "echo Connection OK")
+                success, output = VPSManager.run_remote(cfg, "echo Connection OK")
                 if success:
                     msg("✅ Доступ восстановлен. Запускаю настройку окружения...")
                     VPSManager.setup_vps(cfg)
                     msg("✅ Ремонт завершен!")
                 else:
-                    err("❌ Не удалось восстановить доступ.")
+                    err(f"❌ Не удалось восстановить доступ: {output}")
                 pause()
                 
             elif choice == '3':
@@ -337,6 +337,11 @@ class RProxyCLI:
         pub_key_path = f"{VPSManager.SSH_KEY}.pub"
         
         try:
+            VPSManager.ensure_ssh_key()
+            if not os.path.exists(pub_key_path):
+                err("Публичный ключ не найден.")
+                return False
+
             with open(pub_key_path, 'r') as f:
                 pub_key = f.read().strip()
             
@@ -347,9 +352,14 @@ class RProxyCLI:
             args = _get_ssh_args(ssh_bin, host, user, port)
             ssh_cmd = [ssh_bin] + args + [f"{user}@{host}", cmd]
             
-            subprocess.run(ssh_cmd, env=ProcessManager._get_env())
+            result = subprocess.run(ssh_cmd, env=ProcessManager._get_env(), capture_output=True, text=True)
+            if result.returncode != 0:
+                err(f"Ошибка проброса ключа: {result.stderr.strip()}")
+                return False
+            return True
         except Exception as e:
             err(f"Ошибка: {e}")
+            return False
 
     def remove_vps(self):
         header("Удаление VPS")
