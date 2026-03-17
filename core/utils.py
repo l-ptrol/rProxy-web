@@ -10,6 +10,16 @@ BOLD = '\033[1m'
 DIM = '\033[2m'
 NC = '\033[0m'
 
+def _resolve_bin(name):
+    """Находит абсолютный путь к бинарнику (Entware priority)"""
+    import os
+    paths = ["/opt/bin", "/opt/sbin", "/usr/bin", "/usr/sbin", "/bin", "/sbin"]
+    for p in paths:
+        full = os.path.join(p, name)
+        if os.path.exists(full):
+            return full
+    return name
+
 def msg(text):
     print(f"{GREEN}▸{NC} {text}")
 

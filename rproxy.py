@@ -6,7 +6,7 @@ from core.utils import msg, pause, warn, err, header, draw_separator, get_router
 from core.config import ConfigManager
 from core.vps import VPSManager
 from core.manager import ProcessManager
-VERSION = "7.0.3"
+VERSION = "7.0.4"
 
 class RProxyCLI:
     def __init__(self):

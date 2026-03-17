@@ -1,7 +1,7 @@
 import os
 import subprocess
 import socket
-from .utils import msg, warn, err, GREEN, RED, CYAN, DIM, NC, YELLOW
+from .utils import msg, warn, err, GREEN, RED, CYAN, DIM, NC, YELLOW, _resolve_bin
 from .config import ConfigManager
 
 class VPSManager:
@@ -10,6 +10,57 @@ class VPSManager:
     RPROXY_ROOT = "/opt/etc/rproxy"
     VPS_DIR = os.path.join(RPROXY_ROOT, "vps")
     SSH_KEY = os.path.join(RPROXY_ROOT, "id_ed25519")
+
+    @staticmethod
+    def _get_ssh_type(bin_path):
+        """Определяет, является ли бинарник OpenSSH или Dropbear (dbclient)"""
+        try:
+            # Dropbear обычно выводит 'Dropbear vXXXX' в stderr при запуске без аргументов
+            # Но надежнее проверить через --help или версию
+            proc = subprocess.run([bin_path, "-V"], capture_output=True, text=True)
+            if "Dropbear" in (proc.stdout + proc.stderr):
+                return "dropbear"
+        except: pass
+        
+        try:
+            # Вторая проверка через help
+            proc = subprocess.run([bin_path, "-h"], capture_output=True, text=True)
+            if "dbclient" in (proc.stdout + proc.stderr) or "Dropbear" in (proc.stdout + proc.stderr):
+                return "dropbear"
+        except: pass
+        
+        return "openssh"
+
+    @staticmethod
+    def _get_ssh_args(bin_path, host, user, port, key_path, scp=False):
+        """Формирует список аргументов в зависимости от типа SSH-клиента"""
+        ssh_type = VPSManager._get_ssh_type(bin_path)
+        args = []
+        
+        if ssh_type == "dropbear":
+            # Dropbear (dbclient)
+            args.append("-y") # Accept host key
+            args.extend(["-i", key_path])
+            if scp:
+                args.extend(["-P", str(port)])
+            else:
+                args.extend(["-p", str(port)])
+        else:
+            # OpenSSH
+            args.extend([
+                "-o", "StrictHostKeyChecking=no",
+                "-o", "UserKnownHostsFile=/dev/null",
+                "-o", "BatchMode=yes",
+                "-o", "ConnectTimeout=10",
+                "-o", "LogLevel=ERROR"
+            ])
+            args.extend(["-i", key_path])
+            if scp:
+                args.extend(["-P", str(port)])
+            else:
+                args.extend(["-p", str(port)])
+        
+        return args
 
     @staticmethod
     def ensure_ssh_key():
@@ -36,26 +87,14 @@ class VPSManager:
     @staticmethod
     def run_remote(vps_cfg, cmd, timeout=30, echo=False):
         """Выполняет команду на удаленном VPS через SSH"""
-        ssh_bin = "/opt/bin/ssh"
-        if not os.path.exists(ssh_bin):
-            ssh_bin = "ssh"
+        ssh_bin = _resolve_bin("ssh")
             
         host = vps_cfg.get('VPS_HOST')
         user = vps_cfg.get('VPS_USER', 'root')
         port = vps_cfg.get('VPS_PORT', '22')
         
-        ssh_cmd = [
-            ssh_bin, 
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
-            "-o", "BatchMode=yes",
-            "-o", "ConnectTimeout=10",
-            "-o", "LogLevel=ERROR",
-            "-i", VPSManager.SSH_KEY,
-            "-p", str(port),
-            f"{user}@{host}",
-            cmd
-        ]
+        args = VPSManager._get_ssh_args(ssh_bin, host, user, port, VPSManager.SSH_KEY)
+        ssh_cmd = [ssh_bin] + args + [f"{user}@{host}", cmd]
         
         try:
             result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=timeout)
@@ -144,24 +183,15 @@ class VPSManager:
         host = vps_cfg.get('VPS_HOST')
         user = vps_cfg.get('VPS_USER', 'root')
         port = vps_cfg.get('VPS_PORT', '22')
-        scp_bin = "/opt/bin/scp"
-        if not os.path.exists(scp_bin):
-            scp_bin = "scp"
+        scp_bin = _resolve_bin("scp")
 
         with tempfile.NamedTemporaryFile(mode='w', delete=False) as tf:
             tf.write(content)
             tf_path = tf.name
 
         try:
-            scp_cmd = [
-                scp_bin, "-q", "-o", "StrictHostKeyChecking=no",
-                "-o", "UserKnownHostsFile=/dev/null",
-                "-o", "BatchMode=yes",
-                "-o", "LogLevel=ERROR",
-                "-i", VPSManager.SSH_KEY,
-                "-P", str(port),
-                tf_path, f"{user}@{host}:{remote_path}"
-            ]
+            args = VPSManager._get_ssh_args(scp_bin, host, user, port, VPSManager.SSH_KEY, scp=True)
+            scp_cmd = [scp_bin, "-q"] + args + [tf_path, f"{user}@{host}:{remote_path}"]
             subprocess.run(scp_cmd, check=True)
             return True, ""
         except Exception as e:
