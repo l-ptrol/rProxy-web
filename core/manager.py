@@ -222,7 +222,9 @@ if __name__ == "__main__":
         mon_port = random.randint(20000, 21000)
 
         # 5.1 СПЕЦИФИКАЦИЯ ТУННЕЛЯ
-        tunnel_spec = f"0.0.0.0:{remote_tunnel_port}:{target_host}:{target_port}"
+        # HTTP всегда биндим на 127.0.0.1 на VPS (потому что Nginx там же), а TCP/UDP - на 0.0.0.0
+        remote_bind = "127.0.0.1" if svc_cfg.get('SVC_TYPE') in ['http', 'ttyd'] else "0.0.0.0"
+        tunnel_spec = f"{remote_bind}:{remote_tunnel_port}:{target_host}:{target_port}"
         if svc_cfg.get('SVC_TYPE') == 'udp':
             # Для UDP пробрасываем порт туннеля для моста socat
             tunnel_spec = f"{remote_tunnel_port}:127.0.0.1:{remote_tunnel_port}"

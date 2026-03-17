@@ -119,6 +119,11 @@ class VPSManager:
         
         systemctl enable nginx && systemctl restart nginx
         
+        # Настройка SSHD для поддержки туннелей
+        sed -i 's/^#*GatewayPorts.*/GatewayPorts yes/' /etc/ssh/sshd_config
+        sed -i 's/^#*AllowTcpForwarding.*/AllowTcpForwarding yes/' /etc/ssh/sshd_config
+        systemctl restart ssh || systemctl restart sshd
+        
         # Настройка автообновления SSL (cron)
         (crontab -l 2>/dev/null; echo "0 0,12 * * * certbot renew -q --deploy-hook 'systemctl reload nginx'") | sort -u | crontab -
         """
