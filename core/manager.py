@@ -27,6 +27,16 @@ class ProcessManager:
         return env
 
     @staticmethod
+    def _resolve_bin(name):
+        """Находит абсолютный путь к бинарнику"""
+        paths = ["/opt/bin", "/opt/sbin", "/usr/bin", "/usr/sbin", "/bin", "/sbin"]
+        for p in paths:
+            full = os.path.join(p, name)
+            if os.path.exists(full):
+                return full
+        return name
+
+    @staticmethod
     def is_running(name):
         """Проверяет, запущен ли сервис по PID-файлу"""
         pid_file = os.path.join(ProcessManager.PID_DIR, f"{name}.pid")
@@ -56,8 +66,9 @@ class ProcessManager:
         ProcessManager.stop_ttyd(port)
         
         # Агрессивная очистка порта перед запуском (как в Bash)
-        if shutil.which('fuser'):
-            subprocess.run(["fuser", "-k", f"{port}/tcp"], env=ProcessManager._get_env(), stderr=subprocess.DEVNULL)
+        fuser_bin = ProcessManager._resolve_bin("fuser")
+        if fuser_bin and os.path.exists(fuser_bin):
+            subprocess.run([fuser_bin, "-k", f"{port}/tcp"], env=ProcessManager._get_env(), stderr=subprocess.DEVNULL)
         time.sleep(1)
 
         # Проверка наличия ttyd
@@ -66,8 +77,9 @@ class ProcessManager:
             try:
                 # Обновляем списки и ставим ttyd
                 env = ProcessManager._get_env()
-                subprocess.run(["opkg", "update"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                subprocess.run(["opkg", "install", "ttyd"], env=env, check=True)
+                opkg_bin = ProcessManager._resolve_bin("opkg")
+                subprocess.run([opkg_bin, "update"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.run([opkg_bin, "install", "ttyd"], env=env, check=True)
                 if not shutil.which('ttyd'):
                     err("Не удалось установить ttyd автоматически. Установите его вручную: opkg install ttyd")
                     return False
@@ -158,9 +170,11 @@ if __name__ == "__main__":
         
         # Агрессивно прибиваем ttyd на конкретном порту (как в Bash)
         env = ProcessManager._get_env()
-        subprocess.run(["pkill", "-9", "-f", f"ttyd.*-p {port}"], env=env, stderr=subprocess.DEVNULL)
-        if shutil.which('fuser'):
-            subprocess.run(["fuser", "-k", f"{port}/tcp"], env=env, stderr=subprocess.DEVNULL)
+        pkill_bin = ProcessManager._resolve_bin("pkill")
+        subprocess.run([pkill_bin, "-9", "-f", f"ttyd.*-p {port}"], env=env, stderr=subprocess.DEVNULL)
+        fuser_bin = ProcessManager._resolve_bin("fuser")
+        if fuser_bin and os.path.exists(fuser_bin):
+            subprocess.run([fuser_bin, "-k", f"{port}/tcp"], env=env, stderr=subprocess.DEVNULL)
 
     @staticmethod
     def start_service(svc_cfg, vps_cfg):
@@ -285,7 +299,8 @@ if __name__ == "__main__":
             
             # Ищем PID нового процесса
             pid = None
-            pgrep = subprocess.run(["pgrep", "-f", f"autossh.*-M {mon_port}"], env=env, capture_output=True, text=True)
+            pgrep_bin = ProcessManager._resolve_bin("pgrep")
+            pgrep = subprocess.run([pgrep_bin, "-f", f"autossh.*-M {mon_port}"], env=env, capture_output=True, text=True)
             if pgrep.returncode == 0:
                 pid = pgrep.stdout.strip().split('\n')[0]
                 with open(os.path.join(ProcessManager.PID_DIR, f"{name}.pid"), 'w') as f:
@@ -334,11 +349,13 @@ if __name__ == "__main__":
                     
                     # Проверка наличия socat
                     env = ProcessManager._get_env()
-                    has_soc_router = subprocess.run(["which", socat_path_router], env=env, capture_output=True).returncode == 0
+                    pkill_bin = ProcessManager._resolve_bin("pkill")
+                    which_bin = ProcessManager._resolve_bin("which")
+                    has_soc_router = subprocess.run([which_bin, socat_path_router], env=env, capture_output=True).returncode == 0
                     if not has_soc_router:
                         err("Утилита socat не найдена на роутере! Установите её: opkg install socat")
                     else:
-                        subprocess.run(["pkill", "-f", f"TCP4-LISTEN:{remote_tunnel_port}"], env=env)
+                        subprocess.run([pkill_bin, "-f", f"TCP4-LISTEN:{remote_tunnel_port}"], env=env)
                         time.sleep(1)
                         
                         try:
@@ -362,7 +379,8 @@ if __name__ == "__main__":
                         
                         # Проверка запуска на роутере
                         time.sleep(2)
-                        pg_router = subprocess.run(["pgrep", "-f", f"TCP4-LISTEN:{remote_tunnel_port}"], env=env, capture_output=True)
+                        pgrep_bin = ProcessManager._resolve_bin("pgrep")
+                        pg_router = subprocess.run([pgrep_bin, "-f", f"TCP4-LISTEN:{remote_tunnel_port}"], env=env, capture_output=True)
                         if pg_router.returncode == 0:
                             msg(f"{GREEN}Мост на роутере успешно запущен.{NC}")
                         else:
@@ -420,7 +438,8 @@ if __name__ == "__main__":
                 if os.path.exists(v_path):
                     v_cfg = ConfigManager.load(v_path)
                     VPSManager.run_remote(v_cfg, f"pkill -f 'UDP4-LISTEN:{ext_port}'")
-                subprocess.run(["pkill", "-f", f"TCP4-LISTEN:{tun_port}"], env=ProcessManager._get_env(), stderr=subprocess.DEVNULL)
+                pkill_bin = ProcessManager._resolve_bin("pkill")
+                subprocess.run([pkill_bin, "-f", f"TCP4-LISTEN:{tun_port}"], env=ProcessManager._get_env(), stderr=subprocess.DEVNULL)
         else:
             # Если конфига нет, пробуем убить по стандартному порту (для очистки)
             ProcessManager.stop_ttyd(7681)
@@ -508,7 +527,8 @@ if __name__ == "__main__":
             
             # Проверка socat на роутере (слушает порт туннеля)
             env = ProcessManager._get_env()
-            pgrep_socat = subprocess.run(["pgrep", "-f", f"TCP4-LISTEN:{tun_port}"], env=env, capture_output=True, text=True)
+            pgrep_bin = ProcessManager._resolve_bin("pgrep")
+            pgrep_socat = subprocess.run([pgrep_bin, "-f", f"TCP4-LISTEN:{tun_port}"], env=env, capture_output=True, text=True)
             s_status = f"{GREEN}ЗАПУЩЕН{NC}" if pgrep_socat.returncode == 0 else f"{RED}НЕ ЗАПУЩЕН{NC}"
             print(f"  - Мост на роутере (socat): {s_status}")
             if pgrep_socat.returncode != 0:
@@ -533,7 +553,8 @@ if __name__ == "__main__":
             
             # Проверка WireGuard порта на роутере
             try:
-                ns = subprocess.run(["netstat", "-unlp"], env=ProcessManager._get_env(), capture_output=True, text=True)
+                netstat_bin = ProcessManager._resolve_bin("netstat")
+                ns = subprocess.run([netstat_bin, "-unlp"], env=ProcessManager._get_env(), capture_output=True, text=True)
                 target_str = f":{t_port}"
                 match = [line for line in ns.stdout.split('\n') if target_str in line]
                 if match:
@@ -604,8 +625,9 @@ if __name__ == "__main__":
         msg("Выполнение глубокой очистки...")
         # Останавливаем всё
         env = ProcessManager._get_env()
-        subprocess.run(["pkill", "-f", "autossh"], env=env, stderr=subprocess.DEVNULL)
-        subprocess.run(["pkill", "-f", "ttyd"], env=env, stderr=subprocess.DEVNULL)
+        pkill_bin = ProcessManager._resolve_bin("pkill")
+        subprocess.run([pkill_bin, "-f", "autossh"], env=env, stderr=subprocess.DEVNULL)
+        subprocess.run([pkill_bin, "-f", "ttyd"], env=env, stderr=subprocess.DEVNULL)
         
         # Удаляем директории
         paths = ["/opt/etc/rproxy", "/opt/var/run/rproxy", "/opt/share/rproxy-web"]
