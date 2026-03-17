@@ -5,7 +5,7 @@ import signal
 import time
 import sys
 import shutil
-from .utils import msg, warn, err, gen_htpasswd, RED, GREEN, YELLOW, CYAN, NC, DIM, _resolve_bin
+from .utils import msg, warn, err, gen_htpasswd, get_domain_ip, RED, GREEN, YELLOW, CYAN, NC, DIM, _resolve_bin
 from .config import ConfigManager
 from .vps import VPSManager
 from .services import ServiceManager
@@ -208,6 +208,15 @@ if __name__ == "__main__":
                 has_certificate = True
                 msg(f"✅ Сертификат для {domain} уже существует. Пропускаю перевыпуск.")
             else:
+                # 2.1 ПРОВЕРКА DNS (Чтобы не мучить Certbot заведомо ложными запросами)
+                vps_ip = vps_cfg.get('VPS_HOST')
+                domain_ip = get_domain_ip(domain)
+                
+                if domain_ip and domain_ip != vps_ip:
+                    warn(f"ВНИМАНИЕ! Домен '{domain}' указывает на IP {domain_ip},")
+                    warn(f"но ваш текущий VPS имеет IP {vps_ip}.")
+                    warn("Certbot НЕ СМОЖЕТ выпустить сертификат, пока DNS не обновится.")
+                
                 msg("Выпуск нового сертификата через Certbot...")
                 from .services import ServiceTemplate
                 # Сначала деплоим базовый конфиг на 80 порт для Certbot

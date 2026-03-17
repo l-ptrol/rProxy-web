@@ -137,3 +137,11 @@ def gen_htpasswd(user, password):
     except Exception:
         # Если openssl нет, возвращаем plain text (Nginx может не принять)
         return f"{user}:{password}"
+
+def get_domain_ip(domain):
+    """Определяет IP-адрес домена через системный сокет"""
+    import socket
+    try:
+        return socket.gethostbyname(domain)
+    except:
+        return None
