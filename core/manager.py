@@ -221,6 +221,12 @@ if __name__ == "__main__":
         import random
         mon_port = random.randint(20000, 21000)
 
+        # 5.1 СПЕЦИФИКАЦИЯ ТУННЕЛЯ
+        tunnel_spec = f"0.0.0.0:{remote_tunnel_port}:{target_host}:{target_port}"
+        if svc_cfg.get('SVC_TYPE') == 'udp':
+            # Для UDP пробрасываем порт туннеля для моста socat
+            tunnel_spec = f"{remote_tunnel_port}:127.0.0.1:{remote_tunnel_port}"
+
         # Настройка окружения для autossh
         env = os.environ.copy()
         env["AUTOSSH_GATETIME"] = "0"
@@ -235,14 +241,14 @@ if __name__ == "__main__":
             "-o", "StrictHostKeyChecking=no",
             "-i", ssh_key,
             "-p", str(vps_port),
-            f"-R", f"0.0.0.0:{remote_tunnel_port}:{target_host}:{target_port}",
+            f"-R", tunnel_spec,
             f"{vps_user}@{vps_host}"
         ]
 
         try:
             msg(f"Запуск туннеля '{name}' (Target: {target_host}:{target_port})...")
             # Остановка старого процесса если есть
-            ProcessManager.stop_service(name)
+            ProcessManager.stop_service(name, svc_cfg=svc_cfg)
             
             subprocess.run(cmd, check=True, env=env)
             
@@ -272,13 +278,15 @@ if __name__ == "__main__":
                 # 6. ДЕПЛОЙ NGINX / UDP BRIDGE
                 if svc_cfg.get('SVC_TYPE') == 'udp':
                     # Для UDP запускаем мост
-                    msg("Запуск UDP моста через socat...")
+                    msg("Запуск UDP-TCP моста через socat...")
+                    # VPS: UDP Listener (Ext) -> TCP Client (Tunnel Port)
                     socat_cmd_vps = f"nohup socat UDP4-LISTEN:{svc_cfg.get('SVC_EXT_PORT')},fork,reuseaddr TCP4:127.0.0.1:{remote_tunnel_port} > /dev/null 2>&1 &"
                     VPSManager.run_remote(vps_cfg, f"pkill -f 'UDP4-LISTEN:{svc_cfg.get('SVC_EXT_PORT')}' ; {socat_cmd_vps}")
                     
-                    socat_cmd_router = f"socat TCP4-LISTEN:{target_port},fork,reuseaddr UDP4:{target_host}:{target_port}"
+                    # Router: TCP Listener (Tunnel Port) -> UDP Target (WireGuard)
+                    socat_cmd_router = f"socat TCP4-LISTEN:{remote_tunnel_port},fork,reuseaddr UDP4:{target_host}:{target_port}"
                     # Запускаем локальный socat в фоне
-                    subprocess.Popen(["sh", "-c", f"pkill -f 'TCP4-LISTEN:{target_port}' ; nohup {socat_cmd_router} > /dev/null 2>&1 &"], start_new_session=True)
+                    subprocess.Popen(["sh", "-c", f"pkill -f 'TCP4-LISTEN:{remote_tunnel_port}' ; nohup {socat_cmd_router} > /dev/null 2>&1 &"], start_new_session=True)
                 else:
                     # Всегда сначала деплоим актуальный конфиг (с SSL или без)
                     use_ssl_final = has_certificate and use_ssl
@@ -328,12 +336,13 @@ if __name__ == "__main__":
             if svc_cfg.get('SVC_TYPE') == 'udp':
                 t_port = svc_cfg.get('SVC_TARGET_PORT')
                 ext_port = svc_cfg.get('SVC_EXT_PORT')
+                tun_port = svc_cfg.get('SVC_TUNNEL_PORT')
                 v_id = svc_cfg.get('SVC_VPS')
                 v_path = os.path.join("/opt/etc/rproxy/vps", f"{v_id}.conf")
                 if os.path.exists(v_path):
                     v_cfg = ConfigManager.load(v_path)
                     VPSManager.run_remote(v_cfg, f"pkill -f 'UDP4-LISTEN:{ext_port}'")
-                subprocess.run(["pkill", "-f", f"TCP4-LISTEN:{t_port}"], stderr=subprocess.DEVNULL)
+                subprocess.run(["pkill", "-f", f"TCP4-LISTEN:{tun_port}"], stderr=subprocess.DEVNULL)
         else:
             # Если конфига нет, пробуем убить по стандартному порту (для очистки)
             ProcessManager.stop_ttyd(7681)
@@ -412,15 +421,21 @@ if __name__ == "__main__":
             msg("Проверка UDP-over-TCP моста...")
             t_port = svc_cfg.get('SVC_TARGET_PORT')
             ext_port = svc_cfg.get('SVC_EXT_PORT')
+            tun_port = svc_cfg.get('SVC_TUNNEL_PORT')
             
-            # Проверка socat на роутере
-            pgrep_socat = subprocess.run(["pgrep", "-f", f"TCP4-LISTEN:{t_port}"], capture_output=True, text=True)
+            # Проверка socat в системе
+            import shutil
+            if not shutil.which('socat'):
+                err("socat НЕ НАЙДЕН на роутере! Выполните opkg install socat")
+            
+            # Проверка socat на роутере (слушает порт туннеля)
+            pgrep_socat = subprocess.run(["pgrep", "-f", f"TCP4-LISTEN:{tun_port}"], capture_output=True, text=True)
             s_status = f"{GREEN}ЗАПУЩЕН{NC}" if pgrep_socat.returncode == 0 else f"{RED}НЕ ЗАПУЩЕН{NC}"
             print(f"  - Мост на роутере (socat): {s_status}")
             
             # Проверка socat на VPS
             s_vps, o_vps = VPSManager.run_remote(vps_cfg, f"pgrep -f 'UDP4-LISTEN:{ext_port}'")
-            sv_status = f"{GREEN}ЗАПУЩЕН{NC}" if s_vps and o_vps else f"{RED}НЕ ЗАПУЩЕН{NC}"
+            sv_status = f"{GREEN}ЗАПУЩЕН{NC}" if s_vps and o_vps else f"{RED}НЕ ЗАПУЩЕН / НЕТ SOCAT{NC}"
             print(f"  - Мост на VPS (socat): {sv_status}")
             
             # Проверка WireGuard порта на роутере
