@@ -460,7 +460,7 @@ if __name__ == "__main__":
             s_status = f"{GREEN}ЗАПУЩЕН{NC}" if pgrep_socat.returncode == 0 else f"{RED}НЕ ЗАПУЩЕН{NC}"
             print(f"  - Мост на роутере (socat): {s_status}")
             if pgrep_socat.returncode != 0:
-                log_router = f"/opt/var/log/rproxy_socat_{name}.log"
+                log_router = f"/tmp/rproxy_socat_{name}.router.log"
                 if os.path.exists(log_router):
                     print(f"    {DIM}Последние ошибки роутера:{NC}")
                     os.system(f"tail -n 5 {log_router} | sed 's/^/      /'")
@@ -474,7 +474,7 @@ if __name__ == "__main__":
                 sv_status = f"{GREEN}ЗАПУЩЕН{NC}" if s_vps and o_vps else f"{RED}ОСТАНОВЛЕН{NC}"
                 print(f"  - Мост на VPS (socat): {sv_status}")
                 if not (s_vps and o_vps):
-                    log_vps = f"/tmp/rproxy_socat_{name}.log"
+                    log_vps = f"/tmp/rproxy_socat_{name}.vps.log"
                     print(f"    {DIM}Последние ошибки VPS:{NC}")
                     VPSManager.run_remote(vps_cfg, f"tail -n 5 {log_vps}", echo=True)
             
