@@ -1,8 +1,8 @@
 #!/bin/sh
 # rProxy Web & CLI (Python Core) Installer for Keenetic
-# rProxy Installer v7.0.5
-VERSION="7.0.5"
-# - ttyd Compatibility Fix
+# rProxy Installer v7.0.7
+VERSION="7.0.7"
+# - Fixed Version Sync & SSH Reliability
 # Новое ядро на Python. 100% паритет с Bash + Модульность.
 
 set -e
@@ -17,7 +17,7 @@ warn() { printf "${YELLOW}⚠${NC} %b\n" "$*"; }
 err() { printf "${RED}✖${NC} %b\n" "$*" >&2; exit 1; }
 
 printf "\n${CYAN}==========================================${NC}\n"
-printf "${CYAN}    rProxy Python Core v7.0.5             ${NC}\n"
+printf "${CYAN}    rProxy Python Core v7.0.7             ${NC}\n"
 printf "${CYAN}==========================================${NC}\n\n"
 
 if [ ! -d "/opt/bin" ]; then
@@ -69,7 +69,7 @@ cat > "$CAT_INIT" <<EOF
 #!/bin/sh
 case "\$1" in
     start)
-        echo "Starting rProxy Web v7.0.5..."
+        echo "Starting rProxy Web v7.0.7..."
         cd "$INSTALL_DIR"
         /opt/bin/python3 main.py > /opt/var/log/rproxy-web.log 2>&1 &
         ;;
