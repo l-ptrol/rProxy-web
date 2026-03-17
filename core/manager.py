@@ -293,7 +293,7 @@ if __name__ == "__main__":
                     s_soc, _ = VPSManager.run_remote(vps_cfg, "which socat")
                     if not s_soc:
                         warn("socat не найден на VPS. Установка...")
-                        VPSManager.run_remote(vps_cfg, "apt-get update && apt-get install -y socat || yum install -y socat")
+                        VPSManager.run_remote(vps_cfg, "apt-get update && apt-get install -y socat || yum install -y socat", timeout=300)
 
                     # 2. Запуск на VPS (UDP -> TCP)
                     # Используем только перенаправление для логов
