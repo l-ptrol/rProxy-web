@@ -58,12 +58,9 @@ server {{
         proxy_set_header X-Forwarded-Host "";
         
         # Origin и Referer строго на внутренний IP
-        # Учитываем протокол целевого порта (обычно http, но может быть https)
-        set $p_proto "http";
-        if ($server_port = 443) {{ set $p_proto "https"; }}
-
-        proxy_set_header Origin "$p_proto://{stealth_host}";
-        proxy_set_header Referer "$p_proto://{stealth_host}/";
+        # Keenetic ожидает http:// даже если мы зашли через https
+        proxy_set_header Origin "http://{stealth_host}";
+        proxy_set_header Referer "http://{stealth_host}/";
         
         proxy_hide_header 'Access-Control-Allow-Origin';
         proxy_hide_header WWW-Authenticate;
