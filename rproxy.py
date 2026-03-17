@@ -7,7 +7,7 @@ from core.config import ConfigManager
 from core.vps import VPSManager
 from core.manager import ProcessManager
 
-VERSION = "6.6.9"
+VERSION = "6.7.0"
 
 class RProxyCLI:
     def __init__(self):
@@ -51,6 +51,7 @@ class RProxyCLI:
             draw_separator()
             print(f"  {BOLD}10){NC} 🚀  Обновить rProxy")
             print(f"  {BOLD}11){NC} 🏥  Проверка VPS (Health)")
+            print(f"  {BOLD}12){NC} 🔍  Тестирование сервиса (Debug)")
             print(f"  {BOLD}99){NC} ☢️   Глубокая очистка (Hard Reset)")
             print(f"  {BOLD}0){NC}      Выход")
             
@@ -67,6 +68,7 @@ class RProxyCLI:
             elif choice == '9': self.vps_menu()
             elif choice == '10': ProcessManager.self_update()
             elif choice == '11': self.health_check_menu()
+            elif choice == '12': self.test_menu()
             elif choice == '99': ProcessManager.hard_reset()
             elif choice == '0': break
             
@@ -655,6 +657,23 @@ class RProxyCLI:
         except:
             s_status = f"{RED}Missing{NC}"
         print(f"  SSH:          {s_status}")
+        
+    def test_menu(self):
+        self.clear()
+        header("Тестирование и отладка сервиса")
+        
+        name = self.select_service("Выберите сервис для тестирования")
+        if not name: return
+        
+        cfg = ConfigManager.load(os.path.join(self.services_dir, f"{name}.conf"))
+        vps_id = cfg.get('SVC_VPS')
+        vps_cfg = ConfigManager.load(os.path.join(self.vps_dir, f"{vps_id}.conf"))
+        
+        if not vps_cfg:
+            err(f"Конфигурация VPS '{vps_id}' не найдена!")
+            return
+            
+        ProcessManager.test_service(cfg, vps_cfg)
 
 if __name__ == "__main__":
     cli = RProxyCLI()
@@ -690,5 +709,13 @@ if __name__ == "__main__":
             else:
                 for f in os.listdir(cli.services_dir):
                     if f.endswith(".conf"): ProcessManager.stop_service(f.replace(".conf", ""))
+        elif cmd == 'test':
+            if len(sys.argv) > 2:
+                name = sys.argv[2]
+                cfg = ConfigManager.load(os.path.join(cli.services_dir, f"{name}.conf"))
+                vps_cfg = ConfigManager.load(os.path.join(cli.vps_dir, f"{cfg.get('SVC_VPS')}.conf"))
+                if vps_cfg: ProcessManager.test_service(cfg, vps_cfg)
+            else:
+                err("Укажите имя сервиса: rproxy test <name>")
     else:
         cli.main_menu()

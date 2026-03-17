@@ -391,6 +391,55 @@ if __name__ == "__main__":
         return success
 
     @staticmethod
+    def test_service(svc_cfg, vps_cfg):
+        """Диагностика работоспособности сервиса"""
+        name = svc_cfg.get('SVC_NAME')
+        svc_type = svc_cfg.get('SVC_TYPE')
+        msg(f"Тестирование сервиса '{name}' ({svc_type})...")
+        
+        # 1. Проверка SSH туннеля
+        is_ssh = ProcessManager.is_running(name)
+        status = f"{GREEN}ЗАПУЩЕН{NC}" if is_ssh else f"{RED}НЕ ЗАПУЩЕН{NC}"
+        print(f"  - SSH Туннель (autossh): {status}")
+        
+        # 2. Проверка VPS
+        success, output = VPSManager.run_remote(vps_cfg, "echo 1")
+        vps_status = f"{GREEN}ДОСТУПЕН{NC}" if success else f"{RED}ОШИБКА: {output}{NC}"
+        print(f"  - Доступность VPS: {vps_status}")
+        
+        # 3. Специфичные проверки для UDP
+        if svc_type == 'udp':
+            msg("Проверка UDP-over-TCP моста...")
+            t_port = svc_cfg.get('SVC_TARGET_PORT')
+            ext_port = svc_cfg.get('SVC_EXT_PORT')
+            
+            # Проверка socat на роутере
+            pgrep_socat = subprocess.run(["pgrep", "-f", f"TCP4-LISTEN:{t_port}"], capture_output=True, text=True)
+            s_status = f"{GREEN}ЗАПУЩЕН{NC}" if pgrep_socat.returncode == 0 else f"{RED}НЕ ЗАПУЩЕН{NC}"
+            print(f"  - Мост на роутере (socat): {s_status}")
+            
+            # Проверка socat на VPS
+            s_vps, o_vps = VPSManager.run_remote(vps_cfg, f"pgrep -f 'UDP4-LISTEN:{ext_port}'")
+            sv_status = f"{GREEN}ЗАПУЩЕН{NC}" if s_vps and o_vps else f"{RED}НЕ ЗАПУЩЕН{NC}"
+            print(f"  - Мост на VPS (socat): {sv_status}")
+            
+            # Проверка WireGuard порта на роутере
+            try:
+                # Пробуем найти кто слушает UDP порт
+                ns = subprocess.run(["netstat", "-unlp"], capture_output=True, text=True)
+                if f":{t_port}" in ns.stdout:
+                    print(f"  - Порт {t_port} (UDP): {GREEN}СЛУШАЕТСЯ (WireGuard активен){NC}")
+                else:
+                    warn(f"Порт {t_port} (UDP) не найден в netstat. Убедитесь, что WireGuard включен на роутере!")
+            except: pass
+        
+        # 4. Проверка Nginx на VPS
+        if svc_type in ['http', 'tcp', 'ssh']:
+            s_ng, _ = VPSManager.run_remote(vps_cfg, f"ls /etc/nginx/*/rproxy_{name}.conf")
+            ng_status = f"{GREEN}АКТИВЕН{NC}" if s_ng else f"{RED}НЕ НАЙДЕН{NC}"
+            print(f"  - Конфигурация Nginx: {ng_status}")
+
+    @staticmethod
     def self_update():
         """Самообновление через загрузку и запуск инсталлера"""
         url = "https://raw.githubusercontent.com/l-ptrol/rProxy-web/master/install.sh"
