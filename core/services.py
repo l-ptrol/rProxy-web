@@ -11,7 +11,6 @@ class ServiceTemplate:
     auth_basic_user_file /etc/nginx/rproxy_{name}.htpasswd;
     # Сквозная авторизация: позволяем роутеру видеть данные входа
     # proxy_set_header Authorization ""; 
-    # proxy_hide_header WWW-Authenticate;
     proxy_set_header X-Forwarded-User $remote_user;
     """
         listen_80 = f"""
@@ -63,6 +62,7 @@ server {{
         proxy_set_header Referer "http://{stealth_host}/";
         
         proxy_hide_header 'Access-Control-Allow-Origin';
+        proxy_hide_header WWW-Authenticate;
         
         # Предотвращаем конфликты сессий
         proxy_buffer_size 128k;
