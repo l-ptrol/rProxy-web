@@ -91,7 +91,7 @@ class VPSManager:
     @staticmethod
     def setup_vps(vps_cfg):
         """Первичная настройка окружения на удаленном VPS"""
-        setup_script = """
+        setup_script = r"""
         if ! command -v nginx >/dev/null 2>&1; then
             apt-get update -qq && apt-get install -y -qq nginx psmisc || (yum update -y && yum install -y nginx psmisc)
         else

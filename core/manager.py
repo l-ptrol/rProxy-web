@@ -45,27 +45,56 @@ class ProcessManager:
         ProcessManager.stop_ttyd(port)
         
         # Агрессивная очистка порта перед запуском (как в Bash)
-        subprocess.run(["fuser", "-k", f"{port}/tcp"], stderr=subprocess.DEVNULL)
+        if shutil.which('fuser'):
+            subprocess.run(["fuser", "-k", f"{port}/tcp"], stderr=subprocess.DEVNULL)
         time.sleep(1)
 
+        # Проверка наличия ttyd
+        import shutil
+        if not shutil.which('ttyd'):
+            err("Бинарный файл 'ttyd' не найден в PATH. Установите его через opkg (Entware).")
+            return False
+
         watchdog_script = f"""
-import subprocess, time, os, signal
+import subprocess, time, os, signal, traceback, sys
 def run():
+    log_path = '{log_file}'
+    with open(log_path, 'a') as f:
+        f.write(f'\\n--- Watchdog started at {{time.ctime()}} (PID: {{os.getpid()}}) ---\\n')
+        f.flush()
+    
     while True:
         try:
-            # Запуск ttyd на 0.0.0.0 (как в оригинале)
+            # Запуск ttyd на 0.0.0.0
+            with open(log_path, 'a') as f:
+                f.write(f'[{{time.ctime()}}] Starting ttyd on port {port}...\\n')
+                f.flush()
+            
             proc = subprocess.Popen(['ttyd', '-W', '--max-clients', '10', '-i', '0.0.0.0', '-p', '{port}', '--', '{cmd}'], 
-                                     stdout=open('{log_file}', 'a'), stderr=subprocess.STDOUT)
+                                     stdout=open(log_path, 'a'), stderr=subprocess.STDOUT)
             proc.wait()
-        except Exception as f:
-            pass
+            
+            with open(log_path, 'a') as f:
+                f.write(f'[{{time.ctime()}}] ttyd stopped with exit code {{proc.returncode}}\\n')
+                if proc.returncode != 0:
+                    f.write(f'Check if port {port} is already in use or binary is compatible.\\n')
+                f.write('Restarting ttyd in 2 seconds...\\n')
+                f.flush()
+        except Exception as e:
+            with open(log_path, 'a') as f:
+                f.write(f'[{{time.ctime()}}] Watchdog fatal error: {{e}}\\n')
+                f.write(traceback.format_exc())
+                f.flush()
         time.sleep(2)
-run()
+if __name__ == "__main__":
+    run()
 """
         # Запускаем watchdog как независимый процесс
         try:
+            # Направляем вывод самого процесса watchdog в тот же лог для отладки ошибок Python
+            log_handle = open(log_file, 'a')
             proc = subprocess.Popen([sys.executable, '-c', watchdog_script], 
-                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                     stdout=log_handle, stderr=subprocess.STDOUT,
                                      start_new_session=True)
             with open(pid_file, 'w') as f:
                 f.write(str(proc.pid))
@@ -94,7 +123,9 @@ run()
         
         # Агрессивно прибиваем ttyd на конкретном порту (как в Bash)
         subprocess.run(["pkill", "-9", "-f", f"ttyd.*-p {port}"], stderr=subprocess.DEVNULL)
-        subprocess.run(["fuser", "-k", f"{port}/tcp"], stderr=subprocess.DEVNULL)
+        import shutil
+        if shutil.which('fuser'):
+            subprocess.run(["fuser", "-k", f"{port}/tcp"], stderr=subprocess.DEVNULL)
 
     @staticmethod
     def start_service(svc_cfg, vps_cfg):
