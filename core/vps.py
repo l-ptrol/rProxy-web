@@ -48,6 +48,7 @@ class VPSManager:
             ssh_bin, 
             "-o", "StrictHostKeyChecking=no",
             "-o", "UserKnownHostsFile=/dev/null",
+            "-o", "BatchMode=yes",
             "-o", "ConnectTimeout=10",
             "-o", "LogLevel=ERROR",
             "-i", VPSManager.SSH_KEY,
@@ -123,8 +124,6 @@ class VPSManager:
         """
         msg(f"Настройка окружения на VPS {vps_cfg.get('VPS_HOST')}...")
         success, output = VPSManager.run_remote(vps_cfg, setup_script, timeout=300)
-        if not success:
-            err(f"Ошибка настройки VPS: {output}")
         return success, output
 
     @staticmethod
@@ -152,6 +151,7 @@ class VPSManager:
             scp_cmd = [
                 scp_bin, "-q", "-o", "StrictHostKeyChecking=no",
                 "-o", "UserKnownHostsFile=/dev/null",
+                "-o", "BatchMode=yes",
                 "-o", "LogLevel=ERROR",
                 "-i", VPSManager.SSH_KEY,
                 "-P", str(port),

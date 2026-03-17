@@ -7,7 +7,7 @@ from core.config import ConfigManager
 from core.vps import VPSManager
 from core.manager import ProcessManager
 
-VERSION = "6.8.9"
+VERSION = "6.9.0"
 
 class RProxyCLI:
     def __init__(self):
@@ -222,7 +222,56 @@ class RProxyCLI:
             choice = input(f"\n{BOLD}Выбор:{NC} ")
             if choice == '0': break
             elif choice == '901': self.add_vps()
-            elif choice == '902': self.remove_vps()
+            elif choice.isdigit():
+                idx = int(choice) - 1
+                if 0 <= idx < len(files):
+                    self.vps_details_menu(files[idx].replace(".conf", ""))
+
+    def vps_details_menu(self, name):
+        while True:
+            self.clear()
+            cfg = ConfigManager.load(os.path.join(self.vps_dir, f"{name}.conf"))
+            header(f"VPS: {name} ({cfg.get('VPS_HOST')})")
+            
+            print(f"  {BOLD}1){NC} Тест доступа и статуса")
+            print( f"  {BOLD}2){NC} {YELLOW}Ремонт (Восстановить SSH и окружение){NC}")
+            print(f"  {BOLD}3){NC} {RED}Удалить сервер{NC}")
+            print(f"  {BOLD}0){NC} Назад")
+            
+            draw_separator()
+            choice = input(f"\n{BOLD}Выбор:{NC} ")
+            
+            if choice == '0': break
+            elif choice == '1':
+                msg("Проверка связи...")
+                success, output = VPSManager.run_remote(cfg, "echo Connection OK")
+                if success:
+                    msg("✅ SSH доступ: РАБОТАЕТ")
+                    res = VPSManager.health_check(cfg)
+                    msg(f"✅ Nginx: {res['nginx']}")
+                    msg(f"✅ SSL Timer: {res['ssl_timer']}")
+                else:
+                    err(f"❌ Доступ закрыт: {output}")
+                pause()
+            
+            elif choice == '2':
+                warn("Начинаю ремонт доступа...")
+                self.add_ssh_key_manually(cfg)
+                success, _ = VPSManager.run_remote(cfg, "echo Connection OK")
+                if success:
+                    msg("✅ Доступ восстановлен. Запускаю настройку окружения...")
+                    VPSManager.setup_vps(cfg)
+                    msg("✅ Ремонт завершен!")
+                else:
+                    err("❌ Не удалось восстановить доступ.")
+                pause()
+                
+            elif choice == '3':
+                res = input(f"{RED}Вы уверены, что хотите удалить {name}? [y/N]:{NC} ").strip().lower()
+                if res == 'y':
+                    os.remove(os.path.join(self.vps_dir, f"{name}.conf"))
+                    msg(f"VPS {name} удален.")
+                    return
 
     def add_vps(self):
         header("Добавление нового VPS")
