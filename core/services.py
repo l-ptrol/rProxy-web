@@ -127,7 +127,7 @@ class ServiceManager:
     
     @staticmethod
     def get_nginx_path(svc_type):
-        if svc_type in ['tcp', 'ssh']:
+        if svc_type in ['tcp', 'ssh', 'udp']:
             return "/etc/nginx/streams-enabled"
         return "/etc/nginx/sites-enabled"
 
