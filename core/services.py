@@ -47,11 +47,13 @@ server {{
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header Host {host_header};
-        proxy_set_header Origin "";
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Forwarded-Port $server_port;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header Origin "";
+        proxy_hide_header X-Frame-Options;
         proxy_cookie_domain "{target_host}" "$host";
         proxy_read_timeout 7d;
         proxy_send_timeout 7d;

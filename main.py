@@ -15,7 +15,7 @@ RPROXY_ROOT = "/opt/etc/rproxy"
 SERVICES_DIR = os.path.join(RPROXY_ROOT, "services")
 VPS_DIR = os.path.join(RPROXY_ROOT, "vps")
 
-VERSION = "6.3.4"
+VERSION = "6.3.5"
 
 # Настройка Bottle
 bottle.TEMPLATE_PATH.insert(0, './templates')
