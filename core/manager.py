@@ -1,4 +1,5 @@
 import os
+import time
 import subprocess
 import signal
 import time
@@ -108,7 +109,9 @@ run()
         if auth_user and auth_pass:
             msg(f"Генерация доступа для {auth_user}...")
             ht_content = gen_htpasswd(auth_user, auth_pass)
-            VPSManager.run_remote(vps_cfg, f"echo '{ht_content}' > /etc/nginx/rproxy_{name}.htpasswd", echo=True)
+            success, ht_err = VPSManager.upload_content(vps_cfg, ht_content + "\n", f"/etc/nginx/rproxy_{name}.htpasswd")
+            if not success:
+                warn(f"Не удалось загрузить файл авторизации: {ht_err}")
 
         # 2. ОБРАБОТКА SSL (CERTBOT)
         domain = svc_cfg.get('SVC_DOMAIN')
@@ -214,15 +217,23 @@ run()
     def self_update():
         """Самообновление через загрузку и запуск инсталлера"""
         url = "https://raw.githubusercontent.com/l-ptrol/rProxy-web/master/install.sh"
-        msg("Загрузка обновления...")
-        cmd = f"curl -sL {url} -o /tmp/rproxy_update.sh && sh /tmp/rproxy_update.sh"
+        msg("Запуск процесса обновления...")
+        
+        # Мы используем nohup и фоновый запуск, чтобы инсталлер выжил после выхода из текущего процесса
+        # Также добавляем вывод в лог для отладки
+        updater_cmd = f"curl -sL {url} -o /tmp/rproxy_update.sh && sh /tmp/rproxy_update.sh"
+        
         try:
-            # Запускаем в новом процессе, так как текущий будет убит инсталлером
-            subprocess.Popen(["sh", "-c", cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            msg("Инсталлятор запущен. Сессия будет перезапущена.")
-            return True
+            print(f"\n{CYAN}▸{NC} Загрузка и запуск инсталлера...")
+            # Запускаем через os.system для немедленного выполнения команды в текущем окружении перед выходом
+            # Но так как инсталлер убьет этот процесс, используем конструкцию, которая позволит ему продолжить работу
+            os.system(f"nohup sh -c '{updater_cmd}' > /opt/var/log/rproxy_updater.log 2>&1 &")
+            msg("Инсталлер запущен в фоне. Сессия будет прервана.")
+            msg("Лог обновления: /opt/var/log/rproxy_updater.log")
+            time.sleep(1)
+            sys.exit(0)
         except Exception as e:
-            err(f"Ошибка обновления: {e}")
+            err(f"Ошибка при запуске обновления: {e}")
             return False
 
     @staticmethod

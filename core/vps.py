@@ -123,12 +123,44 @@ class VPSManager:
         return success
 
     @staticmethod
+    def upload_content(vps_cfg, content, remote_path):
+        """Безопасно загружает текстовый контент в файл на VPS через scp"""
+        import tempfile
+        host = vps_cfg.get('VPS_HOST')
+        user = vps_cfg.get('VPS_USER', 'root')
+        port = vps_cfg.get('VPS_PORT', '22')
+        scp_bin = "/opt/bin/scp"
+        if not os.path.exists(scp_bin):
+            scp_bin = "scp"
+
+        with tempfile.NamedTemporaryFile(mode='w', delete=False) as tf:
+            tf.write(content)
+            tf_path = tf.name
+
+        try:
+            scp_cmd = [
+                scp_bin, "-q", "-o", "StrictHostKeyChecking=no",
+                "-o", "LogLevel=ERROR",
+                "-i", VPSManager.SSH_KEY,
+                "-P", str(port),
+                tf_path, f"{user}@{host}:{remote_path}"
+            ]
+            subprocess.run(scp_cmd, check=True)
+            return True, ""
+        except Exception as e:
+            return False, str(e)
+        finally:
+            if os.path.exists(tf_path):
+                os.remove(tf_path)
+
+    @staticmethod
     def deploy_vhost(vps_cfg, name, content, path="/etc/nginx/sites-enabled"):
         """Деплоит конфиг Nginx на VPS"""
-        # Экранируем кавычки для sh
-        content_escaped = content.replace("'", "'\\''")
-        cmd = f"printf '{content_escaped}' > {path}/rproxy_{name}.conf && nginx -t && systemctl reload nginx"
-        return VPSManager.run_remote(vps_cfg, cmd, echo=True)
+        remote_path = f"{path}/rproxy_{name}.conf"
+        success, err_msg = VPSManager.upload_content(vps_cfg, content, remote_path)
+        if success:
+            return VPSManager.run_remote(vps_cfg, "nginx -t && systemctl reload nginx", echo=True)
+        return False, err_msg
 
     @staticmethod
     def run_certbot(vps_cfg, domain):
