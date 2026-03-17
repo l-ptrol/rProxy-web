@@ -58,8 +58,15 @@ server {{
         proxy_set_header X-Forwarded-Host "";
         
         # Origin и Referer строго на внутренний IP
+        # Учитываем протокол целевого порта (обычно http, но может быть https)
         proxy_set_header Origin "http://{stealth_host}";
         proxy_set_header Referer "http://{stealth_host}/";
+        
+        # Если порт 443 — прикидываемся HTTPS
+        if ("$server_port" = "443") {{
+            proxy_set_header Origin "https://{stealth_host}";
+            proxy_set_header Referer "https://{stealth_host}/";
+        }}
         
         proxy_hide_header 'Access-Control-Allow-Origin';
         proxy_hide_header WWW-Authenticate;

@@ -198,7 +198,7 @@ if __name__ == "__main__":
 
         # 4. ЗАПУСК TTYD (если нужно)
         target_host = svc_cfg.get('SVC_TARGET_HOST', '127.0.0.1')
-        target_port = svc_cfg.get('SVC_TARGET_PORT')
+        target_port = svc_cfg.get('SVC_TARGET_PORT') or "80"
         
         if svc_cfg.get('SVC_TYPE') == 'ttyd':
             ttyd_port = svc_cfg.get('SVC_TARGET_PORT', 7681)
@@ -526,6 +526,13 @@ if __name__ == "__main__":
             s_ng, _ = VPSManager.run_remote(vps_cfg, f"ls /etc/nginx/*/rproxy_{name}.conf")
             ng_status = f"{GREEN}АКТИВЕН{NC}" if s_ng else f"{RED}НЕ НАЙДЕН{NC}"
             print(f"  - Конфигурация Nginx: {ng_status}")
+
+            # 5. Проверка порта туннеля на VPS
+            t_port = svc_cfg.get('SVC_TUNNEL_PORT')
+            # Используем ss или netstat для проверки, слушает ли порт localhost
+            success, output = VPSManager.run_remote(vps_cfg, f"ss -ltn | grep ':{t_port}' || netstat -ltn | grep ':{t_port}'")
+            p_status = f"{GREEN}СЛУШАЕТСЯ{NC}" if success and output else f"{RED}ОТСУТСТВУЕТ (Туннель не работает){NC}"
+            print(f"  - Порт туннеля на VPS ({t_port}): {p_status}")
 
     @staticmethod
     def self_update():
