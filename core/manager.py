@@ -275,12 +275,18 @@ if __name__ == "__main__":
                 msg(f"Туннель '{name}' запущен (PID: {pid}). Ожидание сетевой готовности...")
                 time.sleep(4) 
                 
-                # 6. ДЕПЛОЙ NGINX / UDP BRIDGE
+                # 6. ПРЕДВАРИТЕЛЬНАЯ ОЧИСТКА VPS (от старых конфигов Nginx, которые могут мешать портам)
+                msg(f"Очистка старых конфигов на VPS...")
+                VPSManager.run_remote(vps_cfg, f"rm -f /etc/nginx/sites-enabled/rproxy_{name}.conf /etc/nginx/streams-enabled/rproxy_{name}.conf && (nginx -t && systemctl reload nginx || true)")
+
+                # 7. ДЕПЛОЙ NGINX / UDP BRIDGE
                 if svc_cfg.get('SVC_TYPE') == 'udp':
                     # Для UDP запускаем мост
                     msg("Подготовка UDP-TCP моста...")
                     
                     ext_port = svc_cfg.get('SVC_EXT_PORT')
+                    log_vps = f"/tmp/rproxy_socat_{name}.log"
+                    log_router = f"/opt/var/log/rproxy_socat_{name}.log"
                     
                     # 1. Проверка/Установка socat на VPS
                     msg("Проверка socat на VPS...")
@@ -290,27 +296,22 @@ if __name__ == "__main__":
                         VPSManager.run_remote(vps_cfg, "apt-get update && apt-get install -y socat || yum install -y socat")
 
                     # 2. Запуск на VPS (UDP -> TCP)
-                    # Используем полный путь если возможно
-                    socat_path_vps = "socat"
-                    socat_cmd_vps = f"nohup {socat_path_vps} UDP4-LISTEN:{ext_port},fork,reuseaddr TCP4:127.0.0.1:{remote_tunnel_port} > /dev/null 2>&1 &"
-                    msg(f"Запуск socat на VPS (Порт {ext_port} UDP -> {remote_tunnel_port} TCP)...")
+                    socat_cmd_vps = f"nohup socat -lx {log_vps} UDP4-LISTEN:{ext_port},fork,reuseaddr TCP4:127.0.0.1:{remote_tunnel_port} > {log_vps} 2>&1 &"
+                    msg(f"Запуск socat на VPS (UDP:{ext_port} -> TCP:{remote_tunnel_port})...")
                     VPSManager.run_remote(vps_cfg, f"pkill -f 'UDP4-LISTEN:{ext_port}' ; {socat_cmd_vps}")
                     
                     # 3. Запуск на Роутере (TCP -> UDP)
                     msg("Запуск socat на роутере...")
                     socat_path_router = "/opt/bin/socat" if os.path.exists("/opt/bin/socat") else "socat"
-                    # Важно: pkill завершаем успешно (|| true), чтобы не прерывать цепочку
-                    bash_cmd = f"pkill -f 'TCP4-LISTEN:{remote_tunnel_port}' || true; nohup {socat_path_router} TCP4-LISTEN:{remote_tunnel_port},fork,reuseaddr UDP4:{target_host}:{target_port} > /dev/null 2>&1 &"
+                    # Важно: pkill завершаем успешно (|| true)
+                    bash_cmd = f"pkill -f 'TCP4-LISTEN:{remote_tunnel_port}' || true; nohup {socat_path_router} -lx {log_router} TCP4-LISTEN:{remote_tunnel_port},fork,reuseaddr UDP4:{target_host}:{target_port} > {log_router} 2>&1 &"
                     subprocess.Popen(["sh", "-c", bash_cmd], start_new_session=True)
+                    msg(f"Лог моста на роутере: {log_router}")
                 else:
                     # Всегда сначала деплоим актуальный конфиг (с SSL или без)
                     use_ssl_final = has_certificate and use_ssl
                     msg(f"Применение конфигурации Nginx (SSL: {use_ssl_final})...")
                     nginx_conf = ServiceManager.generate_conf(svc_cfg, use_ssl_paths=use_ssl_final)
-                    
-                    # Перед деплоем удалим старые конфиги с таким же именем (чтобы не было конфликтов)
-                    msg(f"Проверка конфликтов конфигурации...")
-                    VPSManager.run_remote(vps_cfg, f"rm -f /etc/nginx/sites-enabled/rproxy_{name}.conf /etc/nginx/streams-enabled/rproxy_{name}.conf")
                     
                     success, output = VPSManager.deploy_vhost(vps_cfg, name, nginx_conf, path=nginx_path)
                     if not success:
