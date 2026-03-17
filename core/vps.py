@@ -13,24 +13,27 @@ class VPSManager:
     @staticmethod
     def ensure_ssh_key():
         """Гарантирует наличие SSH-ключа для работы с VPS"""
-        if not os.path.exists(VPSManager.SSH_KEY):
-            msg("Генерирую SSH-ключ (ed25519)...")
-            try:
-                # Пытаемся найти ssh-keygen в путях Entware или системных
-                keygen = "/opt/bin/ssh-keygen"
-                if not os.path.exists(keygen):
-                    keygen = "ssh-keygen"
-                
-                subprocess.run([keygen, "-t", "ed25519", "-f", VPSManager.SSH_KEY, "-N", "", "-q"], check=True)
-                os.chmod(VPSManager.SSH_KEY, 0o600)
-                
-                # Генерируем публичный ключ, если он не создался автоматически
-                pub_key = f"{VPSManager.SSH_KEY}.pub"
-                if not os.path.exists(pub_key):
-                    subprocess.run([keygen, "-y", "-f", VPSManager.SSH_KEY], 
-                                 stdout=open(pub_key, 'w'), check=True)
-            except Exception as e:
-                err(f"Не удалось сгенерировать SSH-ключ: {e}")
+        if os.path.exists(VPSManager.SSH_KEY):
+            os.chmod(VPSManager.SSH_KEY, 0o600)
+            return
+        
+        msg("Генерирую SSH-ключ (ed25519)...")
+        try:
+            # Пытаемся найти ssh-keygen в путях Entware или системных
+            keygen = "/opt/bin/ssh-keygen"
+            if not os.path.exists(keygen):
+                keygen = "ssh-keygen"
+            
+            subprocess.run([keygen, "-t", "ed25519", "-f", VPSManager.SSH_KEY, "-N", "", "-q"], check=True)
+            os.chmod(VPSManager.SSH_KEY, 0o600)
+            
+            # Генерируем публичный ключ, если он не создался автоматически
+            pub_key = f"{VPSManager.SSH_KEY}.pub"
+            if not os.path.exists(pub_key):
+                subprocess.run([keygen, "-y", "-f", VPSManager.SSH_KEY], 
+                             stdout=open(pub_key, 'w'), check=True)
+        except Exception as e:
+            err(f"Не удалось сгенерировать SSH-ключ: {e}")
 
     @staticmethod
     def run_remote(vps_cfg, cmd, timeout=30, echo=False):

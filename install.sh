@@ -1,7 +1,7 @@
 #!/bin/sh
 # rProxy Web & CLI (Python Core) Installer for Keenetic
-# rProxy Installer v7.1.6
-VERSION="7.1.6"
+# rProxy Installer v7.1.7
+VERSION="7.1.7"
 # - Fixed Version Sync & SSH Reliability
 # Новое ядро на Python. 100% паритет с Bash + Модульность.
 
@@ -67,6 +67,7 @@ fi
 msg "Настройка прав доступа..."
 chmod +x "$INSTALL_DIR/rproxy.py"
 chmod +x "$INSTALL_DIR/main.py"
+[ -f "/opt/etc/rproxy/id_ed25519" ] && chmod 600 "/opt/etc/rproxy/id_ed25519"
 ln -sf "$INSTALL_DIR/rproxy.py" "/opt/bin/rproxy"
 
 msg "Создание службы автозапуска веб-интерфейса..."
