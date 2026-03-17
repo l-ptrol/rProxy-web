@@ -54,10 +54,12 @@ def _get_ssh_args(bin_path, host, user, port, key_path=None, scp=False):
         args.extend([
             "-o", "StrictHostKeyChecking=no",
             "-o", "UserKnownHostsFile=/dev/null",
-            "-o", "BatchMode=yes" if key_path else "PasswordAuthentication=yes",
-            "-o", "ConnectTimeout=10",
-            "-o", "LogLevel=ERROR"
+            "-o", "BatchMode=yes" if key_path else "BatchMode=no",
+            "-o", "ConnectTimeout=15",
         ])
+        if not key_path:
+            args.extend(["-o", "PasswordAuthentication=yes"])
+        
         if key_path:
             args.extend(["-i", key_path])
         if scp:

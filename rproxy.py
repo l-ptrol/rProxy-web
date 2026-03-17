@@ -7,7 +7,7 @@ from core.utils import msg, pause, warn, err, header, draw_separator, get_router
 from core.config import ConfigManager
 from core.vps import VPSManager
 from core.manager import ProcessManager
-VERSION = "7.0.5"
+VERSION = "7.0.6"
 
 class RProxyCLI:
     def __init__(self):
@@ -286,7 +286,7 @@ class RProxyCLI:
         
         VPSManager.ensure_ssh_key()
         msg(f"Настройка SSH доступа для {host}...")
-        pub_key_path = "/opt/etc/rproxy/id_ed25519.pub"
+        pub_key_path = f"{VPSManager.SSH_KEY}.pub"
         
         try:
             with open(pub_key_path, 'r') as f:
@@ -316,6 +316,7 @@ class RProxyCLI:
         success, _ = VPSManager.run_remote(cfg, "echo OK")
         if not success:
             warn("SSH-ключ не принят сервером (Permission denied).")
+            print(f"  {YELLOW}Подсказка: убедитесь, что на VPS разрешен вход root по паролю (PermitRootLogin yes).{NC}")
             res = input(f"{BOLD}Хотите попробовать добавить ключ повторно? [Y/n]:{NC} ").strip().lower()
             if res != 'n':
                 self.add_ssh_key_manually(cfg)
@@ -333,7 +334,7 @@ class RProxyCLI:
         host = cfg.get('VPS_HOST')
         user = cfg.get('VPS_USER')
         port = cfg.get('VPS_PORT')
-        pub_key_path = "/opt/etc/rproxy/id_ed25519.pub"
+        pub_key_path = f"{VPSManager.SSH_KEY}.pub"
         
         try:
             with open(pub_key_path, 'r') as f:
