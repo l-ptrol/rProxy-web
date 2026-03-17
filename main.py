@@ -15,7 +15,7 @@ RPROXY_ROOT = "/opt/etc/rproxy"
 SERVICES_DIR = os.path.join(RPROXY_ROOT, "services")
 VPS_DIR = os.path.join(RPROXY_ROOT, "vps")
 
-VERSION = "6.5.6"
+VERSION = "6.5.7"
 
 # Настройка многопоточного сервера для Bottle (чтобы SSE не блокировал интерфейс)
 from wsgiref.simple_server import WSGIServer, WSGIRequestHandler
@@ -120,27 +120,35 @@ def service_action(name, action):
     if not os.path.exists(svc_path):
         return HTTPResponse(status=404, body="Service not found")
     
-    cfg = ConfigManager.load(svc_path)
-    vps_id = cfg.get('SVC_VPS')
-    vps_cfg = ConfigManager.load(os.path.join(VPS_DIR, f"{vps_id}.conf"))
+    try:
+        cfg = ConfigManager.load(svc_path)
+        vps_id = cfg.get('SVC_VPS')
+        if not vps_id:
+            return HTTPResponse(status=400, body="Service has no VPS assigned")
+            
+        vps_path = os.path.join(VPS_DIR, f"{vps_id}.conf")
+        if not os.path.exists(vps_path):
+            return HTTPResponse(status=404, body=f"VPS config '{vps_id}' not found")
+            
+        vps_cfg = ConfigManager.load(vps_path)
 
-    if action == 'start':
-        if not vps_cfg: return HTTPResponse(status=400, body="VPS config missing")
-        ProcessManager.start_service(cfg, vps_cfg)
-    elif action == 'stop':
-        ProcessManager.stop_service(name)
-    elif action == 'restart':
-        ProcessManager.stop_service(name)
-        time.sleep(1)
-        ProcessManager.start_service(cfg, vps_cfg)
-    elif action == 'redeploy_nginx':
-        if not vps_cfg: return HTTPResponse(status=400, body="VPS config missing")
-        ProcessManager.redeploy_nginx(cfg, vps_cfg)
-    elif action == 'delete':
-        ProcessManager.stop_service(name)
-        os.remove(svc_path)
-    
-    return {"status": "success"}
+        if action == 'start':
+            ProcessManager.start_service(cfg, vps_cfg)
+        elif action == 'stop':
+            ProcessManager.stop_service(name)
+        elif action == 'restart':
+            ProcessManager.stop_service(name)
+            time.sleep(1)
+            ProcessManager.start_service(cfg, vps_cfg)
+        elif action == 'redeploy_nginx':
+            ProcessManager.redeploy_nginx(cfg, vps_cfg)
+        elif action == 'delete':
+            ProcessManager.stop_service(name)
+            os.remove(svc_path)
+        
+        return {"status": "success"}
+    except Exception as e:
+        return HTTPResponse(status=500, body=str(e))
 
 @get('/api/execute/<command:path>')
 @get('/api/execute/<command>/<target:path>')
