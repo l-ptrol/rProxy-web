@@ -47,8 +47,8 @@ server {{
         proxy_set_header Host "{stealth_host}";
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto http;
-        proxy_set_header X-Forwarded-Port 80;
+        proxy_set_header X-Forwarded-Proto {"https" if use_ssl else "http"};
+        proxy_set_header X-Forwarded-Port {ext_port};
         
         # СТЕЛС-РЕЖИМ 2.0: Прикидываемся локальным браузером
         # Убираем внешнее имя хоста из X-Forwarded-Host, чтобы не смущать CSRF
@@ -73,6 +73,10 @@ server {{
         proxy_cookie_domain "{target_host}" "$host";
         proxy_read_timeout 7d;
         proxy_send_timeout 7d;
+        
+        # ТОТАЛЬНЫЙ СТЕЛС: ловим 401 от роутера и превращаем в 403, чтобы не было окон ввода
+        proxy_intercept_errors on;
+        error_page 401 =403 /;
     }}
     
     # Редирект с некорректного HTTPS порта (ошибка 497 -> 301)
