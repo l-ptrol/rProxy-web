@@ -323,10 +323,11 @@ if __name__ == "__main__":
                             log_file.flush()
                             
                             # Прямой запуск процесса без оболочки
+                            # Используем UDP4-DATAGRAM вместо UDP4 для совместимости с ядром
                             soc_args = [
                                 socat_path_router,
                                 f"TCP4-LISTEN:{remote_tunnel_port},fork,reuseaddr",
-                                f"UDP4:{target_host}:{target_port}"
+                                f"UDP4-DATAGRAM:{target_host}:{target_port}"
                             ]
                             subprocess.Popen(soc_args, stdout=log_file, stderr=log_file, start_new_session=True)
                             msg(f"{GREEN}Процесс socat инициирован.{NC}")
