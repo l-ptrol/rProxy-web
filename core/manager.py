@@ -285,8 +285,8 @@ if __name__ == "__main__":
                     msg("Подготовка UDP-TCP моста...")
                     
                     ext_port = svc_cfg.get('SVC_EXT_PORT')
-                    log_vps = f"/tmp/rproxy_socat_{name}.log"
-                    log_router = f"/opt/var/log/rproxy_socat_{name}.log"
+                    log_vps = f"/tmp/rproxy_socat_{name}.vps.log"
+                    log_router = f"/tmp/rproxy_socat_{name}.router.log"
                     
                     # 1. Проверка/Установка socat на VPS
                     msg("Проверка socat на VPS...")
@@ -296,7 +296,8 @@ if __name__ == "__main__":
                         VPSManager.run_remote(vps_cfg, "apt-get update && apt-get install -y socat || yum install -y socat")
 
                     # 2. Запуск на VPS (UDP -> TCP)
-                    socat_cmd_vps = f"nohup socat -lf {log_vps} UDP4-LISTEN:{ext_port},fork,reuseaddr TCP4:127.0.0.1:{remote_tunnel_port} > {log_vps} 2>&1 &"
+                    # Используем только перенаправление для логов
+                    socat_cmd_vps = f"nohup socat UDP4-LISTEN:{ext_port},fork,reuseaddr TCP4:127.0.0.1:{remote_tunnel_port} > {log_vps} 2>&1 &"
                     msg(f"Запуск socat на VPS (UDP:{ext_port} -> TCP:{remote_tunnel_port})...")
                     VPSManager.run_remote(vps_cfg, f"pkill -f 'UDP4-LISTEN:{ext_port}' || true")
                     time.sleep(1)
@@ -305,9 +306,10 @@ if __name__ == "__main__":
                     # 3. Запуск на Роутере (TCP -> UDP)
                     msg("Запуск socat на роутере...")
                     socat_path_router = "/opt/bin/socat" if os.path.exists("/opt/bin/socat") else "socat"
-                    # Важно: pkill завершаем успешно (|| true)
-                    bash_cmd = f"pkill -f 'TCP4-LISTEN:{remote_tunnel_port}' || true; sleep 1; nohup {socat_path_router} -lf {log_router} TCP4-LISTEN:{remote_tunnel_port},fork,reuseaddr UDP4:{target_host}:{target_port} > {log_router} 2>&1 &"
-                    subprocess.Popen(["sh", "-c", bash_cmd], start_new_session=True)
+                    pkill_cmd = f"pkill -f 'TCP4-LISTEN:{remote_tunnel_port}' || true"
+                    socat_cmd_router = f"nohup {socat_path_router} TCP4-LISTEN:{remote_tunnel_port},fork,reuseaddr UDP4:{target_host}:{target_port} > {log_router} 2>&1 &"
+                    
+                    subprocess.Popen(["sh", "-c", f"{pkill_cmd}; sleep 1; {socat_cmd_router}"], start_new_session=True)
                     
                     # Проверка запуска на роутере
                     time.sleep(2)
@@ -317,7 +319,7 @@ if __name__ == "__main__":
                     else:
                         warn(f"Мост на роутере не отвечает. Проверьте {log_router}")
                         
-                    msg(f"Лог моста на роутере: {log_router}")
+                    msg(f"Логи моста: VPS:/tmp/..., Роутер:{log_router}")
                 else:
                     # Всегда сначала деплоим актуальный конфиг (с SSL или без)
                     use_ssl_final = has_certificate and use_ssl
