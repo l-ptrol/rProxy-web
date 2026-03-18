@@ -1115,14 +1115,21 @@ async function updateApp() {
         try {
             const res = await api('system/update/log');
             const el = document.getElementById('update-log');
-            if (res.log && res.log !== el.textContent) {
-                el.textContent = res.log;
+            
+            // Очистка от ANSI escape кодов (цветов)
+            let cleanLog = res.log ? res.log.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '') : '';
+            // На всякий случай удаляем просто [0;32m если ESC потерялся
+            cleanLog = cleanLog.replace(/\[\d+;\d+m/g, '').replace(/\[\d+m/g, '');
+            
+            if (cleanLog && cleanLog !== el.textContent) {
+                el.textContent = cleanLog;
                 el.scrollTop = el.scrollHeight;
             }
             fails = 0;
             disconnected = false;
+            
             // Проверяем завершение
-            if (res.log && (res.log.includes('Restarting rProxy') || res.log.includes('Установка завершена') || res.log.includes('rProxy installed'))) {
+            if (cleanLog && (cleanLog.includes('Restarting rProxy') || cleanLog.includes('успешно завершена') || cleanLog.includes('rProxy installed') || cleanLog.includes('Статус:'))) {
                 el.textContent += '\n\n✅ Обновление физически завершено!\nТеперь вы можете перезагрузить страницу.';
                 document.getElementById('update-spinner').innerHTML = '<span class="badge badge-online">✅ Готово!</span>';
                 document.getElementById('update-footer').style.display = 'flex';
