@@ -1,8 +1,8 @@
 #!/bin/sh
 # rProxy Web & CLI (Python Core) Installer for Keenetic
-# rProxy Installer v7.1.10
-VERSION="7.1.10"
-# - Fixed ttyd conflict with awg-manager
+# rProxy Installer v7.2.0
+VERSION="7.2.0"
+# - Full web interface rebuild
 # Новое ядро на Python. 100% паритет с Bash + Модульность.
 
 set -e

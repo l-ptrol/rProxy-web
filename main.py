@@ -2,8 +2,9 @@ import os
 import time
 import sys
 import json
+import random
 import bottle
-from bottle import route, run, template, request, response, static_file, post, get, HTTPResponse, debug
+from bottle import route, run, template, request, response, static_file, post, get, delete, HTTPResponse, debug
 
 # Импорт нового ядра
 from core.config import ConfigManager
@@ -15,9 +16,9 @@ RPROXY_ROOT = "/opt/etc/rproxy"
 SERVICES_DIR = os.path.join(RPROXY_ROOT, "services")
 VPS_DIR = os.path.join(RPROXY_ROOT, "vps")
 
-VERSION = "7.1.10"
+VERSION = "7.2.0"
 
-# Настройка многопоточного сервера для Bottle (чтобы SSE не блокировал интерфейс)
+# Многопоточный сервер для Bottle
 from wsgiref.simple_server import WSGIServer, WSGIRequestHandler
 from socketserver import ThreadingMixIn
 
@@ -34,9 +35,13 @@ class ThreadingServer(bottle.ServerAdapter):
 bottle.TEMPLATE_PATH.insert(0, './templates')
 debug(True)
 
+# ==================== Страницы ====================
+
 @route('/')
 def index():
     return template('index', version=VERSION)
+
+# ==================== API: Статистика ====================
 
 @get('/api/stats')
 def get_stats():
@@ -48,7 +53,7 @@ def get_stats():
         for f in files:
             if ProcessManager.is_running(f.replace(".conf", "")):
                 online_count = online_count + 1
-    
+
     vps_count = 0
     if os.path.exists(VPS_DIR):
         vps_count = len([f for f in os.listdir(VPS_DIR) if f.endswith(".conf")])
@@ -59,6 +64,8 @@ def get_stats():
         "vps": vps_count,
         "version": VERSION
     }
+
+# ==================== API: Сервисы ====================
 
 @get('/api/services')
 def list_services():
@@ -80,6 +87,141 @@ def list_services():
                 })
     return {"services": services}
 
+
+@post('/api/services')
+def create_service():
+    """Создание нового сервиса через веб-интерфейс"""
+    try:
+        data = request.json
+        if not data:
+            return HTTPResponse(status=400, body="Пустой запрос")
+
+        name = data.get('name', '').strip()
+        if not name:
+            return HTTPResponse(status=400, body="Название обязательно")
+
+        svc_path = os.path.join(SERVICES_DIR, f"{name}.conf")
+        if os.path.exists(svc_path):
+            return HTTPResponse(status=409, body="Сервис с таким именем уже существует")
+
+        os.makedirs(SERVICES_DIR, exist_ok=True)
+
+        # Генерация порта туннеля
+        tunnel_port = random.randint(10000, 15000)
+
+        svc_type = data.get('type', 'http')
+        target_port = data.get('target_port', '80')
+
+        # Для ttyd — автоматический порт если не указан
+        if svc_type == 'ttyd' and not target_port:
+            target_port = str(random.randint(7682, 7782))
+
+        cfg = {
+            "SVC_NAME": name,
+            "SVC_TYPE": svc_type,
+            "SVC_TARGET_HOST": data.get('target_host', '127.0.0.1'),
+            "SVC_TARGET_PORT": target_port,
+            "SVC_VPS": data.get('vps', ''),
+            "SVC_EXT_PORT": data.get('ext_port', '443'),
+            "SVC_DOMAIN": data.get('domain', ''),
+            "SVC_SSL": data.get('ssl', 'no'),
+            "SVC_TUNNEL_PORT": str(tunnel_port),
+            "SVC_ENABLED": "yes"
+        }
+
+        # Авторизация (Basic Auth)
+        auth_user = data.get('auth_user', '').strip()
+        auth_pass = data.get('auth_pass', '').strip()
+        if auth_user and auth_pass:
+            cfg["SVC_AUTH_USER"] = auth_user
+            cfg["SVC_AUTH_PASS"] = auth_pass
+
+        ConfigManager.save(svc_path, cfg)
+        return {"status": "success", "name": name}
+    except Exception as e:
+        return HTTPResponse(status=500, body=str(e))
+
+
+# ==================== API: Действия с сервисами ====================
+
+@post('/api/action/<name>/<action>')
+def service_action(name, action):
+    svc_path = os.path.join(SERVICES_DIR, f"{name}.conf")
+    if not os.path.exists(svc_path):
+        return HTTPResponse(status=404, body="Сервис не найден")
+
+    try:
+        cfg = ConfigManager.load(svc_path)
+        vps_id = cfg.get('SVC_VPS')
+
+        vps_cfg = None
+        if vps_id:
+            vps_path = os.path.join(VPS_DIR, f"{vps_id}.conf")
+            if os.path.exists(vps_path):
+                vps_cfg = ConfigManager.load(vps_path)
+
+        if action == 'start':
+            if not vps_cfg:
+                return HTTPResponse(status=400, body="VPS не найден")
+            ProcessManager.start_service(cfg, vps_cfg)
+        elif action == 'stop':
+            ProcessManager.stop_service(name, svc_cfg=cfg)
+        elif action == 'restart':
+            ProcessManager.stop_service(name, svc_cfg=cfg)
+            time.sleep(1)
+            if vps_cfg:
+                ProcessManager.start_service(cfg, vps_cfg)
+        elif action == 'redeploy_nginx':
+            if vps_cfg:
+                ProcessManager.redeploy_nginx(cfg, vps_cfg)
+        elif action == 'delete':
+            ProcessManager.stop_service(name, svc_cfg=cfg)
+            # Удаление Nginx конфига с VPS
+            if vps_cfg:
+                VPSManager.remove_vhost(vps_cfg, name)
+            os.remove(svc_path)
+        elif action == 'ssl':
+            if vps_cfg:
+                ProcessManager.run_certbot(cfg, vps_cfg)
+
+        return {"status": "success"}
+    except Exception as e:
+        return HTTPResponse(status=500, body=str(e))
+
+
+# ==================== API: Логи ====================
+
+@get('/api/services/<name>/logs')
+def service_logs(name):
+    """Получение последних строк логов сервиса"""
+    log_dir = "/opt/var/log"
+    result = {}
+    # Лог туннеля
+    tunnel_log = os.path.join(log_dir, f"tunnel_{name}.log")
+    if os.path.exists(tunnel_log):
+        with open(tunnel_log, 'r', errors='replace') as f:
+            lines = f.readlines()
+            result['tunnel'] = ''.join(lines[-100:])
+
+    # Лог ttyd
+    ttyd_log = os.path.join(log_dir, f"ttyd_{name}.log")
+    if os.path.exists(ttyd_log):
+        with open(ttyd_log, 'r', errors='replace') as f:
+            lines = f.readlines()
+            result['ttyd'] = ''.join(lines[-100:])
+
+    # Лог autossh
+    autossh_log = os.path.join(log_dir, f"autossh_{name}.log")
+    if os.path.exists(autossh_log):
+        with open(autossh_log, 'r', errors='replace') as f:
+            lines = f.readlines()
+            result['autossh'] = ''.join(lines[-100:])
+
+    return result
+
+
+# ==================== API: VPS ====================
+
 @get('/api/vps')
 def list_vps():
     vps_list = []
@@ -92,125 +234,118 @@ def list_vps():
                     "id": name,
                     "name": name,
                     "host": cfg.get("VPS_HOST"),
-                    "user": cfg.get("VPS_USER", "root")
+                    "user": cfg.get("VPS_USER", "root"),
+                    "port": cfg.get("VPS_PORT", "22")
                 })
     return {"vps": vps_list}
+
+
+@post('/api/vps')
+def create_vps():
+    """Добавление нового VPS сервераe"""
+    try:
+        data = request.json
+        if not data:
+            return HTTPResponse(status=400, body="Пустой запрос")
+
+        name = data.get('name', '').strip()
+        host = data.get('host', '').strip()
+        if not name or not host:
+            return HTTPResponse(status=400, body="Название и IP обязательны")
+
+        os.makedirs(VPS_DIR, exist_ok=True)
+        vps_path = os.path.join(VPS_DIR, f"{name}.conf")
+
+        cfg = {
+            "VPS_HOST": host,
+            "VPS_USER": data.get('user', 'root').strip(),
+            "VPS_PORT": data.get('port', '22').strip(),
+            "VPS_AUTH": "key"
+        }
+        ConfigManager.save(vps_path, cfg)
+        return {"status": "success", "name": name}
+    except Exception as e:
+        return HTTPResponse(status=500, body=str(e))
+
+
+@delete('/api/vps/<name>')
+def delete_vps(name):
+    vps_path = os.path.join(VPS_DIR, f"{name}.conf")
+    if not os.path.exists(vps_path):
+        return HTTPResponse(status=404, body="VPS не найден")
+    os.remove(vps_path)
+    return {"status": "success"}
+
+
+@get('/api/vps/<name>/health')
+def vps_health(name):
+    vps_path = os.path.join(VPS_DIR, f"{name}.conf")
+    if not os.path.exists(vps_path):
+        return HTTPResponse(status=404, body="VPS не найден")
+
+    vps_cfg = ConfigManager.load(vps_path)
+    result = VPSManager.health_check(vps_cfg)
+    return result
+
 
 @post('/api/vps/<name>/cleanup')
 def vps_cleanup(name):
     vps_path = os.path.join(VPS_DIR, f"{name}.conf")
     if not os.path.exists(vps_path):
-        return HTTPResponse(status=404, body="VPS not found")
-    
+        return HTTPResponse(status=404, body="VPS не найден")
+
     vps_cfg = ConfigManager.load(vps_path)
     # Список активных сервисов для этого VPS
     active = []
-    for f in os.listdir(SERVICES_DIR):
-        if f.endswith(".conf"):
-            cfg = ConfigManager.load(os.path.join(SERVICES_DIR, f))
-            if cfg.get('SVC_VPS') == name:
-                active.append(f.replace(".conf", ""))
-    
+    if os.path.exists(SERVICES_DIR):
+        for f in os.listdir(SERVICES_DIR):
+            if f.endswith(".conf"):
+                cfg = ConfigManager.load(os.path.join(SERVICES_DIR, f))
+                if cfg.get('SVC_VPS') == name:
+                    active.append(f.replace(".conf", ""))
+
     success, msg = VPSManager.cleanup_vps(vps_cfg, active)
     return {"status": "success" if success else "error", "message": msg}
 
-@post('/api/action/<name>/<action>')
-def service_action(name, action):
-    svc_path = os.path.join(SERVICES_DIR, f"{name}.conf")
-    if not os.path.exists(svc_path):
-        return HTTPResponse(status=404, body="Service not found")
-    
-    try:
-        cfg = ConfigManager.load(svc_path)
-        vps_id = cfg.get('SVC_VPS')
-        if not vps_id:
-            return HTTPResponse(status=400, body="Service has no VPS assigned")
-            
-        vps_path = os.path.join(VPS_DIR, f"{vps_id}.conf")
-        if not os.path.exists(vps_path):
-            return HTTPResponse(status=404, body=f"VPS config '{vps_id}' not found")
-            
-        vps_cfg = ConfigManager.load(vps_path)
 
-        if action == 'start':
-            ProcessManager.start_service(cfg, vps_cfg)
-        elif action == 'stop':
-            ProcessManager.stop_service(name)
-        elif action == 'restart':
-            ProcessManager.stop_service(name)
-            time.sleep(1)
-            ProcessManager.start_service(cfg, vps_cfg)
-        elif action == 'redeploy_nginx':
-            ProcessManager.redeploy_nginx(cfg, vps_cfg)
-        elif action == 'delete':
-            ProcessManager.stop_service(name)
-            os.remove(svc_path)
-        
+# ==================== API: Система ====================
+
+@post('/api/system/update')
+def system_update():
+    """Запускает самообновление"""
+    try:
+        ProcessManager.self_update()
         return {"status": "success"}
     except Exception as e:
         return HTTPResponse(status=500, body=str(e))
 
-@get('/api/execute/<command:path>')
-@get('/api/execute/<command>/<target:path>')
-def execute_command(command, target=None):
-    """Эндпоинт для выполнения команд с потоковой передачей логов (SSE)"""
-    response.content_type = 'text/event-stream'
-    response.cache_control = 'no-cache'
-    response.headers['Access-Control-Allow-Origin'] = '*'
 
-    def stream():
+@post('/api/system/reset')
+def system_reset():
+    """Полная очистка (Hard Reset)"""
+    try:
+        # Упрощённая версия (без подтверждения через stdin)
+        import shutil
+        env = ProcessManager._get_env()
+        from core.utils import _resolve_bin
+        pkill_bin = _resolve_bin("pkill")
         import subprocess
-        
-        # Маппинг команд фронтенда на CLI аргументы
-        cmd_map = {
-            'start': ['start'],
-            'stop': ['stop'],
-            'restart': ['restart'],
-            'redeploy_nginx': ['redeploy_nginx'],
-            'add-service': ['add-service']
-        }
-        
-        args = cmd_map.get(command, [command])
-        if target:
-            args.append(target)
-            
-        rproxy_bin = "/opt/bin/rproxy"
-        if not os.path.exists(rproxy_bin):
-            rproxy_bin = sys.executable + " " + os.path.join(os.getcwd(), "rproxy.py")
+        subprocess.run([pkill_bin, "-f", "autossh"], env=env, stderr=subprocess.DEVNULL)
+        subprocess.run([pkill_bin, "-f", "ttyd"], env=env, stderr=subprocess.DEVNULL)
 
-        full_cmd = f"python3 rproxy.py {' '.join(args)}" if not os.path.exists("/opt/bin/rproxy") else f"rproxy {' '.join(args)}"
-        
-        yield f"data: {{\"type\": \"log\", \"message\": \"Запуск: {full_cmd}\"}}\n\n"
-        
-        try:
-            # Используем subprocess.Popen для отслеживания вывода
-            # Внимание: для реального SSE в Bottle нужно использовать gevent или специальный сервер
-            # но для простых команд достаточно запустить процесс и прочитать вывод
-            proc = subprocess.Popen(
-                ["python3", "rproxy.py"] + args,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-                universal_newlines=True
-            )
-            
-            for line in proc.stdout:
-                if line.strip():
-                    yield f"data: {json.dumps({'type': 'log', 'message': line.strip()})}\n\n"
-            
-            proc.wait()
-            yield f"data: {{\"type\": \"done\", \"code\": {proc.returncode}}}\n\n"
-        except Exception as e:
-            import json
-            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+        paths = ["/opt/etc/rproxy", "/opt/var/run/rproxy"]
+        for p in paths:
+            if os.path.exists(p):
+                if os.path.isdir(p):
+                    shutil.rmtree(p)
+                else:
+                    os.remove(p)
 
-    return stream()
+        return {"status": "success", "message": "Все данные очищены"}
+    except Exception as e:
+        return HTTPResponse(status=500, body=str(e))
 
-@get('/api/execute/<command>')
-def execute_command_simple(command):
-    return execute_command(command)
 
 if __name__ == "__main__":
-    # Используем ThreadingServer для поддержки многопоточности и SSE
+    # Многопоточный сервер для параллельных запросов
     run(host='0.0.0.0', port=3000, server=ThreadingServer, quiet=True, debug=False)

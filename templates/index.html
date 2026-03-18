@@ -2,412 +2,905 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, vertical-align=middle">
-    <title>rProxy Premium Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>rProxy</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
         :root {
-            --accent: #00f2ff;
-            --accent-glow: rgba(0, 242, 255, 0.5);
-            --bg: #050505;
-            --glass: rgba(255, 255, 255, 0.03);
-            --glass-border: rgba(255, 255, 255, 0.08);
-            --text: #ffffff;
-            --text-dim: rgba(255, 255, 255, 0.4);
+            --bg: #0f1117;
+            --surface: #1a1d27;
+            --surface2: #22252f;
+            --border: #2a2d3a;
+            --text: #e4e4e7;
+            --text2: #9ca3af;
+            --text3: #6b7280;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --green: #22c55e;
+            --green-bg: rgba(34,197,94,0.12);
+            --red: #ef4444;
+            --red-bg: rgba(239,68,68,0.12);
+            --yellow: #f59e0b;
+            --yellow-bg: rgba(245,158,11,0.12);
+            --radius: 8px;
+            --radius-lg: 12px;
         }
-
-        @keyframes mesh {
-            0% { transform: translate(0, 0); }
-            50% { transform: translate(-5%, 5%); }
-            100% { transform: translate(0, 0); }
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            -webkit-tap-highlight-color: transparent;
-        }
-
         body {
-            background-color: var(--bg);
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg);
             color: var(--text);
             min-height: 100vh;
-            overflow-x: hidden;
-            display: flex;
-            flex-direction: column;
+            line-height: 1.5;
         }
 
-        /* Animated Mesh Background */
-        .mesh-bg {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: -1;
-            overflow: hidden;
-            background: radial-gradient(at 0% 0%, #0a1128 0%, transparent 50%),
-                        radial-gradient(at 100% 100%, #1a0a28 0%, transparent 50%);
-        }
-
-        .mesh-bg::after {
-            content: '';
-            position: absolute;
-            width: 150%;
-            height: 150%;
-            top: -25%;
-            left: -25%;
-            background: radial-gradient(circle at 20% 30%, rgba(0, 242, 255, 0.05) 0%, transparent 40%),
-                        radial-gradient(circle at 80% 70%, rgba(192, 132, 252, 0.05) 0%, transparent 40%);
-            filter: blur(80px);
-            animation: mesh 20s ease-in-out infinite;
-        }
-
-        .container {
-            max-width: 100%;
-            width: 100%;
-            padding: 20px;
-            margin: 0 auto;
-        }
-
-        header {
-            margin-bottom: 30px;
-            padding: 10px 0;
-        }
-
-        .logo-group h1 {
-            font-size: 28px;
-            font-weight: 900;
-            letter-spacing: -1px;
-            background: linear-gradient(to right, #fff, var(--accent));
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .version-badge {
-            font-size: 10px;
-            font-weight: 800;
-            padding: 2px 8px;
-            background: var(--accent);
-            color: #000;
-            border-radius: 4px;
-            margin-left: 10px;
-            vertical-align: middle;
-        }
-
-        .stats-grid {
-            display: grid;
-            grid-template-cols: repeat(2, 1fr);
-            gap: 12px;
-            margin-bottom: 30px;
-        }
-
-        .stat-card {
-            background: var(--glass);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid var(--glass-border);
-            padding: 16px;
-            border-radius: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .stat-card .label {
-            font-size: 11px;
-            font-weight: 700;
-            color: var(--text-dim);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .stat-card .value {
-            font-size: 24px;
-            font-weight: 800;
-        }
-
-        .section-title {
-            font-size: 14px;
-            font-weight: 800;
-            color: var(--text-dim);
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            margin-bottom: 15px;
+        /* Шапка */
+        .topbar {
             display: flex;
             align-items: center;
             justify-content: space-between;
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+        .topbar-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .topbar h1 {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text);
+        }
+        .topbar .ver {
+            font-size: 11px;
+            color: var(--text3);
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .topbar-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
-        .services-list {
+        /* Навигация (табы) */
+        .tabs {
+            display: flex;
+            gap: 2px;
+            padding: 12px 24px 0;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            overflow-x: auto;
+        }
+        .tabs button {
+            padding: 10px 18px;
+            background: none;
+            border: none;
+            color: var(--text3);
+            font-size: 13px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: color 0.2s, border-color 0.2s;
+            white-space: nowrap;
+        }
+        .tabs button:hover { color: var(--text2); }
+        .tabs button.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }
+
+        /* Контент */
+        .page { display: none; padding: 24px; max-width: 960px; margin: 0 auto; }
+        .page.active { display: block; }
+
+        /* Статистика */
+        .stats {
             display: grid;
-            grid-template-cols: 1fr;
-            gap: 16px;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+            margin-bottom: 24px;
         }
+        .stat {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 16px;
+        }
+        .stat-label { font-size: 11px; color: var(--text3); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+        .stat-value { font-size: 28px; font-weight: 800; margin-top: 4px; }
 
-        .service-card {
-            background: var(--glass);
-            backdrop-filter: blur(25px);
-            -webkit-backdrop-filter: blur(25px);
-            border: 1px solid var(--glass-border);
-            border-radius: 24px;
-            padding: 20px;
-            transition: transform 0.3s ease, border-color 0.3s ease;
-            position: relative;
+        /* Панель инструментов */
+        .toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .toolbar h2 { font-size: 16px; font-weight: 700; }
+
+        /* Кнопки */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text);
+            font-size: 13px;
+            font-weight: 600;
+            font-family: inherit;
+            border-radius: var(--radius);
+            cursor: pointer;
+            transition: all 0.15s;
+            white-space: nowrap;
+        }
+        .btn:hover { background: var(--surface2); border-color: var(--text3); }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-danger { color: var(--red); }
+        .btn-danger:hover { background: var(--red-bg); }
+        .btn-sm { padding: 5px 10px; font-size: 12px; }
+        .btn-icon { padding: 6px 8px; }
+
+        /* Таблица */
+        .table-wrap {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
             overflow: hidden;
         }
-
-        .service-card:active {
-            transform: scale(0.98);
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
         }
-
-        .service-card.online {
-            border-color: rgba(0, 242, 255, 0.2);
-            box-shadow: 0 0 20px rgba(0, 242, 255, 0.05);
+        thead th {
+            text-align: left;
+            padding: 12px 16px;
+            font-size: 11px;
+            color: var(--text3);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
         }
-
-        .svc-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 15px;
+        tbody td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            vertical-align: middle;
         }
+        tbody tr:last-child td { border-bottom: none; }
+        tbody tr:hover { background: rgba(255,255,255,0.02); }
 
-        .svc-info h3 {
-            font-size: 18px;
-            font-weight: 800;
-            margin-bottom: 4px;
-        }
-
-        .status-pill {
+        /* Бейджи статуса */
+        .badge {
             display: inline-flex;
             align-items: center;
             gap: 5px;
-            padding: 4px 10px;
+            padding: 3px 10px;
             border-radius: 100px;
-            font-size: 10px;
-            font-weight: 800;
-            text-transform: uppercase;
-            background: rgba(255, 255, 255, 0.05);
-        }
-
-        .status-pill.online {
-            color: #00f2ff;
-            background: rgba(0, 242, 255, 0.1);
-        }
-
-        .svc-details {
-            display: grid;
-            grid-template-cols: repeat(2, 1fr);
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-
-        .detail-item .d-label {
-            font-size: 10px;
-            color: var(--text-dim);
-            margin-bottom: 4px;
-        }
-
-        .detail-item .d-value {
-            font-size: 13px;
-            font-weight: 600;
-            font-family: 'Monaco', monospace;
-        }
-
-        .svc-actions {
-            display: flex;
-            gap: 10px;
-        }
-
-        .btn {
-            flex: 1;
-            padding: 12px;
-            border-radius: 14px;
-            border: none;
+            font-size: 11px;
             font-weight: 700;
-            font-size: 13px;
-            cursor: pointer;
-            transition: all 0.3s ease;
+        }
+        .badge-online { background: var(--green-bg); color: var(--green); }
+        .badge-offline { background: rgba(107,114,128,0.15); color: var(--text3); }
+        .badge-type {
+            background: rgba(59,130,246,0.12);
+            color: var(--accent);
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .badge-ssl { background: var(--green-bg); color: var(--green); }
+
+        .mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+
+        .actions-cell { display: flex; gap: 4px; flex-wrap: wrap; }
+
+        /* Модальное окно */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 100;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 60px 16px;
+            overflow-y: auto;
+        }
+        .modal-overlay.visible { display: flex; }
+        .modal {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            width: 100%;
+            max-width: 520px;
+            overflow: hidden;
+        }
+        .modal-header {
             display: flex;
             align-items: center;
-            justify-content: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+        }
+        .modal-header h3 { font-size: 15px; font-weight: 700; }
+        .modal-body { padding: 20px; }
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            padding: 16px 20px;
+            border-top: 1px solid var(--border);
+        }
+
+        /* Формы */
+        .form-group { margin-bottom: 16px; }
+        .form-group label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text2);
+            margin-bottom: 6px;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 9px 12px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text);
+            font-size: 13px;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+        .form-group input:focus, .form-group select:focus { border-color: var(--accent); }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .form-hint { font-size: 11px; color: var(--text3); margin-top: 4px; }
+
+        /* Лог-панель */
+        .log-panel {
+            background: #0a0c10;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            line-height: 1.7;
+            color: var(--text2);
+            padding: 16px;
+            min-height: 400px;
+            max-height: 70vh;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .log-panel .log-line { padding: 1px 0; }
+        .log-panel .log-ok { color: var(--green); }
+        .log-panel .log-warn { color: var(--yellow); }
+        .log-panel .log-err { color: var(--red); }
+
+        /* VPS карточки */
+        .vps-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 12px;
+        }
+        .vps-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 16px;
+        }
+        .vps-card h4 { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
+        .vps-card .vps-host { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--text2); margin-bottom: 12px; }
+        .vps-card .vps-actions { display: flex; gap: 6px; }
+
+        /* Пустое состояние */
+        .empty {
+            text-align: center;
+            padding: 48px 24px;
+            color: var(--text3);
+        }
+        .empty-icon { font-size: 32px; margin-bottom: 10px; }
+        .empty p { font-size: 14px; }
+
+        /* Тост */
+        .toast-container {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
             gap: 8px;
         }
-
-        .btn-main {
-            background: var(--accent);
-            color: #000;
+        .toast {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 10px 16px;
+            font-size: 13px;
+            font-weight: 500;
+            animation: toast-in 0.3s ease;
+            max-width: 360px;
+        }
+        .toast.error { border-color: var(--red); color: var(--red); }
+        .toast.success { border-color: var(--green); color: var(--green); }
+        @keyframes toast-in {
+            from { opacity:0; transform: translateY(-10px); }
+            to { opacity:1; transform: translateY(0); }
         }
 
-        .btn-stop {
-            background: rgba(255, 69, 58, 0.1);
-            color: #ff453a;
-            border: 1px solid rgba(255, 69, 58, 0.2);
-        }
-
-        .btn-outline {
-            background: transparent;
-            border: 1px solid var(--glass-border);
-            color: var(--text);
-        }
-
-        /* Floating Add Button */
-        .fab {
-            position: fixed;
-            bottom: 30px;
-            right: 30px;
-            width: 60px;
-            height: 60px;
-            background: var(--accent);
-            border-radius: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 10px 30px var(--accent-glow);
-            z-index: 100;
-            border: none;
-        }
-
-        /* Loading Animation */
-        .loader {
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(255,255,255,0.1);
-            border-top-color: var(--accent);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        /* Responsive Mobile */
-        @media (max-width: 480px) {
-            .logo-group h1 { font-size: 24px; }
-            .container { padding: 15px; }
+        /* Адаптивность */
+        @media (max-width: 640px) {
+            .topbar { padding: 12px 16px; }
+            .tabs { padding: 8px 16px 0; }
+            .tabs button { padding: 8px 12px; font-size: 12px; }
+            .page { padding: 16px; }
+            .form-row { grid-template-columns: 1fr; }
+            .stats { grid-template-columns: repeat(2, 1fr); }
+            /* Мобильная таблица */
+            table, thead, tbody, th, td, tr { display: block; }
+            thead { display: none; }
+            tbody td {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 8px 16px;
+                font-size: 13px;
+            }
+            tbody td::before {
+                content: attr(data-label);
+                font-weight: 600;
+                color: var(--text3);
+                font-size: 11px;
+                text-transform: uppercase;
+                margin-right: 12px;
+                flex-shrink: 0;
+            }
+            tbody tr {
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                margin-bottom: 8px;
+                background: var(--surface);
+            }
         }
     </style>
 </head>
 <body>
-    <div class="mesh-bg"></div>
-    
-    <div class="container">
-        <header>
-            <div class="logo-group">
-                <h1>rProxy Dashboard<span class="version-badge" id="app-version">v5.0</span></h1>
-            </div>
-        </header>
+    <!-- Тосты -->
+    <div class="toast-container" id="toasts"></div>
 
-        <div class="stats-grid">
-            <div class="stat-card">
-                <span class="label">Туннели</span>
-                <span class="value" id="stat-services">-</span>
+    <!-- Шапка -->
+    <div class="topbar">
+        <div class="topbar-left">
+            <h1>rProxy</h1>
+            <span class="ver" id="app-ver">v{{version}}</span>
+        </div>
+        <div class="topbar-right">
+            <button class="btn btn-sm" onclick="refreshAll()">↻ Обновить</button>
+        </div>
+    </div>
+
+    <!-- Табы -->
+    <div class="tabs" id="tabs">
+        <button class="active" data-tab="services">Сервисы</button>
+        <button data-tab="vps">VPS</button>
+        <button data-tab="logs">Логи</button>
+        <button data-tab="system">Система</button>
+    </div>
+
+    <!-- ==================== СЕРВИСЫ ==================== -->
+    <div class="page active" id="page-services">
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-label">Всего</div>
+                <div class="stat-value" id="s-total">—</div>
             </div>
-            <div class="stat-card">
-                <span class="label">Онлайн</span>
-                <span class="value" id="stat-online" style="color: var(--accent)">-</span>
+            <div class="stat">
+                <div class="stat-label">Онлайн</div>
+                <div class="stat-value" id="s-online" style="color:var(--green)">—</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">VPS</div>
+                <div class="stat-value" id="s-vps">—</div>
             </div>
         </div>
 
-        <div class="section-title">
-            <span>Ваши сервисы</span>
-            <button onclick="refreshData()" class="btn-outline" style="padding: 4px 8px; border-radius: 8px; font-size: 10px;">Обновить</button>
+        <div class="toolbar">
+            <h2>Туннели</h2>
+            <button class="btn btn-primary" onclick="openAddService()">+ Добавить</button>
         </div>
 
-        <div class="services-list" id="services-container">
-            <!-- Скелет загрузки -->
-            <div style="padding: 40px; text-align: center; color: var(--text-dim)">
-                <div class="loader" style="margin: 0 auto 10px;"></div>
-                Загрузка данных...
+        <div id="services-table"></div>
+    </div>
+
+    <!-- ==================== VPS ==================== -->
+    <div class="page" id="page-vps">
+        <div class="toolbar">
+            <h2>Серверы VPS</h2>
+            <button class="btn btn-primary" onclick="openAddVps()">+ Добавить VPS</button>
+        </div>
+        <div id="vps-container"></div>
+    </div>
+
+    <!-- ==================== ЛОГИ ==================== -->
+    <div class="page" id="page-logs">
+        <div class="toolbar">
+            <h2>Логи сервисов</h2>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <select id="log-service-select" style="padding:7px 12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:13px;font-family:inherit;">
+                    <option value="">Выберите сервис...</option>
+                </select>
+                <button class="btn btn-sm" onclick="loadLogs()">Загрузить</button>
+            </div>
+        </div>
+        <div class="log-panel" id="log-output">Выберите сервис и нажмите «Загрузить» для просмотра логов.</div>
+    </div>
+
+    <!-- ==================== СИСТЕМА ==================== -->
+    <div class="page" id="page-system">
+        <div class="toolbar"><h2>О системе</h2></div>
+        <div style="display:grid;gap:12px;max-width:480px;">
+            <div class="stat">
+                <div class="stat-label">Версия</div>
+                <div class="stat-value" style="font-size:20px" id="sys-ver">{{version}}</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">Платформа</div>
+                <div class="stat-value" style="font-size:16px">Keenetic • Entware • Python</div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+                <button class="btn" onclick="selfUpdate()">🔄 Обновить rProxy</button>
+                <button class="btn btn-danger" onclick="hardReset()">☢ Hard Reset</button>
             </div>
         </div>
     </div>
 
-    <button class="fab" onclick="alert('Добавление скоро появится в v5.1')">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-    </button>
-
-    <script>
-        async function fetchData() {
-            try {
-                const statsRes = await fetch('/api/stats');
-                const stats = await statsRes.json();
-                document.getElementById('stat-services').innerText = stats.services;
-                document.getElementById('stat-online').innerText = stats.online;
-                document.getElementById('app-version').innerText = 'v' + stats.version;
-
-                const svcRes = await fetch('/api/services');
-                const data = await svcRes.json();
-                renderServices(data.services);
-            } catch (err) {
-                console.error(err);
-                document.getElementById('services-container').innerHTML = '<div style="color: #ff453a; padding: 20px; text-align: center;">Ошибка связи с роутером</div>';
-            }
-        }
-
-        function renderServices(services) {
-            const container = document.getElementById('services-container');
-            if (services.length === 0) {
-                container.innerHTML = '<div style="padding: 40px; text-align: center; color: var(--text-dim)">Нет активных сервисов</div>';
-                return;
-            }
-
-            container.innerHTML = services.map(s => `
-                <div class="service-card ${s.status === 'online' ? 'online' : ''}">
-                    <div class="svc-header">
-                        <div class="svc-info">
-                            <div class="status-pill ${s.status === 'online' ? 'online' : ''}">${s.status === 'online' ? '● В сети' : '○ Оффлайн'}</div>
-                            <h3>${s.name}</h3>
-                        </div>
+    <!-- ==================== МОДАЛКА: Добавить сервис ==================== -->
+    <div class="modal-overlay" id="modal-add-service">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Новый сервис</h3>
+                <button class="btn btn-icon btn-sm" onclick="closeModal('modal-add-service')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Название (лат., без пробелов)</label>
+                    <input id="f-name" placeholder="my-app">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Тип</label>
+                        <select id="f-type" onchange="onTypeChange()">
+                            <option value="http">HTTP Proxy</option>
+                            <option value="tcp">TCP Tunnel</option>
+                            <option value="ttyd">Web Terminal</option>
+                            <option value="ssh">SSH Access</option>
+                            <option value="udp">UDP Port</option>
+                        </select>
                     </div>
-                    <div class="svc-details">
-                        <div class="detail-item">
-                            <div class="d-label">Локальный порт</div>
-                            <div class="d-value">${s.target.split(':')[1]}</div>
-                        </div>
-                        <div class="detail-item">
-                            <div class="d-label">Внешний порт</div>
-                            <div class="d-value" style="color: var(--accent)">${s.ext_port}</div>
-                        </div>
-                    </div>
-                    <div class="svc-actions">
-                        ${s.status === 'online' 
-                            ? `<button class="btn btn-stop" onclick="action('${s.id}', 'stop')">Стоп</button>`
-                            : `<button class="btn btn-main" onclick="action('${s.id}', 'start')">Запуск</button>`
-                        }
-                        <button class="btn btn-outline" onclick="action('${s.id}', 'restart')">🔄</button>
+                    <div class="form-group">
+                        <label>VPS сервер</label>
+                        <select id="f-vps"></select>
                     </div>
                 </div>
-            `).join('');
-        }
+                <div class="form-row" id="target-row">
+                    <div class="form-group">
+                        <label>IP цели</label>
+                        <input id="f-host" value="127.0.0.1" placeholder="127.0.0.1">
+                    </div>
+                    <div class="form-group">
+                        <label>Порт цели</label>
+                        <input id="f-port" placeholder="80">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Домен (пусто = по IP)</label>
+                    <input id="f-domain" placeholder="example.com">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Внешний порт</label>
+                        <input id="f-ext-port" value="443" placeholder="443">
+                    </div>
+                    <div class="form-group">
+                        <label>SSL</label>
+                        <select id="f-ssl">
+                            <option value="yes">Да</option>
+                            <option value="no">Нет</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Логин (Basic Auth)</label>
+                        <input id="f-auth-user" placeholder="оставьте пусто для отключения">
+                    </div>
+                    <div class="form-group">
+                        <label>Пароль</label>
+                        <input id="f-auth-pass" type="password" placeholder="">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeModal('modal-add-service')">Отмена</button>
+                <button class="btn btn-primary" onclick="submitAddService()">Создать</button>
+            </div>
+        </div>
+    </div>
 
-        async function action(name, act) {
-            const btn = event.target;
-            const originalText = btn.innerText;
-            btn.innerText = '...';
-            btn.disabled = true;
-            
-            try {
-                await fetch(\`/api/action/\${name}/\${act}\`, { method: 'POST' });
-                setTimeout(fetchData, 2000); // Даем время скрипту отработать
-            } catch (err) {
-                alert('Ошибка выполнения команды');
-            } finally {
-                btn.disabled = false;
-                btn.innerText = originalText;
-            }
-        }
+    <!-- ==================== МОДАЛКА: Добавить VPS ==================== -->
+    <div class="modal-overlay" id="modal-add-vps">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Новый VPS сервер</h3>
+                <button class="btn btn-icon btn-sm" onclick="closeModal('modal-add-vps')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Название (ID)</label>
+                    <input id="v-name" placeholder="my-vps">
+                </div>
+                <div class="form-group">
+                    <label>IP адрес (Host)</label>
+                    <input id="v-host" placeholder="1.2.3.4">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Пользователь</label>
+                        <input id="v-user" value="root">
+                    </div>
+                    <div class="form-group">
+                        <label>Порт SSH</label>
+                        <input id="v-port" value="22">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeModal('modal-add-vps')">Отмена</button>
+                <button class="btn btn-primary" onclick="submitAddVps()">Добавить</button>
+            </div>
+        </div>
+    </div>
 
-        function refreshData() {
-            fetchData();
-        }
+    <!-- ==================== МОДАЛКА: Health Check ==================== -->
+    <div class="modal-overlay" id="modal-health">
+        <div class="modal" style="max-width:600px">
+            <div class="modal-header">
+                <h3 id="health-title">Health Check</h3>
+                <button class="btn btn-icon btn-sm" onclick="closeModal('modal-health')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="log-panel" id="health-output" style="min-height:200px;">Загрузка...</div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeModal('modal-health')">Закрыть</button>
+            </div>
+        </div>
+    </div>
 
-        fetchData();
-        setInterval(fetchData, 10000); // Обновление раз в 10 сек
-    </script>
+<script>
+// ========== Утилиты ==========
+function toast(msg, type='') {
+    const c = document.getElementById('toasts');
+    const d = document.createElement('div');
+    d.className = 'toast ' + type;
+    d.textContent = msg;
+    c.appendChild(d);
+    setTimeout(() => d.remove(), 4000);
+}
+
+async function api(path, opts={}) {
+    try {
+        const r = await fetch('/api/' + path, {
+            headers: {'Content-Type': 'application/json'},
+            ...opts
+        });
+        if (!r.ok) {
+            const t = await r.text();
+            throw new Error(t || r.statusText);
+        }
+        return await r.json();
+    } catch(e) {
+        toast('Ошибка: ' + e.message, 'error');
+        throw e;
+    }
+}
+
+// ========== Навигация ==========
+document.querySelectorAll('#tabs button').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('#tabs button').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('page-' + btn.dataset.tab).classList.add('active');
+        // Подгрузка данных при переключении
+        if (btn.dataset.tab === 'vps') loadVps();
+        if (btn.dataset.tab === 'logs') populateLogSelect();
+    });
+});
+
+function closeModal(id) { document.getElementById(id).classList.remove('visible'); }
+function openModal(id) { document.getElementById(id).classList.add('visible'); }
+
+// ========== Сервисы ==========
+let servicesData = [];
+let vpsData = [];
+
+async function loadStats() {
+    try {
+        const d = await api('stats');
+        document.getElementById('s-total').textContent = d.services;
+        document.getElementById('s-online').textContent = d.online;
+        document.getElementById('s-vps').textContent = d.vps;
+    } catch(e) {}
+}
+
+async function loadServices() {
+    try {
+        const d = await api('services');
+        servicesData = d.services || [];
+        renderServices();
+    } catch(e) {
+        document.getElementById('services-table').innerHTML = '<div class="empty"><p>Ошибка загрузки данных</p></div>';
+    }
+}
+
+function renderServices() {
+    const c = document.getElementById('services-table');
+    if (servicesData.length === 0) {
+        c.innerHTML = '<div class="empty"><div class="empty-icon">📡</div><p>Нет сервисов. Нажмите «+ Добавить» для создания.</p></div>';
+        return;
+    }
+    let html = `<div class="table-wrap"><table>
+        <thead><tr>
+            <th>Статус</th><th>Имя</th><th>Тип</th><th>Цель</th><th>Внешний</th><th>Домен</th><th>SSL</th><th>Действия</th>
+        </tr></thead><tbody>`;
+    servicesData.forEach(s => {
+        const isOn = s.status === 'online';
+        const badge = isOn ? '<span class="badge badge-online">● онлайн</span>' : '<span class="badge badge-offline">○ офлайн</span>';
+        const sslBadge = s.ssl ? '<span class="badge badge-ssl">✓</span>' : '<span style="color:var(--text3)">—</span>';
+        const domain = s.domain || '—';
+        html += `<tr>
+            <td data-label="Статус">${badge}</td>
+            <td data-label="Имя"><strong>${s.name}</strong></td>
+            <td data-label="Тип"><span class="badge badge-type">${s.type}</span></td>
+            <td data-label="Цель"><span class="mono">${s.target}</span></td>
+            <td data-label="Порт"><span class="mono">${s.ext_port}</span></td>
+            <td data-label="Домен"><span class="mono" style="font-size:11px">${domain}</span></td>
+            <td data-label="SSL">${sslBadge}</td>
+            <td data-label=""><div class="actions-cell">${isOn
+                ? `<button class="btn btn-sm btn-danger" onclick="svcAction('${s.id}','stop')">Стоп</button>`
+                : `<button class="btn btn-sm" onclick="svcAction('${s.id}','start')">Старт</button>`
+            }<button class="btn btn-sm" onclick="svcAction('${s.id}','restart')">↻</button>
+            <button class="btn btn-sm" onclick="svcAction('${s.id}','redeploy_nginx')">Nginx</button>
+            <button class="btn btn-sm btn-danger btn-icon" onclick="svcDelete('${s.id}')">✕</button>
+            </div></td>
+        </tr>`;
+    });
+    html += '</tbody></table></div>';
+    c.innerHTML = html;
+}
+
+async function svcAction(name, action) {
+    toast(`${action}... ${name}`);
+    try {
+        await api(`action/${name}/${action}`, {method:'POST'});
+        toast(`${name}: ${action} — ОК`, 'success');
+        setTimeout(refreshAll, 2000);
+    } catch(e) {}
+}
+
+async function svcDelete(name) {
+    if (!confirm(`Удалить сервис "${name}"? Это действие необратимо.`)) return;
+    try {
+        await api(`action/${name}/delete`, {method:'POST'});
+        toast(`Сервис ${name} удалён`, 'success');
+        setTimeout(refreshAll, 1000);
+    } catch(e) {}
+}
+
+// ========== Добавить сервис ==========
+function openAddService() {
+    // Заполнить select VPS
+    const sel = document.getElementById('f-vps');
+    sel.innerHTML = vpsData.map(v => `<option value="${v.id}">${v.name} (${v.host})</option>`).join('');
+    if (vpsData.length === 0) sel.innerHTML = '<option value="">Нет VPS</option>';
+    openModal('modal-add-service');
+}
+
+function onTypeChange() {
+    const t = document.getElementById('f-type').value;
+    const row = document.getElementById('target-row');
+    if (t === 'ttyd') {
+        document.getElementById('f-host').value = '127.0.0.1';
+        document.getElementById('f-port').value = String(7682 + Math.floor(Math.random() * 100));
+        document.getElementById('f-port').disabled = true;
+    } else {
+        document.getElementById('f-port').disabled = false;
+    }
+}
+
+async function submitAddService() {
+    const data = {
+        name: document.getElementById('f-name').value.trim(),
+        type: document.getElementById('f-type').value,
+        vps: document.getElementById('f-vps').value,
+        target_host: document.getElementById('f-host').value.trim(),
+        target_port: document.getElementById('f-port').value.trim(),
+        domain: document.getElementById('f-domain').value.trim(),
+        ext_port: document.getElementById('f-ext-port').value.trim(),
+        ssl: document.getElementById('f-ssl').value,
+        auth_user: document.getElementById('f-auth-user').value.trim(),
+        auth_pass: document.getElementById('f-auth-pass').value.trim()
+    };
+    if (!data.name) { toast('Укажите название','error'); return; }
+    if (!data.vps) { toast('Выберите VPS','error'); return; }
+    if (!data.target_port) { toast('Укажите порт цели','error'); return; }
+
+    try {
+        await api('services', {method:'POST', body: JSON.stringify(data)});
+        closeModal('modal-add-service');
+        toast('Сервис создан!', 'success');
+        setTimeout(refreshAll, 1500);
+    } catch(e) {}
+}
+
+// ========== VPS ==========
+async function loadVps() {
+    try {
+        const d = await api('vps');
+        vpsData = d.vps || [];
+        renderVps();
+    } catch(e) {}
+}
+
+function renderVps() {
+    const c = document.getElementById('vps-container');
+    if (vpsData.length === 0) {
+        c.innerHTML = '<div class="empty"><div class="empty-icon">🖥</div><p>Нет серверов. Нажмите «+ Добавить VPS».</p></div>';
+        return;
+    }
+    c.innerHTML = '<div class="vps-grid">' + vpsData.map(v => `
+        <div class="vps-card">
+            <h4>${v.name}</h4>
+            <div class="vps-host">${v.user}@${v.host}</div>
+            <div class="vps-actions">
+                <button class="btn btn-sm" onclick="vpsHealth('${v.id}')">Health Check</button>
+                <button class="btn btn-sm" onclick="vpsCleanup('${v.id}')">Очистка</button>
+                <button class="btn btn-sm btn-danger" onclick="vpsDelete('${v.id}')">Удалить</button>
+            </div>
+        </div>
+    `).join('') + '</div>';
+}
+
+function openAddVps() { openModal('modal-add-vps'); }
+
+async function submitAddVps() {
+    const data = {
+        name: document.getElementById('v-name').value.trim(),
+        host: document.getElementById('v-host').value.trim(),
+        user: document.getElementById('v-user').value.trim() || 'root',
+        port: document.getElementById('v-port').value.trim() || '22'
+    };
+    if (!data.name || !data.host) { toast('Заполните название и IP','error'); return; }
+    try {
+        await api('vps', {method:'POST', body: JSON.stringify(data)});
+        closeModal('modal-add-vps');
+        toast('VPS добавлен!', 'success');
+        loadVps();
+    } catch(e) {}
+}
+
+async function vpsDelete(name) {
+    if (!confirm(`Удалить VPS "${name}"?`)) return;
+    try {
+        await api(`vps/${name}`, {method:'DELETE'});
+        toast('VPS удалён', 'success');
+        loadVps();
+    } catch(e) {}
+}
+
+async function vpsHealth(name) {
+    document.getElementById('health-title').textContent = 'Health: ' + name;
+    document.getElementById('health-output').textContent = 'Запрос данных...';
+    openModal('modal-health');
+    try {
+        const d = await api(`vps/${name}/health`);
+        let text = '';
+        text += `Nginx:      ${d.nginx || '?'}\n`;
+        text += `SSL Timer:  ${d.ssl_timer || '?'}\n`;
+        if (d.next_run) text += `Следующий:  ${d.next_run}\n`;
+        text += '\n';
+        if (d.certs && d.certs.length > 0) {
+            text += '--- Сертификаты ---\n';
+            d.certs.forEach(c => {
+                text += `  Домены: ${c.domains}\n`;
+                text += `  Истекает: ${c.expiry} (осталось ${c.days} дн.)\n\n`;
+            });
+        } else {
+            text += 'Сертификаты не найдены.\n';
+        }
+        document.getElementById('health-output').textContent = text;
+    } catch(e) {
+        document.getElementById('health-output').textContent = 'Ошибка запроса.';
+    }
+}
+
+async function vpsCleanup(name) {
+    toast('Очистка VPS...');
+    try {
+        const d = await api(`vps/${name}/cleanup`, {method:'POST'});
+        toast(d.message || 'Готово', 'success');
+    } catch(e) {}
+}
+
+// ========== Логи ==========
+async function populateLogSelect() {
+    try {
+        const d = await api('services');
+        const sel = document.getElementById('log-service-select');
+        const svcs = d.services || [];
+        sel.innerHTML = '<option value="">Выберите сервис...</option>' + svcs.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+    } catch(e) {}
+}
+
+async function loadLogs() {
+    const name = document.getElementById('log-service-select').value;
+    if (!name) { toast('Выберите сервис','error'); return; }
+    const out = document.getElementById('log-output');
+    out.textContent = 'Загрузка...';
+    try {
+        const d = await api(`services/${name}/logs`);
+        let text = '';
+        if (d.tunnel) { text += '=== Лог туннеля ===\n' + d.tunnel + '\n\n'; }
+        if (d.ttyd) { text += '=== Лог ttyd ===\n' + d.ttyd + '\n\n'; }
+        if (d.autossh) { text += '=== Лог autossh ===\n' + d.autossh + '\n\n'; }
+        if (!text) text = 'Логи пусты или не найдены.';
+        out.textContent = text;
+        out.scrollTop = out.scrollHeight;
+    } catch(e) {
+        out.textContent = 'Ошибка загрузки логов.';
+    }
+}
+
+// ========== Система ==========
+async function selfUpdate() {
+    if (!confirm('Запустить обновление rProxy? Веб-интерфейс будет перезапущен.')) return;
+    toast('Запуск обновления...');
+    try { await api('system/update', {method:'POST'}); } catch(e) {}
+}
+
+async function hardReset() {
+    if (!confirm('ВНИМАНИЕ! Это удалит ВСЕ настройки, ключи и данные rProxy. Вы уверены?')) return;
+    if (!confirm('ПОСЛЕДНЕЕ ПРЕДУПРЕЖДЕНИЕ: данные будут потеряны безвозвратно!')) return;
+    try { await api('system/reset', {method:'POST'}); toast('Очистка завершена','success'); } catch(e) {}
+}
+
+// ========== Общее ==========
+async function refreshAll() {
+    await Promise.all([loadStats(), loadServices(), loadVps()]);
+}
+
+// Старт
+refreshAll();
+setInterval(loadStats, 8000);
+setInterval(loadServices, 10000);
+</script>
 </body>
 </html>
