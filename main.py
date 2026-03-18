@@ -39,8 +39,12 @@ debug(True)
 
 @post('/api/system/update')
 def update_system():
-    ProcessManager.self_update(web=True)
-    return {"status": "success"}
+    try:
+        ProcessManager.self_update(web=True)
+        return {"status": "success"}
+    except Exception as e:
+        response.status = 500
+        return {"status": "error", "message": str(e)}
 
 @get('/api/system/update/log')
 def get_update_log():

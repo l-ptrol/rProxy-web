@@ -97,7 +97,7 @@ def header(text):
     _safe_print(f"\n{CYAN}{BOLD}{text}{NC}")
 
 def draw_separator():
-    print(f"{DIM}──────────────────────────────────────────────────{NC}")
+    _safe_print(f"{DIM}──────────────────────────────────────────────────{NC}")
 
 def get_router_ip():
     """Автоопределение IP роутера (ndmq / ip route / default)"""
