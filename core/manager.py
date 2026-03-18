@@ -236,7 +236,7 @@ if __name__ == "__main__":
         target_port = svc_cfg.get('SVC_TARGET_PORT') or "80"
         
         if svc_cfg.get('SVC_TYPE') == 'ttyd':
-            ttyd_port = svc_cfg.get('SVC_TARGET_PORT', 7681)
+            ttyd_port = svc_cfg.get('SVC_TARGET_PORT', 7682)
             ttyd_cmd = svc_cfg.get('SVC_TTYD_CMD', 'login')
             if ProcessManager.start_ttyd(ttyd_port, ttyd_cmd, name):
                 target_host = "127.0.0.1"
@@ -429,7 +429,7 @@ if __name__ == "__main__":
         
         # 2. TTYD
         if svc_cfg:
-            ttyd_port = svc_cfg.get('SVC_TTYD_PORT', 7681)
+            ttyd_port = svc_cfg.get('SVC_TTYD_PORT', 7682)
             ProcessManager.stop_ttyd(ttyd_port)
             
             # 3. SOCAT (UDP мост)
@@ -446,7 +446,7 @@ if __name__ == "__main__":
                 subprocess.run([pkill_bin, "-f", f"TCP4-LISTEN:{tun_port}"], env=ProcessManager._get_env(), stderr=subprocess.DEVNULL)
         else:
             # Если конфига нет, пробуем убить по стандартному порту (для очистки)
-            ProcessManager.stop_ttyd(7681)
+            ProcessManager.stop_ttyd(7682)
         
         msg(f"Сервис '{name}' остановлен.")
         return True

@@ -7,7 +7,7 @@ from core.utils import msg, pause, warn, err, header, draw_separator, get_router
 from core.config import ConfigManager
 from core.vps import VPSManager
 from core.manager import ProcessManager
-VERSION = "7.1.9"
+VERSION = "7.1.10"
 
 class RProxyCLI:
     def __init__(self):
@@ -457,7 +457,7 @@ class RProxyCLI:
             elif step == 3: # Цель
                 if svc_type == 'ttyd':
                     target_host = "127.0.0.1"
-                    target_port = old_cfg.get('SVC_TARGET_PORT', random.randint(7681, 7781))
+                    target_port = old_cfg.get('SVC_TARGET_PORT', random.randint(7682, 7782))
                     msg(f"Для ttyd будет использован порт {target_port}")
                     step = 4
                     continue
