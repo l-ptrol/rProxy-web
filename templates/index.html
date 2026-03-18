@@ -243,6 +243,7 @@
         .mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
         
         .svc-link:hover { text-decoration: underline !important; }
+        .auth-item:hover { background: var(--surface2); color: var(--accent); }
 
         .actions-cell { display: flex; gap: 4px; flex-wrap: wrap; }
 
@@ -579,9 +580,13 @@
                     </div>
                 </div>
                 <div class="form-row">
-                    <div class="form-group">
+                    <div class="form-group" style="position:relative;">
                         <label>Логин (Basic Auth)</label>
-                        <input id="f-auth-user" placeholder="оставьте пусто для отключения">
+                        <input id="f-auth-user" placeholder="оставьте пусто для отключения" onclick="showAuthDropdown()" onblur="setTimeout(hideAuthDropdown, 200)">
+                        <div id="auth-dropdown" style="display:none; position:absolute; top:100%; left:0; right:0; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:8px; z-index:10; box-shadow:var(--shadow);">
+                            <div style="font-size:11px; color:var(--text3); margin-bottom:4px">Сохраненные данные:</div>
+                            <div class="auth-item" onclick="selectDefaultAuth()" style="padding:6px 8px; cursor:pointer; border-radius:4px; font-weight:600;" id="auth-item-user"></div>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label>Пароль</label>
@@ -743,9 +748,11 @@ function renderServices() {
             domainDisplay = `<a href="${url}" target="_blank" class="svc-link" style="color: var(--accent); text-decoration: none;" title="Открыть в новой вкладке">${domainDisplay} ↗</a>`;
         }
 
+        const nameDisplay = s.auth ? `<strong>${s.name}</strong> <span title="Защищено паролем" style="font-size:11px">🔒</span>` : `<strong>${s.name}</strong>`;
+
         html += `<tr>
             <td data-label="Статус">${badge}</td>
-            <td data-label="Имя"><strong>${s.name}</strong></td>
+            <td data-label="Имя">${nameDisplay}</td>
             <td data-label="Тип"><span class="badge badge-type">${s.type}</span></td>
             <td data-label="Цель"><span class="mono">${s.target}</span></td>
             <td data-label="Порт"><span class="mono">${s.ext_port}</span></td>
@@ -783,11 +790,44 @@ async function svcDelete(name) {
 }
 
 // ========== Добавить сервис ==========
-function openAddService() {
+let defaultAuth = null;
+async function checkDefaultAuth() {
+    if (defaultAuth !== null) return;
+    try {
+        const d = await api('settings/auth');
+        if (d.user) defaultAuth = d;
+        else defaultAuth = {user: '', pass: ''};
+    } catch(e) {
+        defaultAuth = {user: '', pass: ''};
+    }
+}
+function showAuthDropdown() {
+    if (defaultAuth && defaultAuth.user) {
+        document.getElementById('auth-dropdown').style.display = 'block';
+    }
+}
+function hideAuthDropdown() {
+    document.getElementById('auth-dropdown').style.display = 'none';
+}
+function selectDefaultAuth() {
+    if (defaultAuth && defaultAuth.user) {
+        document.getElementById('f-auth-user').value = defaultAuth.user;
+        document.getElementById('f-auth-pass').value = defaultAuth.pass;
+    }
+    hideAuthDropdown();
+}
+
+async function openAddService() {
     // Заполнить select VPS
     const sel = document.getElementById('f-vps');
     sel.innerHTML = vpsData.map(v => `<option value="${v.id}">${v.name} (${v.host})</option>`).join('');
     if (vpsData.length === 0) sel.innerHTML = '<option value="">Нет VPS</option>';
+    
+    await checkDefaultAuth();
+    if (defaultAuth && defaultAuth.user) {
+        document.getElementById('auth-item-user').textContent = defaultAuth.user;
+    }
+    
     openModal('modal-add-service');
 }
 

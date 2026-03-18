@@ -83,6 +83,7 @@ def list_services():
                     "ext_port": cfg.get("SVC_EXT_PORT", ""),
                     "domain": cfg.get("SVC_DOMAIN", ""),
                     "ssl": cfg.get("SVC_SSL", "no") == "yes",
+                    "auth": bool(cfg.get("SVC_AUTH_USER")),
                     "status": "online" if ProcessManager.is_running(name) else "offline"
                 })
     return {"services": services}
@@ -141,6 +142,17 @@ def create_service():
     except Exception as e:
         return HTTPResponse(status=500, body=str(e))
 
+
+# ==================== API: Настройки (Auth, etc) ====================
+
+@get('/api/settings/auth')
+def get_default_auth():
+    g_path = os.path.join(RPROXY_ROOT, "rproxy.conf")
+    g_cfg = ConfigManager.load(g_path)
+    return {
+        "user": g_cfg.get('DEFAULT_AUTH_USER', ''),
+        "pass": g_cfg.get('DEFAULT_AUTH_PASS', '')
+    }
 
 # ==================== API: Действия с сервисами ====================
 
