@@ -58,17 +58,26 @@
             line-height: 1.5;
         }
 
+        /* Контейнер */
+        .container {
+            max-width: 1080px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
         /* Шапка */
         .topbar {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+        .topbar .container {
             display: flex;
             align-items: center;
             justify-content: space-between;
             padding: 16px 24px;
-            border-bottom: 1px solid var(--border);
-            background: var(--surface);
-            position: sticky;
-            top: 0;
-            z-index: 50;
         }
         .topbar-left {
             display: flex;
@@ -93,11 +102,13 @@
 
         /* Навигация (табы) */
         .tabs {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+        }
+        .tabs .container {
             display: flex;
             gap: 2px;
             padding: 12px 24px 0;
-            background: var(--surface);
-            border-bottom: 1px solid var(--border);
             overflow-x: auto;
         }
         .tabs button {
@@ -120,7 +131,7 @@
         }
 
         /* Контент */
-        .page { display: none; padding: 24px; max-width: 960px; margin: 0 auto; }
+        .page { display: none; padding: 24px; max-width: 1080px; margin: 0 auto; width: 100%; }
         .page.active { display: block; }
 
         /* Статистика */
@@ -230,6 +241,8 @@
         .badge-ssl { background: var(--green-bg); color: var(--green); }
 
         .mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+        
+        .svc-link:hover { text-decoration: underline !important; }
 
         .actions-cell { display: flex; gap: 4px; flex-wrap: wrap; }
 
@@ -421,22 +434,26 @@
 
     <!-- Шапка -->
     <div class="topbar">
-        <div class="topbar-left">
-            <h1>rProxy</h1>
-            <span class="ver" id="app-ver">v{{version}}</span>
-        </div>
-        <div class="topbar-right">
-            <button class="btn btn-sm btn-icon" id="theme-toggle" onclick="toggleTheme()" title="Переключить тему">🌓</button>
-            <button class="btn btn-sm" onclick="refreshAll()">↻ Обновить</button>
+        <div class="container">
+            <div class="topbar-left">
+                <h1>rProxy</h1>
+                <span class="ver" id="app-ver">v{{version}}</span>
+            </div>
+            <div class="topbar-right">
+                <button class="btn btn-sm btn-icon" id="theme-toggle" onclick="toggleTheme()" title="Переключить тему">🌓</button>
+                <button class="btn btn-sm" onclick="refreshAll()">↻ Обновить</button>
+            </div>
         </div>
     </div>
 
     <!-- Табы -->
-    <div class="tabs" id="tabs">
-        <button class="active" data-tab="services">Сервисы</button>
-        <button data-tab="vps">VPS</button>
-        <button data-tab="logs">Логи</button>
-        <button data-tab="system">Система</button>
+    <div class="tabs">
+        <div class="container" id="tabs">
+            <button class="active" data-tab="services">Сервисы</button>
+            <button data-tab="vps">VPS</button>
+            <button data-tab="logs">Логи</button>
+            <button data-tab="system">Система</button>
+        </div>
     </div>
 
     <!-- ==================== СЕРВИСЫ ==================== -->
@@ -716,14 +733,23 @@ function renderServices() {
         const isOn = s.status === 'online';
         const badge = isOn ? '<span class="badge badge-online">● онлайн</span>' : '<span class="badge badge-offline">○ офлайн</span>';
         const sslBadge = s.ssl ? '<span class="badge badge-ssl">✓</span>' : '<span style="color:var(--text3)">—</span>';
-        const domain = s.domain || '—';
+        
+        let domainDisplay = s.domain || '—';
+        if (s.type === 'http' || s.type === 'ttyd') {
+            const host = s.domain || window.location.hostname;
+            const portStr = (s.ext_port == 80 || s.ext_port == 443) ? '' : `:${s.ext_port}`;
+            const proto = (s.ssl === true || s.ssl === 'yes' || s.ext_port == 443) ? 'https' : 'http';
+            const url = `${proto}://${host}${portStr}`;
+            domainDisplay = `<a href="${url}" target="_blank" class="svc-link" style="color: var(--accent); text-decoration: none;" title="Открыть в новой вкладке">${domainDisplay} ↗</a>`;
+        }
+
         html += `<tr>
             <td data-label="Статус">${badge}</td>
             <td data-label="Имя"><strong>${s.name}</strong></td>
             <td data-label="Тип"><span class="badge badge-type">${s.type}</span></td>
             <td data-label="Цель"><span class="mono">${s.target}</span></td>
             <td data-label="Порт"><span class="mono">${s.ext_port}</span></td>
-            <td data-label="Домен"><span class="mono" style="font-size:11px">${domain}</span></td>
+            <td data-label="Домен"><span class="mono" style="font-size:11px">${domainDisplay}</span></td>
             <td data-label="SSL">${sslBadge}</td>
             <td data-label=""><div class="actions-cell">${isOn
                 ? `<button class="btn btn-sm btn-danger" onclick="svcAction('${s.id}','stop')">Стоп</button>`
