@@ -598,7 +598,7 @@ if __name__ == "__main__":
                             print(f"      {line.strip()}")
 
     @staticmethod
-    def self_update():
+    def self_update(web=False):
         import time
         url = f"https://raw.githubusercontent.com/l-ptrol/rProxy-web/master/install.sh?t={int(time.time())}"
         msg("Запуск процесса обновления...")
@@ -607,13 +607,17 @@ if __name__ == "__main__":
         
         try:
             print(f"\n{CYAN}▸{NC} Загрузка и запуск инсталлера...")
-            # Исправлен путь лога на /tmp/ для надежности
             log_upd = "/tmp/rproxy_updater.log"
+            import os
+            if os.path.exists(log_upd):
+                os.remove(log_upd)
             os.system(f"nohup sh -c '{updater_cmd}' > {log_upd} 2>&1 &")
             msg("Инсталлер запущен в фоне. Сессия будет прервана.")
             msg(f"Лог обновления: {log_upd}")
-            time.sleep(1)
-            sys.exit(0)
+            if not web:
+                time.sleep(1)
+                sys.exit(0)
+            return True
         except Exception as e:
             err(f"Ошибка при запуске обновления: {e}")
             return False

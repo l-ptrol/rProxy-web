@@ -309,6 +309,22 @@
         }
         .form-group input:focus, .form-group select:focus { border-color: var(--accent); }
         .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+        /* Модалка обновления */
+        #modal-update pre {
+            background: var(--bg);
+            padding: 12px;
+            border-radius: var(--radius);
+            height: 300px;
+            overflow-y: auto;
+            font-size: 11px;
+            color: var(--text2);
+            margin: 10px 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
         .form-hint { font-size: 11px; color: var(--text3); margin-top: 4px; }
 
         /* Лог-панель */
@@ -518,7 +534,7 @@
                 <div class="stat-value" style="font-size:16px">Keenetic • Entware • Python</div>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
-                <button class="btn" onclick="selfUpdate()">🔄 Обновить rProxy</button>
+                <button class="btn" onclick="updateApp()">🔄 Обновить rProxy</button>
                 <button class="btn btn-danger" onclick="hardReset()">☢ Hard Reset</button>
             </div>
         </div>
@@ -647,6 +663,22 @@
             </div>
             <div class="modal-footer">
                 <button class="btn" onclick="closeModal('modal-health')">Закрыть</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== МОДАЛКА: ОБНОВЛЕНИЕ ==================== -->
+    <div class="modal-overlay" id="modal-update">
+        <div class="modal" style="width: 600px; max-width: 95%">
+            <div class="modal-header">
+                <h3>Обновление rProxy</h3>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom: 8px;">Выполняется установка... Страница перезагрузится по окончанию.</p>
+                <pre id="update-log">Запуск процесса...</pre>
+                <div style="text-align:center; padding: 10px;" id="update-spinner">
+                    <span class="badge badge-online">⏳ Подождите...</span>
+                </div>
             </div>
         </div>
     </div>

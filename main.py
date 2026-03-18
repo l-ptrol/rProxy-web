@@ -35,6 +35,21 @@ class ThreadingServer(bottle.ServerAdapter):
 bottle.TEMPLATE_PATH.insert(0, './templates')
 debug(True)
 
+# ==================== API: Система ====================
+
+@post('/api/system/update')
+def update_system():
+    ProcessManager.self_update(web=True)
+    return {"status": "success"}
+
+@get('/api/system/update/log')
+def get_update_log():
+    log_upd = "/tmp/rproxy_updater.log"
+    if os.path.exists(log_upd):
+        with open(log_upd, 'r', errors='replace') as f:
+            return {"log": f.read()}
+    return {"log": "Ожидание запуска установщика..."}
+
 # ==================== Страницы ====================
 
 @route('/')
