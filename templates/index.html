@@ -552,25 +552,20 @@
                     <label>Название (лат., без пробелов)</label>
                     <input id="f-name" placeholder="my-app">
                 </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Тип</label>
-                        <select id="f-type" onchange="onTypeChange()">
-                            <option value="http">HTTP Proxy</option>
-                            <option value="tcp">TCP Tunnel</option>
-                            <option value="ttyd">Web Terminal</option>
-                            <option value="ssh">SSH Access</option>
-                            <option value="udp">UDP Port</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>VPS сервер</label>
-                        <select id="f-vps"></select>
-                    </div>
+                <div class="form-group">
+                    <label>Тип сервиса</label>
+                    <select id="f-type" onchange="onTypeChange()">
+                        <option value="http">HTTP Proxy</option>
+                        <option value="tcp">TCP Tunnel</option>
+                        <option value="ttyd">Web Terminal</option>
+                        <option value="ssh">SSH Access</option>
+                        <option value="udp">UDP Port</option>
+                    </select>
                 </div>
+                
                 <div class="form-row" id="target-row">
                     <div class="form-group">
-                        <label>IP цели</label>
+                        <label>IP цели (Локально)</label>
                         <input id="f-host" value="127.0.0.1" placeholder="127.0.0.1">
                     </div>
                     <div class="form-group">
@@ -578,26 +573,43 @@
                         <input id="f-port" placeholder="80">
                     </div>
                 </div>
+
                 <div class="form-group">
-                    <label>Домен (пусто = по IP)</label>
-                    <input id="f-domain" placeholder="example.com">
+                    <label>Домен (внешний адрес)</label>
+                    <div style="display:flex; gap:8px;">
+                        <input id="f-domain" placeholder="example.com" style="flex:1;">
+                        <button class="btn" onclick="checkDomainVps()" type="button" style="white-space:nowrap;">Проверить IP</button>
+                    </div>
+                    <div id="domain-hint" class="form-hint" style="min-height: 16px;"></div>
                 </div>
+
+                <div class="form-group">
+                    <label>VPS сервер</label>
+                    <select id="f-vps">
+                        <option value="">-- Выберите VPS --</option>
+                    </select>
+                </div>
+
                 <div class="form-row">
                     <div class="form-group">
                         <label>Внешний порт</label>
                         <input id="f-ext-port" value="443" placeholder="443">
                     </div>
                     <div class="form-group">
-                        <label>SSL</label>
+                        <label>Обеспечить SSL</label>
                         <select id="f-ssl">
                             <option value="yes">Да</option>
                             <option value="no">Нет</option>
                         </select>
                     </div>
                 </div>
+
                 <div class="form-row">
                     <div class="form-group" style="position:relative;">
-                        <label>Логин (Basic Auth)</label>
+                        <label>
+                            Логин (Basic Auth)
+                            <span style="float:right;cursor:pointer;color:var(--text3);" onclick="clearAuth()" title="Очистить данные">✕</span>
+                        </label>
                         <input id="f-auth-user" placeholder="оставьте пусто для отключения" onclick="showAuthDropdown()" onblur="setTimeout(hideAuthDropdown, 200)">
                         <div id="auth-dropdown" style="display:none; position:absolute; top:100%; left:0; right:0; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:8px; z-index:10; box-shadow:var(--shadow);">
                             <div style="font-size:11px; color:var(--text3); margin-bottom:4px">Сохраненные данные:</div>
@@ -605,7 +617,10 @@
                         </div>
                     </div>
                     <div class="form-group">
-                        <label>Пароль</label>
+                        <label>
+                            Пароль
+                            <span style="float:right;cursor:pointer;color:var(--text3);" onclick="toggleAuthPass()" id="toggle-pass-btn" title="Показать/скрыть">👁</span>
+                        </label>
                         <input id="f-auth-pass" type="password" placeholder="">
                     </div>
                 </div>
@@ -849,12 +864,61 @@ function selectDefaultAuth() {
     hideAuthDropdown();
 }
 
+function clearAuth() {
+    document.getElementById('f-auth-user').value = '';
+    document.getElementById('f-auth-pass').value = '';
+}
+function toggleAuthPass() {
+    const p = document.getElementById('f-auth-pass');
+    const b = document.getElementById('toggle-pass-btn');
+    if (p.type === 'password') {
+        p.type = 'text';
+        b.style.color = 'var(--accent)';
+    } else {
+        p.type = 'password';
+        b.style.color = 'var(--text3)';
+    }
+}
+
+async function checkDomainVps() {
+    const domain = document.getElementById('f-domain').value.trim();
+    const hint = document.getElementById('domain-hint');
+    if (!domain) {
+        hint.innerHTML = '';
+        return;
+    }
+    
+    hint.innerHTML = 'Проверка...';
+    hint.style.color = 'var(--text3)';
+    try {
+        const res = await api(`dns/resolve?domain=${domain}`, 'GET');
+        if (res.ip) {
+            const vps = vpsData.find(v => v.host === res.ip);
+            if (vps) {
+                document.getElementById('f-vps').value = vps.id;
+                hint.innerHTML = `✓ Домен указывает на ${res.ip}. Выбран VPS: ${vps.name}`;
+                hint.style.color = 'var(--green)';
+            } else {
+                hint.innerHTML = `⚠ Домен указывает на ${res.ip}, но такого VPS у вас нет. <a href="#" onclick="closeModal('modal-add-service'); document.querySelector('[data-tab=vps]').click(); openModal('modal-add-vps');" style="color:var(--orange); text-decoration:underline;">Добавить?</a>`;
+                hint.style.color = 'var(--orange)';
+            }
+        } else {
+            hint.innerHTML = `Не удалось определить IP для домена.`;
+            hint.style.color = 'var(--red)';
+        }
+    } catch(e) {
+        hint.innerHTML = `Ошибка проверки.`;
+        hint.style.color = 'var(--red)';
+    }
+}
+
 async function openAddService() {
     // Заполнить select VPS
     const sel = document.getElementById('f-vps');
-    sel.innerHTML = vpsData.map(v => `<option value="${v.id}">${v.name} (${v.host})</option>`).join('');
+    sel.innerHTML = '<option value="">-- Выберите VPS --</option>' + vpsData.map(v => `<option value="${v.id}">${v.name} (${v.host})</option>`).join('');
     if (vpsData.length === 0) sel.innerHTML = '<option value="">Нет VPS</option>';
     
+    document.getElementById('domain-hint').innerHTML = ''; // очистить
     await checkDefaultAuth();
     if (defaultAuth && defaultAuth.user) {
         document.getElementById('auth-item-user').textContent = defaultAuth.user;

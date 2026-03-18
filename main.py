@@ -50,6 +50,18 @@ def get_update_log():
             return {"log": f.read()}
     return {"log": "Ожидание запуска установщика..."}
 
+@get('/api/dns/resolve')
+def resolve_domain():
+    import socket
+    domain = request.query.get('domain', '').strip()
+    if not domain:
+        return {"ip": None}
+    try:
+        ip = socket.gethostbyname(domain)
+        return {"ip": ip}
+    except Exception as e:
+        return {"ip": None, "error": str(e)}
+
 # ==================== Страницы ====================
 
 @route('/')
