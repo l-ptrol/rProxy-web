@@ -715,6 +715,8 @@ function toast(msg, type='') {
     setTimeout(() => d.remove(), 4000);
 }
 
+let _suppressToasts = false;
+
 async function api(path, opts={}) {
     try {
         const r = await fetch('/api/' + path, {
@@ -727,7 +729,7 @@ async function api(path, opts={}) {
         }
         return await r.json();
     } catch(e) {
-        toast('Ошибка: ' + e.message, 'error');
+        if (!_suppressToasts) toast('Ошибка: ' + e.message, 'error');
         throw e;
     }
 }
@@ -1088,17 +1090,22 @@ let updateLogTimer = null;
 async function updateApp() {
     if(!confirm('Обновить систему до последней версии?')) return;
     
+    // Подавляем тосты на время обновления
+    _suppressToasts = true;
+    
     document.getElementById('modal-update').style.display = 'flex';
     document.getElementById('update-log').textContent = 'Отправка команды...';
+    document.getElementById('update-spinner').style.display = '';
     
     try {
         await api('system/update', {method: 'POST'});
+        document.getElementById('update-log').textContent = 'Команда отправлена. Ожидание начала установки...';
     } catch(e) { 
         document.getElementById('update-log').textContent += '\nОшибка запуска: ' + e.message;
-        // Всё равно запускаем polling — ошибка может быть записана в лог
     }
     
     let fails = 0;
+    let disconnected = false;
     updateLogTimer = setInterval(async () => {
         try {
             const res = await api('system/update/log');
@@ -1107,22 +1114,32 @@ async function updateApp() {
                 el.textContent = res.log;
                 el.scrollTop = el.scrollHeight;
             }
-            if (res.log && (res.log.includes('Restarting rProxy') || res.log.includes('Установка завершена'))) {
-                document.getElementById('update-log').textContent += '\n\nУстановка завершена! Перезагрузка страницы...';
-                setTimeout(() => location.reload(), 3000);
-                clearInterval(updateLogTimer);
-            }
             fails = 0;
+            disconnected = false;
+            // Проверяем завершение
+            if (res.log && (res.log.includes('Restarting rProxy') || res.log.includes('Установка завершена') || res.log.includes('rProxy installed'))) {
+                el.textContent += '\n\n✅ Установка завершена! Перезагрузка страницы...';
+                document.getElementById('update-spinner').innerHTML = '<span class="badge badge-online">✅ Готово!</span>';
+                clearInterval(updateLogTimer);
+                _suppressToasts = false;
+                setTimeout(() => location.reload(), 3000);
+            }
         } catch(e) {
             fails++;
-            if (fails > 4) {
-                // Если бэкенд выключился для рестарта
-                document.getElementById('update-log').textContent += '\n\nСоединение разорвано. Ожидание перезапуска сервера...';
-                setTimeout(() => location.reload(), 5000);
+            // Показываем сообщение только один раз
+            if (!disconnected && fails > 2) {
+                disconnected = true;
+                document.getElementById('update-log').textContent += '\n\n⏳ Сервер перезапускается... Ожидание.';
+                document.getElementById('update-spinner').innerHTML = '<span class="badge" style="background:var(--orange);color:#fff;">⏳ Перезапуск...</span>';
+            }
+            if (fails > 15) {
+                // Слишком долго недоступен — просто перезагружаем
                 clearInterval(updateLogTimer);
+                _suppressToasts = false;
+                location.reload();
             }
         }
-    }, 1000);
+    }, 1500);
 }
 
 async function hardReset() {
