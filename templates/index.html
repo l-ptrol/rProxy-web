@@ -689,11 +689,15 @@
                 <h3>Обновление rProxy</h3>
             </div>
             <div class="modal-body">
-                <p style="margin-bottom: 8px;">Выполняется установка... Страница перезагрузится по окончанию.</p>
+                <p style="margin-bottom: 8px;">Выполняется установка...</p>
                 <pre id="update-log">Запуск процесса...</pre>
                 <div style="text-align:center; padding: 10px;" id="update-spinner">
                     <span class="badge badge-online">⏳ Подождите...</span>
                 </div>
+            </div>
+            <div class="modal-footer" id="update-footer" style="display:none;">
+                <button class="btn btn-outline" onclick="closeModal('modal-update')">Закрыть</button>
+                <button class="btn btn-primary" id="btn-reload-page" onclick="location.reload()">Перезагрузить страницу</button>
             </div>
         </div>
     </div>
@@ -1101,7 +1105,8 @@ async function updateApp() {
         await api('system/update', {method: 'POST'});
         document.getElementById('update-log').textContent = 'Команда отправлена. Ожидание начала установки...';
     } catch(e) { 
-        document.getElementById('update-log').textContent += '\nОшибка запуска: ' + e.message;
+        // Фоновый процесс часто вызывает обрыв соединения при старте, игнорируем ошибку
+        document.getElementById('update-log').textContent = 'Команда отправлена (в фоне). Ожидание начала установки...';
     }
     
     let fails = 0;
@@ -1118,11 +1123,11 @@ async function updateApp() {
             disconnected = false;
             // Проверяем завершение
             if (res.log && (res.log.includes('Restarting rProxy') || res.log.includes('Установка завершена') || res.log.includes('rProxy installed'))) {
-                el.textContent += '\n\n✅ Установка завершена! Перезагрузка страницы...';
+                el.textContent += '\n\n✅ Обновление физически завершено!\nТеперь вы можете перезагрузить страницу.';
                 document.getElementById('update-spinner').innerHTML = '<span class="badge badge-online">✅ Готово!</span>';
+                document.getElementById('update-footer').style.display = 'flex';
                 clearInterval(updateLogTimer);
                 _suppressToasts = false;
-                setTimeout(() => location.reload(), 3000);
             }
         } catch(e) {
             fails++;
