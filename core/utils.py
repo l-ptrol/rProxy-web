@@ -69,22 +69,32 @@ def _get_ssh_args(bin_path, host, user, port, key_path=None, scp=False):
     
     return args
 
+def _safe_print(text, file=sys.stdout):
+    try:
+        print(text, file=file)
+    except UnicodeEncodeError:
+        text_safe = text.encode('ascii', 'replace').decode('ascii')
+        print(text_safe, file=file)
+
 def msg(text):
-    print(f"{GREEN}▸{NC} {text}")
+    _safe_print(f"{GREEN}▸{NC} {text}")
 
 def pause():
-    input(f"\n{BOLD}Нажмите Enter, чтобы продолжить...{NC}")
+    try:
+        input(f"\n{BOLD}Нажмите Enter, чтобы продолжить...{NC}")
+    except (EOFError, KeyboardInterrupt):
+        pass
 
 def warn(text):
-    print(f"{YELLOW}⚠{NC} {text}")
+    _safe_print(f"{YELLOW}⚠{NC} {text}")
 
 def err(text, exit_code=None):
-    print(f"{RED}✖{NC} {text}", file=sys.stderr)
+    _safe_print(f"{RED}✖{NC} {text}", file=sys.stderr)
     if exit_code is not None:
         sys.exit(exit_code)
 
 def header(text):
-    print(f"\n{CYAN}{BOLD}{text}{NC}")
+    _safe_print(f"\n{CYAN}{BOLD}{text}{NC}")
 
 def draw_separator():
     print(f"{DIM}──────────────────────────────────────────────────{NC}")
