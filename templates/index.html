@@ -1094,8 +1094,8 @@ async function updateApp() {
     try {
         await api('system/update', {method: 'POST'});
     } catch(e) { 
-        document.getElementById('update-log').textContent += '\nОшибка запуска: ' + e;
-        return; 
+        document.getElementById('update-log').textContent += '\nОшибка запуска: ' + e.message;
+        // Всё равно запускаем polling — ошибка может быть записана в лог
     }
     
     let fails = 0;

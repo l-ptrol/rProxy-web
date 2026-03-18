@@ -599,30 +599,51 @@ if __name__ == "__main__":
 
     @staticmethod
     def self_update(web=False):
-        import time
-        url = f"https://raw.githubusercontent.com/l-ptrol/rProxy-web/master/install.sh?t={int(time.time())}"
-        msg("Запуск процесса обновления...")
+        """Обновление rProxy из GitHub"""
+        import time as _time
+        import subprocess as _sp
         
-        updater_cmd = f"curl -sL '{url}' -o /tmp/rproxy_update.sh && sh /tmp/rproxy_update.sh"
+        url = f"https://raw.githubusercontent.com/l-ptrol/rProxy-web/master/install.sh?t={int(_time.time())}"
+        log_upd = "/tmp/rproxy_updater.log"
         
+        # Очищаем старый лог
         try:
-            msg("Загрузка и запуск инсталлера...")
-            log_upd = "/tmp/rproxy_updater.log"
-            # Очищаем старый лог перед запуском
+            if os.path.exists(log_upd):
+                os.remove(log_upd)
+        except Exception:
+            pass
+        
+        # Записываем начальный статус в лог
+        try:
+            with open(log_upd, 'w') as f:
+                f.write("Загрузка install.sh...\n")
+        except Exception:
+            pass
+        
+        # Запускаем обновление через Popen (не блокирует)
+        shell_cmd = f"curl -sL '{url}' -o /tmp/rproxy_update.sh && sh /tmp/rproxy_update.sh"
+        try:
+            log_fd = open(log_upd, 'w')
+            _sp.Popen(
+                ['sh', '-c', shell_cmd],
+                stdout=log_fd,
+                stderr=log_fd,
+                stdin=_sp.DEVNULL,
+                start_new_session=True
+            )
+        except Exception as e:
+            # Если Popen не удалось, fallback на os.system
             try:
-                if os.path.exists(log_upd):
-                    os.remove(log_upd)
+                with open(log_upd, 'w') as f:
+                    f.write(f"Popen failed: {e}\nFallback to os.system...\n")
             except Exception:
                 pass
-            os.system(f"nohup sh -c '{updater_cmd}' > {log_upd} 2>&1 &")
-            msg("Инсталлер запущен в фоне.")
-            if not web:
-                time.sleep(1)
-                sys.exit(0)
-            return True
-        except Exception as e:
-            err(f"Ошибка при запуске обновления: {e}")
-            return False
+            os.system(f"nohup sh -c '{shell_cmd}' > {log_upd} 2>&1 &")
+        
+        if not web:
+            _time.sleep(1)
+            sys.exit(0)
+        return True
 
     @staticmethod
     def hard_reset():

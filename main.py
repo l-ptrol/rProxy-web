@@ -16,7 +16,7 @@ RPROXY_ROOT = "/opt/etc/rproxy"
 SERVICES_DIR = os.path.join(RPROXY_ROOT, "services")
 VPS_DIR = os.path.join(RPROXY_ROOT, "vps")
 
-VERSION = "7.2.2"
+VERSION = "7.2.3"
 
 # Многопоточный сервер для Bottle
 from wsgiref.simple_server import WSGIServer, WSGIRequestHandler
@@ -43,8 +43,16 @@ def update_system():
         ProcessManager.self_update(web=True)
         return {"status": "success"}
     except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        # Записываем ошибку в лог для отладки
+        try:
+            with open('/tmp/rproxy_updater.log', 'w') as f:
+                f.write(f"ERROR in update_system:\n{tb}\n")
+        except Exception:
+            pass
         response.status = 500
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": str(e), "traceback": tb}
 
 @get('/api/system/update/log')
 def get_update_log():
