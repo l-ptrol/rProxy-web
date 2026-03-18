@@ -1083,10 +1083,46 @@ async function loadLogs() {
 }
 
 // ========== Система ==========
-async function selfUpdate() {
-    if (!confirm('Запустить обновление rProxy? Веб-интерфейс будет перезапущен.')) return;
-    toast('Запуск обновления...');
-    try { await api('system/update', {method:'POST'}); } catch(e) {}
+let updateLogTimer = null;
+
+async function updateApp() {
+    if(!confirm('Обновить систему до последней версии?')) return;
+    
+    document.getElementById('modal-update').style.display = 'flex';
+    document.getElementById('update-log').textContent = 'Отправка команды...';
+    
+    try {
+        await api('system/update', {method: 'POST'});
+    } catch(e) { 
+        document.getElementById('update-log').textContent += '\nОшибка запуска: ' + e;
+        return; 
+    }
+    
+    let fails = 0;
+    updateLogTimer = setInterval(async () => {
+        try {
+            const res = await api('system/update/log');
+            const el = document.getElementById('update-log');
+            if (res.log && res.log !== el.textContent) {
+                el.textContent = res.log;
+                el.scrollTop = el.scrollHeight;
+            }
+            if (res.log && (res.log.includes('Restarting rProxy') || res.log.includes('Установка завершена'))) {
+                document.getElementById('update-log').textContent += '\n\nУстановка завершена! Перезагрузка страницы...';
+                setTimeout(() => location.reload(), 3000);
+                clearInterval(updateLogTimer);
+            }
+            fails = 0;
+        } catch(e) {
+            fails++;
+            if (fails > 4) {
+                // Если бэкенд выключился для рестарта
+                document.getElementById('update-log').textContent += '\n\nСоединение разорвано. Ожидание перезапуска сервера...';
+                setTimeout(() => location.reload(), 5000);
+                clearInterval(updateLogTimer);
+            }
+        }
+    }, 1000);
 }
 
 async function hardReset() {
