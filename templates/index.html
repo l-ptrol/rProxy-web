@@ -646,12 +646,13 @@
 
     <!-- ==================== МОДАЛКА: Добавить сервис ==================== -->
     <div class="modal-overlay" id="modal-add-service">
-        <div class="modal">
+        <div class="modal" style="width: 700px; max-width: 95%">
             <div class="modal-header">
-                <h3>Новый сервис</h3>
+                <h3 id="modal-service-title">Деплой нового сервиса</h3>
                 <button class="btn btn-icon btn-sm" onclick="closeModal('modal-add-service')">✕</button>
             </div>
             <div class="modal-body">
+                <input type="hidden" id="f-edit-mode" value="false">
                 <div class="form-group">
                     <label>Название (лат., без пробелов)</label>
                     <input id="f-name" placeholder="my-app">
@@ -731,7 +732,7 @@
             </div>
             <div class="modal-footer">
                 <button class="btn" onclick="closeModal('modal-add-service')">Отмена</button>
-                <button class="btn btn-primary" onclick="submitAddService()">Создать</button>
+                <button class="btn btn-primary" id="btn-save-service" onclick="submitAddService()">Создать</button>
             </div>
         </div>
     </div>
@@ -1009,7 +1010,8 @@ function renderServices() {
             <td data-label=""><div class="btn-group">${isOn
                 ? `<button class="btn btn-icon" style="color:var(--orange)" data-tooltip="Остановить" onclick="svcAction('${s.id}','stop')"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg></button>`
                 : `<button class="btn btn-icon" style="color:var(--green)" data-tooltip="Запустить" onclick="svcAction('${s.id}','start')"><svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg></button>`
-            }<button class="btn btn-icon" data-tooltip="Перезапустить" onclick="svcAction('${s.id}','restart')"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><polyline points="3 3 3 8 8 8"></polyline></svg></button>
+            }<button class="btn btn-icon" data-tooltip="Редактировать" onclick="editService('${s.id}')"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button>
+            <button class="btn btn-icon" data-tooltip="Перезапустить" onclick="svcAction('${s.id}','restart')"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><polyline points="3 3 3 8 8 8"></polyline></svg></button>
             <button class="btn btn-icon" data-tooltip="Nginx Конфиг" onclick="svcAction('${s.id}','redeploy_nginx')"><svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg></button>
             <button class="btn btn-icon" style="color:var(--red)" data-tooltip="Удалить" onclick="svcDelete('${s.id}')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
             </div></td>
@@ -1135,19 +1137,66 @@ async function checkDomainVps() {
     }
 }
 
-async function openAddService() {
+async function openAddServiceModal() {
     // Заполнить select VPS
     const sel = document.getElementById('f-vps');
     sel.innerHTML = '<option value="">-- Выберите VPS --</option>' + vpsData.map(v => `<option value="${v.id}">${v.name} (${v.host})</option>`).join('');
     if (vpsData.length === 0) sel.innerHTML = '<option value="">Нет VPS</option>';
     
-    document.getElementById('domain-hint').innerHTML = ''; // очистить
+    document.getElementById('modal-service-title').textContent = 'Деплой нового сервиса';
+    document.getElementById('btn-save-service').textContent = 'Создать';
+    document.getElementById('f-edit-mode').value = 'false';
+    document.getElementById('f-name').disabled = false;
+    
+    // Очистка полей
+    document.getElementById('f-name').value = '';
+    document.getElementById('f-host').value = '127.0.0.1';
+    document.getElementById('f-port').value = '';
+    document.getElementById('f-domain').value = '';
+    document.getElementById('f-ext-port').value = '443';
+    document.getElementById('f-ssl').value = 'yes';
+    document.getElementById('f-auth-user').value = '';
+    document.getElementById('f-auth-pass').value = '';
+    document.getElementById('domain-hint').innerHTML = '';
+
     await checkDefaultAuth();
     if (defaultAuth && defaultAuth.user) {
         document.getElementById('auth-item-user').textContent = defaultAuth.user;
     }
     
     openModal('modal-add-service');
+}
+
+async function editService(name) {
+    try {
+        const s = await api(`services/${name}`);
+        
+        // Заполнить select VPS (нужно для отображения правильного имени)
+        const sel = document.getElementById('f-vps');
+        sel.innerHTML = '<option value="">-- Выберите VPS --</option>' + vpsData.map(v => `<option value="${v.id}">${v.name} (${v.host})</option>`).join('');
+
+        document.getElementById('modal-service-title').textContent = `Редактирование: ${name}`;
+        document.getElementById('btn-save-service').textContent = 'Сохранить';
+        document.getElementById('f-edit-mode').value = 'true';
+        
+        document.getElementById('f-name').value = s.name;
+        document.getElementById('f-name').disabled = true; 
+        document.getElementById('f-type').value = s.type;
+        document.getElementById('f-vps').value = s.vps;
+        document.getElementById('f-host').value = s.target_host;
+        document.getElementById('f-port').value = s.target_port;
+        document.getElementById('f-domain').value = s.domain;
+        document.getElementById('f-ext-port').value = s.ext_port;
+        document.getElementById('f-ssl').value = s.ssl;
+        document.getElementById('f-auth-user').value = s.auth_user;
+        document.getElementById('f-auth-pass').value = s.auth_pass;
+        document.getElementById('domain-hint').innerHTML = '';
+        
+        openModal('modal-add-service');
+        onTypeChange(); // Обновить состояние поля порта
+    } catch(e) {
+        toast('Ошибка получения данных сервиса', 'error');
+    }
 }
 
 function onTypeChange() {
@@ -1163,6 +1212,7 @@ function onTypeChange() {
 }
 
 async function submitAddService() {
+    const isEdit = document.getElementById('f-edit-mode').value === 'true';
     const data = {
         name: document.getElementById('f-name').value.trim(),
         type: document.getElementById('f-type').value,
@@ -1180,14 +1230,21 @@ async function submitAddService() {
     if (!data.target_port) { toast('Укажите порт цели','error'); return; }
 
     try {
-        // Шаг 1: Создаём конфиг
-        await api('services', {method:'POST', body: JSON.stringify(data)});
-        closeModal('modal-add-service');
+        if (isEdit) {
+            await api(`services/${data.name}`, {method:'POST', body: JSON.stringify(data)});
+            toast('Настройки обновлены. Для применения изменений пересоберите Nginx или перезапустите сервис.', 'success');
+            closeModal('modal-add-service');
+            setTimeout(refreshAll, 1000);
+        } else {
+            // Шаг 1: Создаём конфиг
+            await api('services', {method:'POST', body: JSON.stringify(data)});
+            closeModal('modal-add-service');
 
-        // Шаг 2: Открываем модалку деплоя
-        startDeploy(data.name);
+            // Шаг 2: Открываем модалку деплоя
+            startDeploy(data.name);
+        }
     } catch(e) {
-        toast('Ошибка создания сервиса: ' + (e.message || e), 'error');
+        toast('Ошибка: ' + (e.message || e), 'error');
     }
 }
 

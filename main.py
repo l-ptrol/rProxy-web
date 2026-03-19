@@ -16,7 +16,7 @@ RPROXY_ROOT = "/opt/etc/rproxy"
 SERVICES_DIR = os.path.join(RPROXY_ROOT, "services")
 VPS_DIR = os.path.join(RPROXY_ROOT, "vps")
 
-VERSION = "7.3.3"
+VERSION = "7.3.4"
 
 # Многопоточный сервер для Bottle
 from wsgiref.simple_server import WSGIServer, WSGIRequestHandler
@@ -218,6 +218,71 @@ def create_service():
             cfg["SVC_AUTH_PASS"] = auth_pass
 
         ConfigManager.save(svc_path, cfg)
+        return {"status": "success", "name": name}
+    except Exception as e:
+        return HTTPResponse(status=500, body=str(e))
+
+
+@get('/api/services/<name>')
+def get_service_details(name):
+    """Получение полных настроек сервиса для редактирования"""
+    svc_path = os.path.join(SERVICES_DIR, f"{name}.conf")
+    if not os.path.exists(svc_path):
+        return HTTPResponse(status=404, body="Сервис не найден")
+    
+    cfg = ConfigManager.load(svc_path)
+    return {
+        "name": cfg.get("SVC_NAME", name),
+        "type": cfg.get("SVC_TYPE", "http"),
+        "target_host": cfg.get("SVC_TARGET_HOST", "127.0.0.1"),
+        "target_port": cfg.get("SVC_TARGET_PORT", ""),
+        "vps": cfg.get("SVC_VPS", ""),
+        "ext_port": cfg.get("SVC_EXT_PORT", "443"),
+        "domain": cfg.get("SVC_DOMAIN", ""),
+        "ssl": cfg.get("SVC_SSL", "no"),
+        "auth_user": cfg.get("SVC_AUTH_USER", ""),
+        "auth_pass": cfg.get("SVC_AUTH_PASS", ""),
+        "tunnel_port": cfg.get("SVC_TUNNEL_PORT", "")
+    }
+
+
+@post('/api/services/<name>')
+def update_service(name):
+    """Обновление настроек существующего сервиса"""
+    try:
+        data = request.json
+        if not data:
+            return HTTPResponse(status=400, body="Пустой запрос")
+
+        svc_path = os.path.join(SERVICES_DIR, f"{name}.conf")
+        if not os.path.exists(svc_path):
+            return HTTPResponse(status=404, body="Сервис не найден")
+
+        # Загружаем старый конфиг, чтобы сохранить порт туннеля
+        old_cfg = ConfigManager.load(svc_path)
+        tunnel_port = old_cfg.get('SVC_TUNNEL_PORT')
+
+        new_cfg = {
+            "SVC_NAME": name,
+            "SVC_TYPE": data.get('type', 'http'),
+            "SVC_TARGET_HOST": data.get('target_host', '127.0.0.1'),
+            "SVC_TARGET_PORT": data.get('target_port', ''),
+            "SVC_VPS": data.get('vps', ''),
+            "SVC_EXT_PORT": data.get('ext_port', '443'),
+            "SVC_DOMAIN": data.get('domain', ''),
+            "SVC_SSL": data.get('ssl', 'no'),
+            "SVC_TUNNEL_PORT": tunnel_port,
+            "SVC_ENABLED": old_cfg.get('SVC_ENABLED', 'yes')
+        }
+
+        # Авторизация
+        auth_user = data.get('auth_user', '').strip()
+        auth_pass = data.get('auth_pass', '').strip()
+        if auth_user and auth_pass:
+            new_cfg["SVC_AUTH_USER"] = auth_user
+            new_cfg["SVC_AUTH_PASS"] = auth_pass
+
+        ConfigManager.save(svc_path, new_cfg)
         return {"status": "success", "name": name}
     except Exception as e:
         return HTTPResponse(status=500, body=str(e))
