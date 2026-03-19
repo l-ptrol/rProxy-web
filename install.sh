@@ -1,7 +1,7 @@
 #!/bin/sh
 # rProxy Web & CLI (Python Core) Installer for Keenetic
 # rProxy Installer v7.2.0
-VERSION="7.4.3"
+VERSION="7.4.4"
 # - Full web interface rebuild
 # Новое ядро на Python. 100% паритет с Bash + Модульность.
 
@@ -110,8 +110,11 @@ cat > "$SVC_INIT" <<EOF
 export PATH=/opt/sbin:/opt/bin:/opt/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 case "\$1" in
     start)
-        echo "Autostarting rProxy tunnels..."
-        /opt/bin/rproxy boot
+        echo "Autostarting rProxy tunnels in background (delayed)..."
+        (
+            sleep 60
+            /opt/bin/rproxy boot
+        ) > /opt/var/log/rproxy_boot.log 2>&1 &
         ;;
     stop)
         echo "Stopping all rProxy tunnels..."
