@@ -806,6 +806,28 @@
         </div>
     </div>
 
+    <!-- ==================== МОДАЛКА: ДЕПЛОЙ СЕРВИСА ==================== -->
+    <div class="modal-overlay" id="modal-deploy" style="display:none;">
+        <div class="modal" style="width: 600px; max-width: 95%">
+            <div class="modal-header">
+                <h3 id="deploy-title">Деплой сервиса</h3>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom: 8px;" id="deploy-status-text">Выполняется установка и запуск...</p>
+                <div style="width:100%; height:4px; background:var(--border); border-radius:2px; margin-bottom:12px; overflow:hidden;">
+                    <div id="deploy-progress" style="width:10%; height:100%; background:var(--accent); border-radius:2px; transition: width 0.5s;"></div>
+                </div>
+                <pre id="deploy-log" style="max-height:300px; overflow-y:auto; font-size: 12px; padding: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); white-space: pre-wrap; word-wrap: break-word;">Запуск процесса...</pre>
+                <div style="text-align:center; padding: 10px;" id="deploy-spinner">
+                    <span class="badge badge-online">⏳ Подождите...</span>
+                </div>
+            </div>
+            <div class="modal-footer" id="deploy-footer" style="display:none;">
+                <button class="btn" onclick="closeDeployModal()">Закрыть</button>
+            </div>
+        </div>
+    </div>
+
 <script>
 // ========== Настройки темы ==========
 function toggleTheme() {
@@ -1158,11 +1180,72 @@ async function submitAddService() {
     if (!data.target_port) { toast('Укажите порт цели','error'); return; }
 
     try {
+        // Шаг 1: Создаём конфиг
         await api('services', {method:'POST', body: JSON.stringify(data)});
         closeModal('modal-add-service');
-        toast('Сервис создан!', 'success');
-        setTimeout(refreshAll, 1500);
-    } catch(e) {}
+
+        // Шаг 2: Открываем модалку деплоя
+        startDeploy(data.name);
+    } catch(e) {
+        toast('Ошибка создания сервиса: ' + (e.message || e), 'error');
+    }
+}
+
+let deployLogTimer = null;
+
+function startDeploy(name) {
+    document.getElementById('deploy-title').textContent = `Деплой: ${name}`;
+    document.getElementById('deploy-log').textContent = 'Запуск процесса...';
+    document.getElementById('deploy-status-text').textContent = 'Выполняется установка и запуск...';
+    document.getElementById('deploy-progress').style.width = '10%';
+    document.getElementById('deploy-progress').style.background = 'var(--accent)';
+    document.getElementById('deploy-spinner').innerHTML = '<span class="badge badge-online">⏳ Подождите...</span>';
+    document.getElementById('deploy-footer').style.display = 'none';
+    document.getElementById('modal-deploy').style.display = 'flex';
+
+    // Запуск деплоя
+    api(`services/${name}/deploy`, {method:'POST'}).catch(() => {});
+
+    // Поллинг логов
+    let step = 0;
+    deployLogTimer = setInterval(async () => {
+        step++;
+        try {
+            const res = await api(`services/${name}/deploy/log`);
+            const el = document.getElementById('deploy-log');
+            if (res.log) {
+                el.textContent = res.log;
+                el.scrollTop = el.scrollHeight;
+            }
+
+            // Прогрессбар: плавно растёт
+            const pct = Math.min(10 + step * 5, 90);
+            document.getElementById('deploy-progress').style.width = pct + '%';
+
+            if (res.status === 'success') {
+                clearInterval(deployLogTimer);
+                document.getElementById('deploy-progress').style.width = '100%';
+                document.getElementById('deploy-progress').style.background = 'var(--green)';
+                document.getElementById('deploy-spinner').innerHTML = '<span class="badge badge-online">✅ Готово!</span>';
+                document.getElementById('deploy-status-text').textContent = 'Сервис успешно развёрнут!';
+                document.getElementById('deploy-footer').style.display = 'flex';
+                refreshAll();
+            } else if (res.status === 'error') {
+                clearInterval(deployLogTimer);
+                document.getElementById('deploy-progress').style.width = '100%';
+                document.getElementById('deploy-progress').style.background = 'var(--red)';
+                document.getElementById('deploy-spinner').innerHTML = '<span class="badge" style="background:var(--red-bg);color:var(--red);">❌ Ошибка</span>';
+                document.getElementById('deploy-status-text').textContent = 'Деплой завершился с ошибками';
+                document.getElementById('deploy-footer').style.display = 'flex';
+                refreshAll();
+            }
+        } catch(e) {}
+    }, 1500);
+}
+
+function closeDeployModal() {
+    if (deployLogTimer) clearInterval(deployLogTimer);
+    document.getElementById('modal-deploy').style.display = 'none';
 }
 
 // ========== VPS ==========

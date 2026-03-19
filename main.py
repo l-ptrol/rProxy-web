@@ -16,7 +16,7 @@ RPROXY_ROOT = "/opt/etc/rproxy"
 SERVICES_DIR = os.path.join(RPROXY_ROOT, "services")
 VPS_DIR = os.path.join(RPROXY_ROOT, "vps")
 
-VERSION = "7.3.1"
+VERSION = "7.3.2"
 
 # Многопоточный сервер для Bottle
 from wsgiref.simple_server import WSGIServer, WSGIRequestHandler
@@ -221,6 +221,115 @@ def create_service():
         return {"status": "success", "name": name}
     except Exception as e:
         return HTTPResponse(status=500, body=str(e))
+
+
+# ==================== API: Деплой сервиса (фоновый) ====================
+
+import threading
+import io
+import contextlib
+
+@post('/api/services/<name>/deploy')
+def deploy_service(name):
+    """Запуск полного деплоя сервиса в фоновом потоке с записью лога"""
+    svc_path = os.path.join(SERVICES_DIR, f"{name}.conf")
+    if not os.path.exists(svc_path):
+        return HTTPResponse(status=404, body="Сервис не найден")
+
+    log_file = f"/tmp/rproxy_deploy_{name}.log"
+
+    # Очищаем старый лог
+    with open(log_file, 'w') as f:
+        f.write(f"▸ Начало деплоя сервиса '{name}'...\n")
+
+    def _deploy_worker():
+        """Фоновый воркер — перехватывает stdout/stderr и пишет в лог"""
+        import sys as _sys
+
+        class LogWriter:
+            """Перехватчик stdout/stderr в файл"""
+            def __init__(self, log_path, original):
+                self.log_path = log_path
+                self.original = original
+            def write(self, text):
+                if text.strip():
+                    # Очистка ANSI-кодов
+                    import re
+                    clean = re.sub(r'\x1B\[[0-9;]*[a-zA-Z]', '', text)
+                    clean = re.sub(r'\[\d+;\d+m', '', clean).replace('\[0m', '')
+                    with open(self.log_path, 'a') as f:
+                        f.write(clean)
+                        if not clean.endswith('\n'):
+                            f.write('\n')
+                        f.flush()
+                self.original.write(text)
+            def flush(self):
+                self.original.flush()
+
+        old_stdout = _sys.stdout
+        old_stderr = _sys.stderr
+        _sys.stdout = LogWriter(log_file, old_stdout)
+        _sys.stderr = LogWriter(log_file, old_stderr)
+
+        try:
+            cfg = ConfigManager.load(svc_path)
+            vps_id = cfg.get('SVC_VPS')
+            if not vps_id:
+                with open(log_file, 'a') as f:
+                    f.write("❌ Ошибка: VPS не указан в конфигурации сервиса.\n")
+                    f.write("__DEPLOY_STATUS__:error\n")
+                return
+
+            vps_path = os.path.join(VPS_DIR, f"{vps_id}.conf")
+            if not os.path.exists(vps_path):
+                with open(log_file, 'a') as f:
+                    f.write(f"❌ Ошибка: VPS '{vps_id}' не найден.\n")
+                    f.write("__DEPLOY_STATUS__:error\n")
+                return
+
+            vps_cfg = ConfigManager.load(vps_path)
+            result = ProcessManager.start_service(cfg, vps_cfg)
+
+            with open(log_file, 'a') as f:
+                if result is False:
+                    f.write("\n❌ Деплой завершён с ошибками.\n")
+                    f.write("__DEPLOY_STATUS__:error\n")
+                else:
+                    f.write("\n✅ Сервис успешно развернут и запущен!\n")
+                    f.write("__DEPLOY_STATUS__:success\n")
+        except Exception as e:
+            import traceback
+            with open(log_file, 'a') as f:
+                f.write(f"\n❌ Критическая ошибка: {e}\n")
+                f.write(traceback.format_exc() + "\n")
+                f.write("__DEPLOY_STATUS__:error\n")
+        finally:
+            _sys.stdout = old_stdout
+            _sys.stderr = old_stderr
+
+    t = threading.Thread(target=_deploy_worker, daemon=True)
+    t.start()
+    return {"status": "started", "log": log_file}
+
+
+@get('/api/services/<name>/deploy/log')
+def deploy_log(name):
+    """Чтение лога деплоя сервиса"""
+    log_file = f"/tmp/rproxy_deploy_{name}.log"
+    if os.path.exists(log_file):
+        with open(log_file, 'r', errors='replace') as f:
+            content = f.read()
+        # Определяем статус деплоя
+        if "__DEPLOY_STATUS__:success" in content:
+            status = "success"
+            content = content.replace("__DEPLOY_STATUS__:success\n", "")
+        elif "__DEPLOY_STATUS__:error" in content:
+            status = "error"
+            content = content.replace("__DEPLOY_STATUS__:error\n", "")
+        else:
+            status = "running"
+        return {"log": content, "status": status}
+    return {"log": "Ожидание запуска деплоя...", "status": "pending"}
 
 
 # ==================== API: Настройки (Auth, etc) ====================
