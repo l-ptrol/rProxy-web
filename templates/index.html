@@ -869,6 +869,21 @@
         </div>
     </div>
 
+    <!-- ==================== МОДАЛКА: ПРОГРЕСС VPS ==================== -->
+    <div class="modal-overlay" id="modal-vps-progress" style="display:none;">
+        <div class="modal" style="width: 600px; max-width: 95%">
+            <div class="modal-header">
+                <h3 id="vps-progress-title">Задача VPS</h3>
+            </div>
+            <div class="modal-body">
+                <pre id="vps-progress-log" style="max-height:400px; overflow-y:auto; font-size: 11px; padding: 12px; background: #000; color: #0f0; border: 1px solid var(--border); border-radius: var(--radius); white-space: pre-wrap; word-wrap: break-word; font-family: 'JetBrains Mono', monospace;">Запуск процесса...</pre>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeModal('modal-vps-progress')">Закрыть</button>
+            </div>
+        </div>
+    </div>
+
 <script>
 // ========== Настройки темы ==========
 function toggleTheme() {
@@ -1372,17 +1387,26 @@ function renderVps() {
         c.innerHTML = '<div class="empty"><div class="empty-icon">🖥</div><p>Нет серверов. Нажмите «+ Добавить VPS».</p></div>';
         return;
     }
-    c.innerHTML = '<div class="vps-grid">' + vpsData.map(v => `
-        <div class="vps-card">
-            <h4>${v.name}</h4>
-            <div class="vps-host">${v.user}@${v.host}</div>
-            <div class="vps-actions">
-                <button class="btn btn-sm" onclick="vpsHealth('${v.id}')">Health Check</button>
-                <button class="btn btn-sm" onclick="vpsCleanup('${v.id}')">Очистка</button>
-                <button class="btn btn-sm btn-danger" onclick="vpsDelete('${v.id}')">Удалить</button>
+    c.innerHTML = '<div class="vps-grid">' + vpsData.map(v => {
+        const statusClass = (v.status === 'online') ? 'badge-online' : (v.status === 'offline' ? 'badge-offline' : 'badge-disabled');
+        const statusText = (v.status === 'online') ? 'Online' : (v.status === 'offline' ? 'Offline' : 'Unknown');
+        
+        return `
+            <div class="vps-card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <h4 style="margin:0">${v.name}</h4>
+                    <span class="badge ${statusClass}" style="font-size:10px; padding: 2px 8px;">${statusText}</span>
+                </div>
+                <div class="vps-host" style="margin-bottom:12px;">${v.user}@${v.host}</div>
+                <div class="vps-actions">
+                    <button class="btn btn-sm" onclick="vpsHealth('${v.id}')">Health</button>
+                    <button class="btn btn-sm" onclick="vpsRepair('${v.id}')" title="Ремонт">🛠️</button>
+                    <button class="btn btn-sm" onclick="vpsCleanup('${v.id}')" title="Очистка">🧹</button>
+                    <button class="btn btn-sm btn-danger" onclick="vpsDelete('${v.id}')">DEL</button>
+                </div>
             </div>
-        </div>
-    `).join('') + '</div>';
+        `;
+    }).join('') + '</div>';
 }
 
 function openAddVps() { openModal('modal-add-vps'); }
@@ -1439,11 +1463,42 @@ async function vpsHealth(name) {
 }
 
 async function vpsCleanup(name) {
-    toast('Очистка VPS...');
-    try {
-        const d = await api(`vps/${name}/cleanup`, {method:'POST'});
-        toast(d.message || 'Готово', 'success');
-    } catch(e) {}
+    if (!(await confirmDialog(`Очистить VPS <b>${name}</b> от фантомных конфигураций Nginx? \n\nБудут удалены только те файлы rproxy, для которых нет активных сервисов.`, 'Очистка VPS', true, 'Очистить'))) return;
+    openVpsProgressModal(name, 'cleanup', 'Очистка VPS');
+}
+
+async function vpsRepair(name) {
+    if (!(await confirmDialog(`Запустить ремонт окружения на VPS <b>${name}</b>? \n\nБудет выполнена перенастройка Nginx, SSH и установка необходимых пакетов.`, 'Ремонт VPS', true, 'Запустить'))) return;
+    openVpsProgressModal(name, 'repair', 'Ремонт VPS');
+}
+
+function openVpsProgressModal(name, type, title) {
+    document.getElementById('vps-progress-title').innerText = title;
+    document.getElementById('vps-progress-log').innerText = 'Запуск задачи...';
+    openModal('modal-vps-progress');
+    
+    api(`vps/${name}/${type}`, {method: 'POST'}).then(() => {
+        const interval = setInterval(async () => {
+            const modal = document.getElementById('modal-vps-progress');
+            if (!modal || modal.style.display === 'none') {
+                clearInterval(interval);
+                return;
+            }
+            try {
+                const log = await api(`vps/${name}/task/${type}/log`);
+                const logEl = document.getElementById('vps-progress-log');
+                logEl.innerText = log;
+                logEl.scrollTop = logEl.scrollHeight;
+                
+                if (log.includes('ФИНИШ')) {
+                    clearInterval(interval);
+                    loadVps();
+                }
+            } catch(e) { clearInterval(interval); }
+        }, 1000);
+    }).catch(e => {
+        closeModal('modal-vps-progress');
+    });
 }
 
 // ========== Логи ==========

@@ -16,7 +16,10 @@ RPROXY_ROOT = "/opt/etc/rproxy"
 SERVICES_DIR = os.path.join(RPROXY_ROOT, "services")
 VPS_DIR = os.path.join(RPROXY_ROOT, "vps")
 
-VERSION = "7.3.8"
+VERSION = "7.4.0"
+
+# Кэш статусов VPS (online/offline)
+VPS_STATUS_CACHE = {}
 
 # Многопоточный сервер для Bottle
 from wsgiref.simple_server import WSGIServer, WSGIRequestHandler
@@ -489,7 +492,8 @@ def list_vps():
                     "name": name,
                     "host": cfg.get("VPS_HOST"),
                     "user": cfg.get("VPS_USER", "root"),
-                    "port": cfg.get("VPS_PORT", "22")
+                    "port": cfg.get("VPS_PORT", "22"),
+                    "status": VPS_STATUS_CACHE.get(name, "unknown")
                 })
     return {"vps": vps_list}
 
@@ -547,19 +551,87 @@ def vps_cleanup(name):
     vps_path = os.path.join(VPS_DIR, f"{name}.conf")
     if not os.path.exists(vps_path):
         return HTTPResponse(status=404, body="VPS не найден")
+    
+    # Запуск в фоне
+    import threading
+    task_id = f"cleanup_{name}"
+    threading.Thread(target=_vps_task_worker, args=(name, 'cleanup'), daemon=True).start()
+    return {"status": "success", "task_id": task_id}
 
+
+@post('/api/vps/<name>/repair')
+def vps_repair(name):
+    vps_path = os.path.join(VPS_DIR, f"{name}.conf")
+    if not os.path.exists(vps_path):
+        return HTTPResponse(status=404, body="VPS не найден")
+    
+    import threading
+    task_id = f"repair_{name}"
+    threading.Thread(target=_vps_task_worker, args=(name, 'repair'), daemon=True).start()
+    return {"status": "success", "task_id": task_id}
+
+
+@get('/api/vps/<name>/task/<action>/log')
+def vps_task_log(name, action):
+    log_path = os.path.join(VPS_DIR, f"{name}_{action}.log")
+    if not os.path.exists(log_path):
+        return "Ожидание начала задачи..."
+    
+    with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
+        return f.read()
+
+
+def _vps_task_worker(name, action):
+    log_path = os.path.join(VPS_DIR, f"{name}_{action}.log")
+    vps_path = os.path.join(VPS_DIR, f"{name}.conf")
     vps_cfg = ConfigManager.load(vps_path)
-    # Список активных сервисов для этого VPS
-    active = []
-    if os.path.exists(SERVICES_DIR):
-        for f in os.listdir(SERVICES_DIR):
-            if f.endswith(".conf"):
-                cfg = ConfigManager.load(os.path.join(SERVICES_DIR, f))
-                if cfg.get('SVC_VPS') == name:
-                    active.append(f.replace(".conf", ""))
+    
+    with open(log_path, 'w', encoding='utf-8') as f:
+        f.write(f"▸ Начало задачи '{action}' для VPS '{name}'...\n")
+        f.flush()
+        
+        try:
+            if action == 'cleanup':
+                # Список активных сервисов
+                active = []
+                if os.path.exists(SERVICES_DIR):
+                    for fname in os.listdir(SERVICES_DIR):
+                        if fname.endswith(".conf"):
+                            cfg = ConfigManager.load(os.path.join(SERVICES_DIR, fname))
+                            if cfg.get('SVC_VPS') == name:
+                                active.append(fname.replace(".conf", ""))
+                
+                f.write(f"Активные сервисы: {', '.join(active) if active else 'нет'}\n")
+                success, msg_text = VPSManager.cleanup_vps(vps_cfg, active)
+                f.write(f"{msg_text}\n")
+            
+            elif action == 'repair':
+                f.write("Проверка SSH доступа...\n")
+                success_ssh, out_ssh = VPSManager.run_remote(vps_cfg, "echo OK")
+                if not success_ssh:
+                    f.write(f"❌ Ошибка SSH: {out_ssh}\n")
+                    f.write("Убедитесь, что SSH-ключ rProxy добавлен в ~/.ssh/authorized_keys на сервере.\n")
+                    f.write("ФИНИШ: Ошибка доступа\n")
+                    return
 
-    success, msg = VPSManager.cleanup_vps(vps_cfg, active)
-    return {"status": "success" if success else "error", "message": msg}
+                f.write("✅ SSH доступ подтвержден. Запускаю настройку окружения (setup_vps)...\n")
+                f.write("Это может занять до 2-3 минут (установка nginx, certbot и др.)...\n")
+                f.flush()
+                
+                # Перенаправляем вывод setup_vps в лог (если бы он умел логгировать)
+                # Сейчас setup_vps просто возвращает (bool, output)
+                success, output = VPSManager.setup_vps(vps_cfg)
+                f.write(output + "\n")
+            
+            if success:
+                f.write(f"\n✅ Задача '{action}' успешно завершена!\n")
+            else:
+                f.write(f"\n❌ Задача '{action}' завершилась с ошибкой.\n")
+                
+            f.write("ФИНИШ\n")
+        except Exception as e:
+            f.write(f"\n Ошибка воркера: {str(e)}\n")
+            f.write("ФИНИШ\n")
 
 
 # ==================== API: Система ====================
@@ -599,6 +671,27 @@ def system_reset():
     except Exception as e:
         return HTTPResponse(status=500, body=str(e))
 
+
+def _vps_health_monitor():
+    """Фоновый поток для периодической проверки VPS"""
+    import time
+    while True:
+        try:
+            if os.path.exists(VPS_DIR):
+                for f in os.listdir(VPS_DIR):
+                    if f.endswith(".conf"):
+                        name = f.replace(".conf", "")
+                        vps_cfg = ConfigManager.load(os.path.join(VPS_DIR, f))
+                        # Быстрая проверка через SSH
+                        success, _ = VPSManager.run_remote(vps_cfg, "echo 1", timeout=5)
+                        VPS_STATUS_CACHE[name] = "online" if success else "offline"
+            time.sleep(180) 
+        except Exception:
+            time.sleep(60)
+
+# Запуск монитора
+import threading
+threading.Thread(target=_vps_health_monitor, daemon=True).start()
 
 if __name__ == "__main__":
     # Многопоточный сервер для параллельных запросов
