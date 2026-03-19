@@ -755,7 +755,7 @@
                             Логин (Basic Auth)
                             <span style="float:right;cursor:pointer;color:var(--text3);" onclick="clearAuth()" title="Очистить данные">✕</span>
                         </label>
-                        <input id="f-auth-user" placeholder="оставьте пусто для отключения" onfocus="showAuthDropdown()" onclick="showAuthDropdown()" onblur="setTimeout(hideAuthDropdown, 250)">
+                        <input id="f-auth-user" placeholder="оставьте пусто для отключения" onfocus="showAuthDropdown()" onclick="showAuthDropdown(); event.stopPropagation()" onblur="setTimeout(hideAuthDropdown, 250)">
                         <div id="auth-dropdown" class="dropdown-menu" style="left:0; right:0; top:100%; transform-origin: top center;">
                             <div style="font-size:11px; color:var(--text3); margin: 0 6px 6px">Сохраненные данные:</div>
                             <div class="dropdown-item" onclick="selectDefaultAuth()" id="auth-item-user"></div>
@@ -1105,12 +1105,44 @@ async function svcAction(name, action) {
 
     if (!(await confirmDialog(msg, title, isDanger, btnText))) return;
 
-    toast(`${action}... ${name}`);
-    try {
-        await api(`action/${name}/${action}`, {method:'POST'});
-        toast(`${name}: ${action} — ОК`, 'success');
-        setTimeout(refreshAll, 1000);
-    } catch(e) {}
+    openActionProgressModal(name, action, title);
+}
+
+function openActionProgressModal(name, action, title) {
+    document.getElementById('vps-progress-title').innerText = title;
+    document.getElementById('vps-progress-log').innerText = 'Запуск задачи...';
+    openModal('modal-vps-progress');
+    
+    api(`action/${name}/${action}`, {method: 'POST'}).then((res) => {
+        if (action === 'delete') {
+            closeModal('modal-vps-progress');
+            toast('Успешно удалено', 'success');
+            setTimeout(refreshAll, 1000);
+            return;
+        }
+
+        const interval = setInterval(async () => {
+            const modal = document.getElementById('modal-vps-progress');
+            if (!modal || !modal.classList.contains('visible')) {
+                clearInterval(interval);
+                return;
+            }
+            try {
+                const log = await api(`action/${name}/${action}/log`);
+                const logEl = document.getElementById('vps-progress-log');
+                logEl.innerText = log;
+                logEl.scrollTop = logEl.scrollHeight;
+                
+                if (log.includes('ФИНИШ')) {
+                    clearInterval(interval);
+                    setTimeout(refreshAll, 1000);
+                }
+            } catch(e) { clearInterval(interval); }
+        }, 1000);
+    }).catch(e => {
+        closeModal('modal-vps-progress');
+        toast('Ошибка: ' + (e.message || e), 'error');
+    });
 }
 
 async function svcDelete(name) {

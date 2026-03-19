@@ -16,7 +16,7 @@ RPROXY_ROOT = "/opt/etc/rproxy"
 SERVICES_DIR = os.path.join(RPROXY_ROOT, "services")
 VPS_DIR = os.path.join(RPROXY_ROOT, "vps")
 
-VERSION = "7.4.5"
+VERSION = "7.4.6"
 
 # Кэш статусов VPS (online/offline)
 VPS_STATUS_CACHE = {}
@@ -407,10 +407,45 @@ def service_action(name, action):
     if not os.path.exists(svc_path):
         return HTTPResponse(status=404, body="Сервис не найден")
 
+    # Для удаления выполняем синхронно (быстро)
+    if action == 'delete':
+        try:
+            cfg = ConfigManager.load(svc_path)
+            vps_cfg = None
+            if cfg.get('SVC_VPS'):
+                vps_path = os.path.join(VPS_DIR, f"{cfg.get('SVC_VPS')}.conf")
+                if os.path.exists(vps_path):
+                    vps_cfg = ConfigManager.load(vps_path)
+            ProcessManager.stop_service(name, svc_cfg=cfg)
+            if vps_cfg:
+                VPSManager.remove_vhost(vps_cfg, name)
+            os.remove(svc_path)
+            return {"status": "success"}
+        except Exception as e:
+            return HTTPResponse(status=500, body=str(e))
+
+    # Для остальных действий - фоновая задача
+    task_id = f"action_{name}_{action}"
+    import threading
+    threading.Thread(target=_svc_action_worker, args=(name, action), daemon=True).start()
+    return {"status": "started", "task_id": task_id}
+
+def _svc_action_worker(name, action):
+    log_file = f"/tmp/rproxy_action_{name}_{action}.log"
+    from core.utils import set_log_hook, clear_log_hook
+    set_log_hook(log_file)
+    
+    with open(log_file, 'w', encoding='utf-8') as f:
+        f.write(f"▸ Начало выполнения действия '{action}' для сервиса '{name}'...\n")
+        
     try:
+        svc_path = os.path.join(SERVICES_DIR, f"{name}.conf")
+        if not os.path.exists(svc_path):
+            with open(log_file, 'a') as f: f.write("❌ Сервис удален или не найден.\nФИНИШ\n")
+            return
+            
         cfg = ConfigManager.load(svc_path)
         vps_id = cfg.get('SVC_VPS')
-
         vps_cfg = None
         if vps_id:
             vps_path = os.path.join(VPS_DIR, f"{vps_id}.conf")
@@ -419,8 +454,9 @@ def service_action(name, action):
 
         if action == 'start':
             if not vps_cfg:
-                return HTTPResponse(status=400, body="VPS не найден")
-            ProcessManager.start_service(cfg, vps_cfg)
+                with open(log_file, 'a') as f: f.write("❌ VPS не найден\n")
+            else:
+                ProcessManager.start_service(cfg, vps_cfg)
         elif action == 'stop':
             ProcessManager.stop_service(name, svc_cfg=cfg)
         elif action == 'restart':
@@ -431,19 +467,26 @@ def service_action(name, action):
         elif action == 'redeploy_nginx':
             if vps_cfg:
                 ProcessManager.redeploy_nginx(cfg, vps_cfg)
-        elif action == 'delete':
-            ProcessManager.stop_service(name, svc_cfg=cfg)
-            # Удаление Nginx конфига с VPS
-            if vps_cfg:
-                VPSManager.remove_vhost(vps_cfg, name)
-            os.remove(svc_path)
         elif action == 'ssl':
             if vps_cfg:
                 ProcessManager.run_certbot(cfg, vps_cfg)
 
-        return {"status": "success"}
+        with open(log_file, 'a') as f:
+            f.write(f"\n✅ Действие '{action}' успешно завершено!\nФИНИШ\n")
     except Exception as e:
-        return HTTPResponse(status=500, body=str(e))
+        import traceback
+        with open(log_file, 'a') as f:
+            f.write(f"\n❌ Ошибка: {e}\n{traceback.format_exc()}\nФИНИШ\n")
+    finally:
+        clear_log_hook()
+
+@get('/api/action/<name>/<action>/log')
+def service_action_log(name, action):
+    log_path = f"/tmp/rproxy_action_{name}_{action}.log"
+    if not os.path.exists(log_path):
+        return "Ожидание начала задачи..."
+    with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
+        return f.read()
 
 
 # ==================== API: Логи ====================
