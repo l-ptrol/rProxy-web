@@ -1232,9 +1232,14 @@ async function submitAddService() {
     try {
         if (isEdit) {
             await api(`services/${data.name}`, {method:'POST', body: JSON.stringify(data)});
-            toast('Настройки обновлены. Для применения изменений пересоберите Nginx или перезапустите сервис.', 'success');
             closeModal('modal-add-service');
-            setTimeout(refreshAll, 1000);
+            
+            if (await confirmDialog(`Настройки сохранены. Хотите пересобрать Nginx и перезапустить сервис <b>${data.name}</b> прямо сейчас?`, 'Применить изменения', false, 'Применить')) {
+                startDeploy(data.name);
+            } else {
+                toast('Настройки сохранены', 'success');
+                setTimeout(refreshAll, 1000);
+            }
         } else {
             // Шаг 1: Создаём конфиг
             await api('services', {method:'POST', body: JSON.stringify(data)});
