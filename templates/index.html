@@ -90,6 +90,9 @@
             font-size: 18px;
             font-weight: 700;
             color: var(--text);
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
         }
         .topbar .ver {
             font-size: 11px;
@@ -546,10 +549,10 @@
     <div class="topbar">
         <div class="container">
             <div class="topbar-left">
-                <h1>rProxy</h1>
-                <span class="ver" id="app-ver">v{{version}}</span>
+            <div>
+                <h1>rProxy <span class="ver">v{{version}}</span><span id="update-badge"></span></h1>
             </div>
-            <div class="topbar-right">
+        </div>    <div class="topbar-right">
                 <button class="btn btn-icon" onclick="toggleTheme()" title="Сменить тему">🌓</button>
                 <div class="dropdown">
                     <button class="btn btn-icon" onclick="toggleDropdown('sys-menu', event)" title="Меню системы">≡</button>
@@ -1283,8 +1286,25 @@ async function loadLogs() {
 // ========== Система ==========
 let updateLogTimer = null;
 
+async function checkUpdate() {
+    try {
+        const d = await api('system/check_update');
+        if (d.update_available) {
+            document.getElementById('update-badge').innerHTML = `<span style="color:var(--green); font-size: 11px; font-weight: 600;">Доступно обновление v${d.latest}</span>`;
+            window.latestVersion = d.latest;
+        } else {
+            document.getElementById('update-badge').innerHTML = '';
+            window.latestVersion = d.current;
+        }
+    } catch(e) {}
+}
+
 async function updateApp() {
-    if (!(await confirmDialog('Обновить систему rProxy до последней версии? \n\nБудет скачан и запущен установочный скрипт с GitHub. Все туннели будут перезапущены.', 'Обновление rProxy', false, 'Обновить'))) return;
+    if (window.latestVersion && window.latestVersion === '{{version}}') {
+        if (!(await confirmDialog('У вас уже установлена последняя версия. Обновить (переустановить) rProxy всё равно?', 'Обновление rProxy', false, 'Всё равно обновить'))) return;
+    } else {
+        if (!(await confirmDialog('Обновить систему rProxy до последней версии? \n\nБудет скачан и запущен установочный скрипт с GitHub. Все туннели будут перезапущены.', 'Обновление rProxy', false, 'Обновить'))) return;
+    }
     
     // Подавляем тосты на время обновления
     _suppressToasts = true;
@@ -1363,8 +1383,10 @@ async function refreshAll() {
 
 // Старт
 refreshAll();
+checkUpdate();
 setInterval(loadStats, 8000);
 setInterval(loadServices, 10000);
+setInterval(checkUpdate, 3600000); // Раз в час
 </script>
 </body>
 </html>

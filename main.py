@@ -16,7 +16,7 @@ RPROXY_ROOT = "/opt/etc/rproxy"
 SERVICES_DIR = os.path.join(RPROXY_ROOT, "services")
 VPS_DIR = os.path.join(RPROXY_ROOT, "vps")
 
-VERSION = "7.2.11"
+VERSION = "7.3.0"
 
 # Многопоточный сервер для Bottle
 from wsgiref.simple_server import WSGIServer, WSGIRequestHandler
@@ -81,6 +81,27 @@ def get_update_log():
         with open(log_upd, 'r', errors='replace') as f:
             return {"log": f.read()}
     return {"log": "Ожидание запуска установщика..."}
+
+@get('/api/system/check_update')
+def check_update():
+    import urllib.request
+    import re
+    try:
+        url = "https://raw.githubusercontent.com/l-ptrol/rProxy-web/master/install.sh"
+        req = urllib.request.Request(url, headers={'User-Agent': 'rProxy Web API'})
+        with urllib.request.urlopen(req, timeout=5) as response:
+            content = response.read().decode('utf-8')
+            match = re.search(r'VERSION="([^"]+)"', content)
+            if match:
+                latest_version = match.group(1)
+                return {
+                    "latest": latest_version, 
+                    "current": VERSION, 
+                    "update_available": latest_version != VERSION
+                }
+        return {"error": "Version not found in repo"}
+    except Exception as e:
+        return {"error": str(e)}
 
 @get('/api/dns/resolve')
 def resolve_domain():
