@@ -1,7 +1,7 @@
 #!/bin/sh
 # rProxy Web & CLI (Python Core) Installer for Keenetic
 # rProxy Installer v7.2.0
-VERSION="7.4.2"
+VERSION="7.4.3"
 # - Full web interface rebuild
 # Новое ядро на Python. 100% паритет с Bash + Модульность.
 
@@ -74,9 +74,11 @@ msg "Создание службы автозапуска веб-интерфе�
 CAT_INIT="/opt/etc/init.d/S99rproxy-web"
 cat > "$CAT_INIT" <<EOF
 #!/bin/sh
+export PATH=/opt/sbin:/opt/bin:/opt/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 case "\$1" in
     start)
         echo "Starting rProxy Web v${VERSION}..."
+        mkdir -p /opt/var/log
         cd "$INSTALL_DIR"
         /opt/bin/python3 main.py > /opt/var/log/rproxy-web.log 2>&1 &
         ;;
@@ -105,6 +107,7 @@ msg "Создание скрипта автозапуска туннелей..."
 SVC_INIT="/opt/etc/init.d/S98rproxy"
 cat > "$SVC_INIT" <<EOF
 #!/bin/sh
+export PATH=/opt/sbin:/opt/bin:/opt/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 case "\$1" in
     start)
         echo "Autostarting rProxy tunnels..."
