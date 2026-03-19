@@ -913,7 +913,11 @@ async function api(path, opts={}) {
             const t = await r.text();
             throw new Error(t || r.statusText);
         }
-        return await r.json();
+        const ct = r.headers.get('content-type');
+        if (ct && ct.includes('application/json')) {
+            return await r.json();
+        }
+        return await r.text();
     } catch(e) {
         // Подавляем спам ошибками при блокировке экрана (Failed to fetch)
         const isNetworkErr = e instanceof TypeError && (e.message.includes('fetch') || e.message.includes('NetworkError'));
