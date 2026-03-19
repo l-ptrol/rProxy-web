@@ -10,6 +10,31 @@ BOLD = '\033[1m'
 DIM = '\033[2m'
 NC = '\033[0m'
 
+# Лог-хук для записи сообщений в файл (используется при деплое через веб)
+_log_hook = None
+
+def set_log_hook(filepath):
+    """Устанавливает лог-хук: все msg/warn/err будут дополнительно писаться в файл"""
+    global _log_hook
+    _log_hook = filepath
+
+def clear_log_hook():
+    """Снимает лог-хук"""
+    global _log_hook
+    _log_hook = None
+
+def _write_to_hook(clean_text):
+    """Запись в файл лог-хука (без ANSI-кодов)"""
+    import re
+    if _log_hook:
+        try:
+            text = re.sub(r'\x1B\[[0-9;]*[a-zA-Z]', '', clean_text)
+            with open(_log_hook, 'a') as f:
+                f.write(text + '\n')
+                f.flush()
+        except Exception:
+            pass
+
 def _resolve_bin(name):
     """Находит абсолютный путь к бинарнику (Entware priority)"""
     import os
@@ -78,6 +103,7 @@ def _safe_print(text, file=sys.stdout):
 
 def msg(text):
     _safe_print(f"{GREEN}▸{NC} {text}")
+    _write_to_hook(f"▸ {text}")
 
 def pause():
     try:
@@ -87,9 +113,11 @@ def pause():
 
 def warn(text):
     _safe_print(f"{YELLOW}⚠{NC} {text}")
+    _write_to_hook(f"⚠ {text}")
 
 def err(text, exit_code=None):
     _safe_print(f"{RED}✖{NC} {text}", file=sys.stderr)
+    _write_to_hook(f"✖ {text}")
     if exit_code is not None:
         sys.exit(exit_code)
 

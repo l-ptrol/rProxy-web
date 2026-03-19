@@ -16,7 +16,7 @@ RPROXY_ROOT = "/opt/etc/rproxy"
 SERVICES_DIR = os.path.join(RPROXY_ROOT, "services")
 VPS_DIR = os.path.join(RPROXY_ROOT, "vps")
 
-VERSION = "7.3.2"
+VERSION = "7.3.3"
 
 # Многопоточный сервер для Bottle
 from wsgiref.simple_server import WSGIServer, WSGIRequestHandler
@@ -226,8 +226,7 @@ def create_service():
 # ==================== API: Деплой сервиса (фоновый) ====================
 
 import threading
-import io
-import contextlib
+from core.utils import set_log_hook, clear_log_hook
 
 @post('/api/services/<name>/deploy')
 def deploy_service(name):
@@ -243,33 +242,9 @@ def deploy_service(name):
         f.write(f"▸ Начало деплоя сервиса '{name}'...\n")
 
     def _deploy_worker():
-        """Фоновый воркер — перехватывает stdout/stderr и пишет в лог"""
-        import sys as _sys
-
-        class LogWriter:
-            """Перехватчик stdout/stderr в файл"""
-            def __init__(self, log_path, original):
-                self.log_path = log_path
-                self.original = original
-            def write(self, text):
-                if text.strip():
-                    # Очистка ANSI-кодов
-                    import re
-                    clean = re.sub(r'\x1B\[[0-9;]*[a-zA-Z]', '', text)
-                    clean = re.sub(r'\[\d+;\d+m', '', clean).replace('\[0m', '')
-                    with open(self.log_path, 'a') as f:
-                        f.write(clean)
-                        if not clean.endswith('\n'):
-                            f.write('\n')
-                        f.flush()
-                self.original.write(text)
-            def flush(self):
-                self.original.flush()
-
-        old_stdout = _sys.stdout
-        old_stderr = _sys.stderr
-        _sys.stdout = LogWriter(log_file, old_stdout)
-        _sys.stderr = LogWriter(log_file, old_stderr)
+        """Фоновый воркер — использует лог-хук для записи шагов деплоя"""
+        # Устанавливаем лог-хук: все msg/warn/err будут писать в этот файл
+        set_log_hook(log_file)
 
         try:
             cfg = ConfigManager.load(svc_path)
@@ -304,8 +279,7 @@ def deploy_service(name):
                 f.write(traceback.format_exc() + "\n")
                 f.write("__DEPLOY_STATUS__:error\n")
         finally:
-            _sys.stdout = old_stdout
-            _sys.stderr = old_stderr
+            clear_log_hook()
 
     t = threading.Thread(target=_deploy_worker, daemon=True)
     t.start()
