@@ -16,7 +16,7 @@ RPROXY_ROOT = "/opt/etc/rproxy"
 SERVICES_DIR = os.path.join(RPROXY_ROOT, "services")
 VPS_DIR = os.path.join(RPROXY_ROOT, "vps")
 
-VERSION = "7.2.6"
+VERSION = "7.2.7"
 
 # Многопоточный сервер для Bottle
 from wsgiref.simple_server import WSGIServer, WSGIRequestHandler
@@ -36,6 +36,26 @@ bottle.TEMPLATE_PATH.insert(0, './templates')
 debug(True)
 
 # ==================== API: Система ====================
+
+@post('/api/system/action')
+def system_action():
+    try:
+        data = request.json or {}
+        action = data.get('action')
+        if action == 'restart':
+            os.system("rproxy restart >/dev/null 2>&1 &")
+            return {"status": "success"}
+        elif action == 'stop':
+            os.system("rproxy stop >/dev/null 2>&1 &")
+            return {"status": "success"}
+        elif action == 'reboot':
+            os.system("reboot >/dev/null 2>&1 &")
+            return {"status": "success"}
+        response.status = 400
+        return {"status": "error", "message": "Unknown action"}
+    except Exception as e:
+        response.status = 500
+        return {"status": "error", "message": str(e)}
 
 @post('/api/system/update')
 def update_system():
