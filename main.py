@@ -132,7 +132,7 @@ def get_stats():
         svc_count = len(files)
         for f in files:
             if ProcessManager.is_running(f.replace(".conf", "")):
-                online_count = online_count + 1
+                online_count += 1
 
     vps_count = 0
     if os.path.exists(VPS_DIR):
