@@ -715,9 +715,9 @@
                             Логин (Basic Auth)
                             <span style="float:right;cursor:pointer;color:var(--text3);" onclick="clearAuth()" title="Очистить данные">✕</span>
                         </label>
-                        <input id="f-auth-user" placeholder="оставьте пусто для отключения" onclick="showAuthDropdown()" onblur="setTimeout(hideAuthDropdown, 200)">
+                        <input id="f-auth-user" placeholder="оставьте пусто для отключения" onfocus="showAuthDropdown()" onclick="showAuthDropdown()" onblur="setTimeout(hideAuthDropdown, 250)">
                         <div id="auth-dropdown" style="display:none; position:absolute; top:100%; left:0; right:0; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:8px; z-index:10; box-shadow:var(--shadow);">
-                            <div style="font-size:11px; color:var(--text3); margin-bottom:4px">Сохраненные данные:</div>
+                            <div style="font-size:11px; color:var(--text3); margin-bottom:4px">Сохраненные данных:</div>
                             <div class="auth-item" onclick="selectDefaultAuth()" style="padding:6px 8px; cursor:pointer; border-radius:4px; font-weight:600;" id="auth-item-user"></div>
                         </div>
                     </div>

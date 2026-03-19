@@ -16,7 +16,7 @@ RPROXY_ROOT = "/opt/etc/rproxy"
 SERVICES_DIR = os.path.join(RPROXY_ROOT, "services")
 VPS_DIR = os.path.join(RPROXY_ROOT, "vps")
 
-VERSION = "7.3.5"
+VERSION = "7.3.6"
 
 # Многопоточный сервер для Bottle
 from wsgiref.simple_server import WSGIServer, WSGIRequestHandler
@@ -337,6 +337,11 @@ def deploy_service(name):
                 import time as _t
                 _t.sleep(1)
             
+            # Принудительно пересобираем конфиг Nginx, чтобы новые настройки (например, пароль) применились
+            with open(log_file, 'a') as f:
+                    f.write(f"▸ Генерация и загрузка новой конфигурации Nginx...\n")
+            ProcessManager.redeploy_nginx(cfg, vps_cfg)
+
             result = ProcessManager.start_service(cfg, vps_cfg)
 
             with open(log_file, 'a') as f:
