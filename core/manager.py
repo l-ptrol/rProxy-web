@@ -127,7 +127,12 @@ def run():
             
             cmd_list = shlex.split(real_cmd)
             # Используем shell=True для лучшей совместимости с переменными окружения на Keenetic
-            cmd_str = f'{{binary}} -W -p {{port}} {{real_cmd}}'
+            # Убираем -W на пробу, чтобы исключить его как причину segfault
+            cmd_str = f'{{binary}} -p {port} {{real_cmd}}'
+            with open(log_path, 'a') as f:
+                f.write(f'[{{time.ctime()}}] Executing: {{cmd_str}}\\n')
+                f.flush()
+            
             proc = subprocess.Popen(cmd_str, shell=True, stdout=open(log_path, 'a'), stderr=subprocess.STDOUT, env=os.environ)
             proc.wait()
             
