@@ -611,9 +611,19 @@
         <div class="log-panel" id="log-output">Выберите сервис и нажмите «Загрузить» для просмотра логов.</div>
     </div>
 
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
-                <button class="btn" onclick="updateApp()">🔄 Обновить rProxy</button>
-                <button class="btn btn-danger" onclick="hardReset()">☢ Hard Reset</button>
+    <!-- ==================== МОДАЛКА: Подтверждение (Confirm) ==================== -->
+    <div class="modal-overlay" id="modal-confirm">
+        <div class="modal" style="width: 420px; max-width: 95%">
+            <div class="modal-header">
+                <h3 id="confirm-title">Подтверждение</h3>
+                <button class="btn btn-icon btn-sm" onclick="closeModal('modal-confirm')">✕</button>
+            </div>
+            <div class="modal-body">
+                <p id="confirm-message" style="margin-bottom: 8px;">Вы уверены?</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" id="btn-confirm-no" onclick="closeModal('modal-confirm')">Отмена</button>
+                <button class="btn btn-primary" id="btn-confirm-yes">Да</button>
             </div>
         </div>
     </div>
