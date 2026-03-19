@@ -1192,6 +1192,11 @@ async function editService(name) {
         document.getElementById('f-auth-pass').value = s.auth_pass;
         document.getElementById('domain-hint').innerHTML = '';
         
+        await checkDefaultAuth();
+        if (defaultAuth && defaultAuth.user) {
+            document.getElementById('auth-item-user').textContent = defaultAuth.user;
+        }
+        
         openModal('modal-add-service');
         onTypeChange(); // Обновить состояние поля порта
     } catch(e) {

@@ -328,6 +328,15 @@ def deploy_service(name):
                 return
 
             vps_cfg = ConfigManager.load(vps_path)
+            
+            # Если сервис уже запущен — сначала останавливаем
+            if ProcessManager.is_running(name):
+                with open(log_file, 'a') as f:
+                    f.write(f"▸ Остановка текущего экземпляра '{name}'...\n")
+                ProcessManager.stop_service(name, svc_cfg=cfg)
+                import time as _t
+                _t.sleep(1)
+            
             result = ProcessManager.start_service(cfg, vps_cfg)
 
             with open(log_file, 'a') as f:
