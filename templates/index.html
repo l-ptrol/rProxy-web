@@ -425,6 +425,35 @@
         .empty-icon { font-size: 32px; margin-bottom: 10px; }
         .empty p { font-size: 14px; }
 
+        /* Тултипы */
+        [data-tooltip] {
+            position: relative;
+        }
+        [data-tooltip]:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 6px 10px;
+            border-radius: var(--radius);
+            font-size: 11px;
+            white-space: nowrap;
+            z-index: 1000;
+            margin-bottom: 6px;
+            box-shadow: var(--shadow);
+            pointer-events: none;
+        }
+        [data-tooltip-bottom]:hover::after {
+            bottom: auto;
+            top: 100%;
+            margin-bottom: 0;
+            margin-top: 6px;
+        }
+
         /* Тост */
         .toast-container {
             position: fixed;
@@ -527,11 +556,10 @@
 
     <!-- Табы -->
     <div class="tabs">
-        <div class="container" id="tabs">
-            <button class="active" data-tab="services">Сервисы</button>
-            <button data-tab="vps">VPS</button>
+        <div class="container">
+            <button data-tab="services" class="active">Сервисы</button>
+            <button data-tab="vps">VPS Серверы</button>
             <button data-tab="logs">Логи</button>
-            <button data-tab="system">Система</button>
         </div>
     </div>
 
@@ -583,18 +611,6 @@
         <div class="log-panel" id="log-output">Выберите сервис и нажмите «Загрузить» для просмотра логов.</div>
     </div>
 
-    <!-- ==================== СИСТЕМА ==================== -->
-    <div class="page" id="page-system">
-        <div class="toolbar"><h2>О системе</h2></div>
-        <div style="display:grid;gap:12px;max-width:480px;">
-            <div class="stat">
-                <div class="stat-label">Версия</div>
-                <div class="stat-value" style="font-size:20px" id="sys-ver">{{version}}</div>
-            </div>
-            <div class="stat">
-                <div class="stat-label">Платформа</div>
-                <div class="stat-value" style="font-size:16px">Keenetic • Entware • Python</div>
-            </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
                 <button class="btn" onclick="updateApp()">🔄 Обновить rProxy</button>
                 <button class="btn btn-danger" onclick="hardReset()">☢ Hard Reset</button>
@@ -836,13 +852,44 @@ document.addEventListener('click', function(e) {
     }
 });
 
+function confirmDialog(msg, title='Подтверждение', isDanger=false, btnText='Да') {
+    return new Promise((resolve) => {
+        document.getElementById('confirm-title').textContent = title;
+        document.getElementById('confirm-message').innerHTML = msg.replace(/\n/g, '<br>');
+        const btnYes = document.getElementById('btn-confirm-yes');
+        const btnNo = document.getElementById('btn-confirm-no');
+        
+        btnYes.textContent = btnText;
+        btnYes.className = 'btn ' + (isDanger ? 'btn-danger' : 'btn-primary');
+        
+        btnYes.onclick = () => { closeModal('modal-confirm'); resolve(true); };
+        btnNo.onclick = () => { closeModal('modal-confirm'); resolve(false); };
+        
+        openModal('modal-confirm');
+    });
+}
+
 async function systemAction(act) {
-    let msg = '';
-    if (act === 'restart') msg = 'Перезапустить конфигурацию rProxy?';
-    if (act === 'reboot') msg = 'ВНИМАНИЕ: Перезагрузить маршрутизатор (Keenetic)?';
-    if (act === 'stop') msg = 'Остановить все туннели rProxy?';
+    let msg = '', title = '', isDanger = false, btnText = 'Выполнить';
+    if (act === 'restart') {
+        title = 'Перезапуск rProxy';
+        msg = 'Перезапустить все туннели и веб-интерфейс rProxy? \nСоединения кратковременно прервутся.';
+        btnText = 'Перезапустить';
+    }
+    if (act === 'reboot') {
+        title = 'Перезагрузка устройства';
+        msg = '⚠️ Внимание: Отправка команды reboot на маршрутизатор (Keenetic). \nВы уверены?';
+        isDanger = true;
+        btnText = 'Перезагрузить';
+    }
+    if (act === 'stop') {
+        title = 'Остановка rProxy';
+        msg = 'Остановить rProxy? \nВсе запущенные сервисы и туннели будут отключены.';
+        isDanger = true;
+        btnText = 'Остановить';
+    }
     
-    if (!confirm(msg)) return;
+    if (!(await confirmDialog(msg, title, isDanger, btnText))) return;
     
     try {
         await api('system/action', {method: 'POST', body: JSON.stringify({action: act})});
@@ -912,11 +959,11 @@ function renderServices() {
             <td data-label="Домен"><span class="mono" style="font-size:11px">${domainDisplay}</span></td>
             <td data-label="SSL">${sslBadge}</td>
             <td data-label=""><div class="actions-cell">${isOn
-                ? `<button class="btn btn-sm btn-danger" onclick="svcAction('${s.id}','stop')">Стоп</button>`
-                : `<button class="btn btn-sm" onclick="svcAction('${s.id}','start')">Старт</button>`
-            }<button class="btn btn-sm" onclick="svcAction('${s.id}','restart')">↻</button>
-            <button class="btn btn-sm" onclick="svcAction('${s.id}','redeploy_nginx')">Nginx</button>
-            <button class="btn btn-sm btn-danger btn-icon" onclick="svcDelete('${s.id}')">✕</button>
+                ? `<button class="btn btn-sm btn-danger" data-tooltip="Остановить туннель" onclick="svcAction('${s.id}','stop')">Стоп</button>`
+                : `<button class="btn btn-sm" data-tooltip="Запустить туннель" onclick="svcAction('${s.id}','start')">Старт</button>`
+            }<button class="btn btn-sm" data-tooltip="Перезапустить сервис" onclick="svcAction('${s.id}','restart')">↻</button>
+            <button class="btn btn-sm" data-tooltip="Пересобрать конфиг Nginx" onclick="svcAction('${s.id}','redeploy_nginx')">Nginx</button>
+            <button class="btn btn-sm btn-danger btn-icon" data-tooltip-bottom="Удалить полностью" onclick="svcDelete('${s.id}')">✕</button>
             </div></td>
         </tr>`;
     });
@@ -925,11 +972,42 @@ function renderServices() {
 }
 
 async function svcAction(name, action) {
+    let msg = '', title = '', isDanger = false, btnText = 'Выполнить';
+    if (action === 'start') {
+        title = 'Запуск сервиса';
+        msg = `Запустить сервис <b>${name}</b>? \n\nБудет запущен туннель SSH для этого порта.`;
+        btnText = 'Запустить';
+    } else if (action === 'stop') {
+        title = 'Остановка сервиса';
+        msg = `Остановить сервис <b>${name}</b>? \n\nТуннель завершит работу, но конфигурация сохранится.`;
+        btnText = 'Остановить';
+        isDanger = true;
+    } else if (action === 'restart') {
+        title = 'Перезапуск сервиса';
+        msg = `Убить процесс туннеля и запустить заново для <b>${name}</b>? \n\nПолезно, если сервис "завис".`;
+        btnText = 'Перезапустить';
+    } else if (action === 'redeploy_nginx') {
+        title = 'Пересборка Nginx';
+        msg = `Удалить старый конфигурационный файл Nginx для <b>${name}</b> и сгенерировать заново? \n\nПолезно при проблемах с портами/доменами.`;
+        btnText = 'Пересобрать';
+    }
+
+    if (!(await confirmDialog(msg, title, isDanger, btnText))) return;
+
     toast(`${action}... ${name}`);
     try {
         await api(`action/${name}/${action}`, {method:'POST'});
         toast(`${name}: ${action} — ОК`, 'success');
-        setTimeout(refreshAll, 2000);
+        setTimeout(refreshAll, 1000);
+    } catch(e) {}
+}
+
+async function svcDelete(name) {
+    if (!(await confirmDialog(`Вы уверены, что хотите ПОЛНОСТЬЮ удалить сервис <b>${name}</b>? \n\nВсе настройки и туннели будут удалены без возможности восстановления.`, 'Удаление сервиса', true, 'Удалить'))) return;
+    try {
+        await api(`services/${name}`, {method:'DELETE'});
+        toast('Сервис удален', 'success');
+        setTimeout(refreshAll, 1000);
     } catch(e) {}
 }
 
@@ -1117,7 +1195,7 @@ async function submitAddVps() {
 }
 
 async function vpsDelete(name) {
-    if (!confirm(`Удалить VPS "${name}"?`)) return;
+    if (!(await confirmDialog(`Удалить сервер <b>${name}</b> из конфигурации rProxy? \n\nЭто действие необратимо.`, 'Удаление VPS', true, 'Удалить'))) return;
     try {
         await api(`vps/${name}`, {method:'DELETE'});
         toast('VPS удалён', 'success');
@@ -1192,7 +1270,7 @@ async function loadLogs() {
 let updateLogTimer = null;
 
 async function updateApp() {
-    if(!confirm('Обновить систему до последней версии?')) return;
+    if (!(await confirmDialog('Обновить систему rProxy до последней версии? \n\nБудет скачан и запущен установочный скрипт с GitHub. Все туннели будут перезапущены.', 'Обновление rProxy', false, 'Обновить'))) return;
     
     // Подавляем тосты на время обновления
     _suppressToasts = true;
@@ -1255,9 +1333,13 @@ async function updateApp() {
 }
 
 async function hardReset() {
-    if (!confirm('ВНИМАНИЕ! Это удалит ВСЕ настройки, ключи и данные rProxy. Вы уверены?')) return;
-    if (!confirm('ПОСЛЕДНЕЕ ПРЕДУПРЕЖДЕНИЕ: данные будут потеряны безвозвратно!')) return;
-    try { await api('system/reset', {method:'POST'}); toast('Очистка завершена','success'); } catch(e) {}
+    if (!(await confirmDialog('ВНИМАНИЕ! Это удалит ВСЕ настройки, ключи и данные rProxy. \n\nВы уверены?', 'Hard Reset', true, 'Да, уверен'))) return;
+    if (!(await confirmDialog('ПОСЛЕДНЕЕ ПРЕДУПРЕЖДЕНИЕ: \n\nДанные будут потеряны безвозвратно!', 'Точно?', true, 'Удалить ВСЕ'))) return;
+    try { 
+        await api('system/reset', {method:'POST'}); 
+        toast('Очистка завершена. Перезагрузка...','warn'); 
+        setTimeout(() => location.reload(), 3000);
+    } catch(e) {}
 }
 
 // ========== Общее ==========
