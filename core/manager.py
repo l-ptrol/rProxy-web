@@ -18,12 +18,21 @@ class ProcessManager:
     
     @staticmethod
     def _get_env():
-        """Возвращает окружение с принудительно добавленными путями Entware"""
+        """Возвращает окружение с путями Entware и библиотеками"""
         env = os.environ.copy()
-        entware_paths = "/opt/bin:/opt/sbin"
+        entware_paths = "/opt/bin:/opt/sbin:/bin:/usr/bin"
         current_path = env.get("PATH", "")
-        if entware_paths not in current_path:
+        if "/opt/bin" not in current_path:
             env["PATH"] = f"{entware_paths}:{current_path}"
+        
+        # Принудительно устанавливаем пути к библиотекам Entware
+        env["LD_LIBRARY_PATH"] = "/opt/lib:/opt/usr/lib:/lib:/usr/lib"
+        # Важно для некоторых утилит
+        if not env.get("HOME"):
+            env["HOME"] = "/opt/root"
+        if not env.get("TERM"):
+            env["TERM"] = "xterm-256color"
+            
         return env
 
     @staticmethod
@@ -116,7 +125,7 @@ def run():
             # Используем абсолютный путь к ttyd и исключаем -- если это возможно
             ttyd_args = [binary, '-W', '-p', '{port}'] + cmd_list
             
-            proc = subprocess.Popen(ttyd_args, stdout=open(log_path, 'a'), stderr=subprocess.STDOUT)
+            proc = subprocess.Popen(ttyd_args, stdout=open(log_path, 'a'), stderr=subprocess.STDOUT, env=os.environ)
             proc.wait()
             
             with open(log_path, 'a') as f:
