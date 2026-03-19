@@ -107,8 +107,15 @@ def run():
                 continue
 
             import shlex
-            cmd_list = shlex.split('{cmd}')
-            ttyd_args = ['ttyd', '-W', '-p', '{port}', '--'] + cmd_list
+            real_cmd = '{cmd}'
+            # На Keenetic/Entware лучше использовать полный путь к login
+            if real_cmd == 'login':
+                real_cmd = '/bin/login'
+            
+            cmd_list = shlex.split(real_cmd)
+            # Используем абсолютный путь к ttyd и исключаем -- если это возможно
+            ttyd_args = [binary, '-W', '-p', '{port}'] + cmd_list
+            
             proc = subprocess.Popen(ttyd_args, stdout=open(log_path, 'a'), stderr=subprocess.STDOUT)
             proc.wait()
             
