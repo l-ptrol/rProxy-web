@@ -106,8 +106,10 @@ def run():
                 time.sleep(5)
                 continue
 
-            proc = subprocess.Popen(['ttyd', '-W', '--max-clients', '10', '-i', '0.0.0.0', '-p', '{port}', '--', '{cmd}'], 
-                                     stdout=open(log_path, 'a'), stderr=subprocess.STDOUT)
+            import shlex
+            cmd_list = shlex.split('{cmd}')
+            ttyd_args = ['ttyd', '-W', '-p', '{port}', '--'] + cmd_list
+            proc = subprocess.Popen(ttyd_args, stdout=open(log_path, 'a'), stderr=subprocess.STDOUT)
             proc.wait()
             
             with open(log_path, 'a') as f:
