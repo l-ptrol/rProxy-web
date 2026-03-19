@@ -16,7 +16,7 @@ RPROXY_ROOT = "/opt/etc/rproxy"
 SERVICES_DIR = os.path.join(RPROXY_ROOT, "services")
 VPS_DIR = os.path.join(RPROXY_ROOT, "vps")
 
-VERSION = "7.4.8"
+VERSION = "7.4.9"
 
 # Кэш статусов VPS (online/offline)
 VPS_STATUS_CACHE = {}

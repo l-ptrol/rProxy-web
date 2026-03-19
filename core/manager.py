@@ -27,6 +27,10 @@ class ProcessManager:
         
         # Принудительно устанавливаем пути к библиотекам Entware
         env["LD_LIBRARY_PATH"] = "/opt/lib:/opt/usr/lib:/lib:/usr/lib"
+        # Важно для terminfo (чтобы ttyd не падал)
+        env["TERMINFO"] = "/opt/share/terminfo"
+        env["TERMINFO_DIRS"] = "/opt/share/terminfo:/etc/terminfo:/usr/share/terminfo"
+        
         # Важно для некоторых утилит
         if not env.get("HOME"):
             env["HOME"] = "/opt/root"
@@ -122,10 +126,9 @@ def run():
                 real_cmd = '/bin/login'
             
             cmd_list = shlex.split(real_cmd)
-            # Используем абсолютный путь к ttyd и исключаем -- если это возможно
-            ttyd_args = [binary, '-W', '-p', '{port}'] + cmd_list
-            
-            proc = subprocess.Popen(ttyd_args, stdout=open(log_path, 'a'), stderr=subprocess.STDOUT, env=os.environ)
+            # Используем shell=True для лучшей совместимости с переменными окружения на Keenetic
+            cmd_str = f'{{binary}} -W -p {{port}} {{real_cmd}}'
+            proc = subprocess.Popen(cmd_str, shell=True, stdout=open(log_path, 'a'), stderr=subprocess.STDOUT, env=os.environ)
             proc.wait()
             
             with open(log_path, 'a') as f:
