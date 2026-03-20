@@ -541,7 +541,7 @@ func handleDeployService(w http.ResponseWriter, r *http.Request, name string) {
 		appendToFile(logFile, "▸ Генерация и загрузка новой конфигурации Nginx...\n")
 		core.RedeployNginx(cfg, vpsCfg)
 
-		result := core.StartService(cfg, vpsCfg)
+		result := core.StartService(cfg, vpsCfg, false)
 
 		if !result {
 			appendToFile(logFile, "\n❌ Деплой завершён с ошибками.\n__DEPLOY_STATUS__:error\n")
@@ -630,7 +630,7 @@ func serviceActionWorker(name, action string) {
 		if vpsCfg == nil {
 			appendToFile(logFile, "❌ VPS не найден\n")
 		} else {
-			core.StartService(cfg, vpsCfg)
+			core.StartService(cfg, vpsCfg, true)
 		}
 	case "stop":
 		core.StopService(name, cfg)
@@ -638,7 +638,7 @@ func serviceActionWorker(name, action string) {
 		core.StopService(name, cfg)
 		time.Sleep(1 * time.Second)
 		if vpsCfg != nil {
-			core.StartService(cfg, vpsCfg)
+			core.StartService(cfg, vpsCfg, true)
 		}
 	case "redeploy_nginx":
 		if vpsCfg != nil {

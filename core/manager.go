@@ -61,8 +61,9 @@ func IsRunning(name string) bool {
 	return true
 }
 
-// StartService — комплексный запуск сервиса: SSL, Auth, Nginx и Туннель
-func StartService(svcCfg, vpsCfg map[string]string) bool {
+// StartService — комплексный запуск сервиса: SSL, Auth, Nginx и Туннель.
+// Параметр fast позволяет пропустить настройку VPS для мгновенного запуска.
+func StartService(svcCfg, vpsCfg map[string]string, fast bool) bool {
 	name := svcCfg["SVC_NAME"]
 	if IsRunning(name) {
 		Msg(fmt.Sprintf("Сервис '%s' уже запущен.", name))
@@ -76,14 +77,16 @@ func StartService(svcCfg, vpsCfg map[string]string) bool {
 	Msg(fmt.Sprintf("Подготовка окружения для '%s'...", name))
 	StopService(name, svcCfg)
 
-	// Очистка старых конфигов Nginx на VPS
-	cleanupCmd := fmt.Sprintf("rm -f /etc/nginx/sites-enabled/rproxy_%s.conf /etc/nginx/streams-enabled/rproxy_%s.conf && (nginx -t && systemctl reload nginx || true)", name, name)
-	RunRemoteSimple(vpsCfg, cleanupCmd)
+	if !fast {
+		// Очистка старых конфигов Nginx на VPS
+		cleanupCmd := fmt.Sprintf("rm -f /etc/nginx/sites-enabled/rproxy_%s.conf /etc/nginx/streams-enabled/rproxy_%s.conf && (nginx -t && systemctl reload nginx || true)", name, name)
+		RunRemoteSimple(vpsCfg, cleanupCmd)
+	}
 
 	// 1. ОБРАБОТКА BASIC AUTH
 	authUser := svcCfg["SVC_AUTH_USER"]
 	authPass := svcCfg["SVC_AUTH_PASS"]
-	if authUser != "" && authPass != "" {
+	if !fast && authUser != "" && authPass != "" {
 		Msg(fmt.Sprintf("Генерация доступа для %s...", authUser))
 		htContent := GenHtpasswd(authUser, authPass)
 		success, errMsg := UploadContent(vpsCfg, htContent+"\n", fmt.Sprintf("/etc/nginx/rproxy_%s.htpasswd", name))
@@ -99,7 +102,7 @@ func StartService(svcCfg, vpsCfg map[string]string) bool {
 	useSSL := svcCfg["SVC_SSL"] == "yes"
 	hasCertificate := false
 
-	if useSSL && domain != "" {
+	if !fast && useSSL && domain != "" {
 		if CheckSSLExists(vpsCfg, domain) {
 			hasCertificate = true
 			Msg(fmt.Sprintf("✅ Сертификат для %s уже существует. Пропускаю перевыпуск.", domain))
@@ -125,6 +128,9 @@ func StartService(svcCfg, vpsCfg map[string]string) bool {
 				Warn(fmt.Sprintf("Certbot не смог выпустить сертификат: %s", output))
 			}
 		}
+	} else if fast && useSSL && domain != "" {
+		// В быстром режиме просто считаем, что сертификат есть, если SSL включен
+		hasCertificate = true
 	}
 
 	// 3. ПОДГОТОВКА ПАРАМЕТРОВ
@@ -267,7 +273,7 @@ func StartService(svcCfg, vpsCfg map[string]string) bool {
 		// 6. ДЕПЛОЙ NGINX / UDP BRIDGE
 		if svcType == "udp" {
 			startUDPBridge(name, svcCfg, vpsCfg, remoteTunnelPort, env)
-		} else {
+		} else if !fast {
 			useSSLFinal := hasCertificate && useSSL
 			Msg(fmt.Sprintf("Применение конфигурации Nginx (SSL: %v)...", useSSLFinal))
 			nginxConf := GenerateNginxConf(svcCfg, useSSLFinal)
@@ -281,6 +287,11 @@ func StartService(svcCfg, vpsCfg map[string]string) bool {
 		Msg(fmt.Sprintf("Туннель '%s' запущен %s(PID: %s, MonPort: %d)%s", name, DIM, pid, monPort, NC))
 		Msg(fmt.Sprintf("Сервис '%s' успешно проброшен!", name))
 		return true
+	}
+
+	if fast {
+		Warn(fmt.Sprintf("Быстрый запуск туннеля '%s' не удался. Ожидайте, перехожу в полный режим...", name))
+		return StartService(svcCfg, vpsCfg, false)
 	}
 
 	Err(fmt.Sprintf("Туннель '%s' не запустился за 20 сек.", name))
@@ -575,7 +586,7 @@ func RedeployNginx(svcCfg, vpsCfg map[string]string) bool {
 		Msg("Принудительный перезапуск сервиса...")
 		StopService(name, nil)
 		time.Sleep(1 * time.Second)
-		StartService(svcCfg, vpsCfg)
+		StartService(svcCfg, vpsCfg, false)
 	} else {
 		Err(fmt.Sprintf("Ошибка при обновлении Nginx: %s", output))
 	}

@@ -123,7 +123,7 @@ func bootServices(delayOverride string) {
 
 			vpsCfg := core.LoadConfig(vpsPath)
 			core.Msg(fmt.Sprintf("Запуск '%s'...", name))
-			core.StartService(cfg, vpsCfg)
+			core.StartService(cfg, vpsCfg, false)
 		}(e)
 	}
 
