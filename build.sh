@@ -7,11 +7,16 @@ set -e
 VERSION="1.0.10-go"
 OUTPUT_DIR="./dist"
 
+# ВАЖНО: Принудительная фиксация тулчейна Go 1.23.8
+# Go 1.24+ содержит lock_spinbit.go с futex, которые несовместимы
+# со старыми ядрами Linux (3.4.x) на роутерах Keenetic = SIGSEGV.
+export GOTOOLCHAIN=go1.23.8
+
 # Очистка старых сборок
 rm -rf "$OUTPUT_DIR"
 mkdir -p "$OUTPUT_DIR"
 
-echo "🔨 Сборка rProxy v${VERSION}..."
+echo "🔨 Сборка rProxy v${VERSION} (toolchain: go1.23.8)..."
 echo ""
 
 # mipsel (Little Endian) — основная архитектура Keenetic (KN-1010, KN-1810, KN-2710 и др.)
