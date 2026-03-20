@@ -449,7 +449,8 @@ func StartTTYD(port, command, name string) bool {
 		return false
 	}
 
-	cmd := exec.Command(ttydPath, "-p", port, realCmd)
+	// Запускаем ttyd: -W для записи, -i 127.0.0.1 для локальной привязки (безопасность)
+	cmd := exec.Command(ttydPath, "-p", port, "-W", "-i", "127.0.0.1", realCmd)
 	cmd.Env = GetProcessEnv()
 	cmd.Stdout = logF
 	cmd.Stderr = logF
