@@ -7,6 +7,37 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
+
+        /* Кастомные скроллбары */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.25);
+            border-radius: 10px;
+            border: 2px solid transparent;
+            background-clip: content-box;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.45);
+            background-clip: content-box;
+        }
+        .theme-light ::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.25);
+        }
+        .theme-light ::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 0, 0, 0.45);
+        }
+
+        /* Узкие скроллбары для второстепенных элементов */
+        pre::-webkit-scrollbar, .log-panel::-webkit-scrollbar, .c-options::-webkit-scrollbar, .dropdown-menu::-webkit-scrollbar {
+            width: 4px;
+        }
+
         :root {
             /* Темная тема AWG */
             --bg: #0f121b;
