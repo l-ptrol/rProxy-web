@@ -360,6 +360,8 @@ func SetupSSHWithPassword(vpsCfg map[string]string, password string) (bool, stri
 		exec.Command("/opt/bin/opkg", "install", "sshpass").Run()
 		if _, err := os.Stat("/opt/bin/sshpass"); err == nil {
 			sshpassCmd = "/opt/bin/sshpass"
+		} else {
+			return false, "Утилита sshpass не найдена и не удалось установить через opkg. Установите её вручную: opkg install sshpass"
 		}
 	}
 
