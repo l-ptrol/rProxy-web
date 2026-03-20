@@ -454,50 +454,77 @@ func StartTTYD(requestedPort, command, name string) (bool, string) {
 
 	pidFile := filepath.Join(PIDDir, fmt.Sprintf("ttyd_%s.pid", port))
 	logFile := filepath.Join(LogDir, fmt.Sprintf("ttyd_%s.log", name))
+	watchdogScript := filepath.Join(PIDDir, fmt.Sprintf("ttyd_watchdog_%s.sh", port))
 
 	// Используем переданную команду без жестких путей (ttyd сам найдет через PATH)
 	realCmd := command
 
 	Msg(fmt.Sprintf("Запуск ttyd на порту %s [команда: %s]...", port, realCmd))
 
-	// Точные аргументы из старой версии rProxy: -W, --max-clients 10, -i 0.0.0.0, --
 	ttydPath := ResolveBin("ttyd")
-	logF, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		Err(fmt.Sprintf("Не удалось открыть лог: %v", err))
-		return false, port
+
+	// Генерируем watchdog-скрипт (в точности как в старой версии)
+	scriptContent := fmt.Sprintf(`#!/bin/sh
+trap 'exit 0' TERM INT
+
+while true; do
+	if [ -x "%s" ]; then
+		"%s" -W --max-clients 10 -i 0.0.0.0 -p "%s" -- %s >> "%s" 2>&1
+	else
+		echo "$(date) Error: ttyd lost during runtime!" >> "%s"
+		exit 1
+	fi
+	
+	exit_code=$?
+	echo "$(date) ttyd stopped with exit code $exit_code, restarting in 2s..." >> "%s"
+	sleep 2
+done
+`, ttydPath, ttydPath, port, realCmd, logFile, logFile, logFile)
+
+	os.WriteFile(watchdogScript, []byte(scriptContent), 0755)
+
+	// Запускаем watchdog-скрипт независимо
+	setsidBin := ResolveBin("setsid")
+	var cmd *exec.Cmd
+	if _, err := os.Stat(setsidBin); err == nil {
+		cmd = exec.Command(setsidBin, "sh", watchdogScript)
+	} else {
+		cmd = exec.Command("sh", watchdogScript)
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	}
 
-	cmd := exec.Command(ttydPath, "-p", port, "-W", "--max-clients", "10", "-i", "0.0.0.0", "--", realCmd)
 	cmd.Env = GetProcessEnv()
-	cmd.Stdout = logF
-	cmd.Stderr = logF
-
-	// Отделяем процесс от родителя, чтобы он не завершался при выходе rProxy
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setsid: true,
-	}
 
 	if err := cmd.Start(); err != nil {
-		Err(fmt.Sprintf("Ошибка запуска ttyd: %v", err))
-		logF.Close()
+		Err(fmt.Sprintf("Ошибка запуска watchdog ttyd: %v", err))
 		return false, port
 	}
-	logF.Close()
 
-	// Сохраняем PID
-	os.WriteFile(pidFile, []byte(strconv.Itoa(cmd.Process.Pid)), 0644)
+	// Сохраняем PID watchdog'а
+	watchdogPid := cmd.Process.Pid
+	os.WriteFile(pidFile, []byte(strconv.Itoa(watchdogPid)), 0644)
+
+	// Очищаем процесс зомби (так как мы его не ждем)
+	go func() {
+		cmd.Wait()
+		os.Remove(watchdogScript)
+	}()
 
 	// Верификация порта
 	Msg("Ожидание готовности порта...")
 	portInt, _ := strconv.Atoi(port)
 	for i := 1; i <= 10; i++ {
 		if IsPortBusy(portInt) {
-			Msg(fmt.Sprintf("ttyd успешно запущен на порту %s", port))
+			Msg(fmt.Sprintf("ttyd успешно запущен на порту %s (Watchdog PID %d)", port, watchdogPid))
 			return true, port
 		}
 		time.Sleep(1 * time.Second)
 	}
+	
+	// Если порт не поднялся - убиваем watchdog
+	exec.Command("kill", "-9", strconv.Itoa(watchdogPid)).Run()
+	os.Remove(pidFile)
+	os.Remove(watchdogScript)
 	return false, port
 }
 
@@ -513,18 +540,22 @@ func StopTTYD(port string) {
 		os.Remove(pidFile)
 	}
 
-	// Агрессивно прибиваем ttyd на порту
+	// Агрессивно прибиваем ttyd на порту и его watchdog
 	env := GetProcessEnv()
 	pkillBin := ResolveBin("pkill")
-	cmd := exec.Command(pkillBin, "-9", "-f", fmt.Sprintf("ttyd.*-p %s", port))
-	cmd.Env = env
-	cmd.Run()
+	cmd1 := exec.Command(pkillBin, "-9", "-f", fmt.Sprintf("ttyd.*-p %s", port))
+	cmd1.Env = env
+	cmd1.Run()
+
+	cmd2 := exec.Command(pkillBin, "-9", "-f", fmt.Sprintf("ttyd_watchdog_%s.sh", port))
+	cmd2.Env = env
+	cmd2.Run()
 
 	fuserBin := ResolveBin("fuser")
 	if _, err := os.Stat(fuserBin); err == nil {
-		cmd = exec.Command(fuserBin, "-k", port+"/tcp")
-		cmd.Env = env
-		cmd.Run()
+		cmd3 := exec.Command(fuserBin, "-k", port+"/tcp")
+		cmd3.Env = env
+		cmd3.Run()
 	}
 }
 
