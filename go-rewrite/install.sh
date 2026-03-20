@@ -45,7 +45,7 @@ msg "Архитектура: $ARCH → Бинарник: $BINARY"
 msg "Установка системных зависимостей (autossh, openssh)..."
 set +e
 opkg update >/dev/null 2>&1
-opkg install autossh psmisc procps-ng-pkill openssh-keygen openssh-client openssl-util ttyd socat curl >/dev/null 2>&1
+opkg install autossh psmisc procps-ng-pkill openssh-keygen openssh-client openssl-util ttyd socat curl sshpass >/dev/null 2>&1
 set -e
 
 INSTALL_DIR="/opt/bin"

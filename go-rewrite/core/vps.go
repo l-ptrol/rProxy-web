@@ -352,13 +352,13 @@ func SetupSSHWithPassword(vpsCfg map[string]string, password string) (bool, stri
 	}
 
 	sshpassCmd := "sshpass"
-	if _, err := exec.LookPath("/opt/bin/sshpass"); err == nil {
+	if _, err := os.Stat("/opt/bin/sshpass"); err == nil {
 		sshpassCmd = "/opt/bin/sshpass"
 	} else if _, err := exec.LookPath("sshpass"); err != nil {
-		// Пытаемся установить sshpass если его нет
-		exec.Command("opkg", "update").Run()
-		exec.Command("opkg", "install", "sshpass").Run()
-		if _, err := exec.LookPath("/opt/bin/sshpass"); err == nil {
+		// Пытаемся установить sshpass если его нет через opkg
+		exec.Command("/opt/bin/opkg", "update").Run()
+		exec.Command("/opt/bin/opkg", "install", "sshpass").Run()
+		if _, err := os.Stat("/opt/bin/sshpass"); err == nil {
 			sshpassCmd = "/opt/bin/sshpass"
 		}
 	}
