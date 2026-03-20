@@ -20,8 +20,18 @@ if [ ! -d "/opt/bin" ]; then
     err "Entware не найден. Установите Entware."
 fi
 
+# Определение порта веб-интерфейса (по умолчанию 3000)
+RPROXY_PORT=${PORT:-3000}
+
 # Определение архитектуры
 ARCH=$(uname -m)
+if [ "$ARCH" = "mips" ]; then
+    # Проверка на Little Endian (например, роутеры Keenetic на MT7621)
+    if grep -qiE "MediaTek|Ralink|MT76|RT3|RT5|Little" /proc/cpuinfo 2>/dev/null; then
+        ARCH="mipsel"
+    fi
+fi
+
 case "$ARCH" in
     mips)     BINARY="rproxy-mips"    ;;
     mipsel)   BINARY="rproxy-mipsle"  ;;
@@ -65,12 +75,12 @@ case "\$1" in
         echo "Starting rProxy Web (Go) v${VERSION}..."
         mkdir -p /opt/var/log
         cd /opt/bin
-        ./rproxy web > /opt/var/log/rproxy-web.log 2>&1 &
+        ./rproxy web $RPROXY_PORT > /opt/var/log/rproxy-web.log 2>&1 &
         ;;
     stop)
         echo "Stopping rProxy Web..."
         pkill -f "rproxy web" || true
-        fuser -k 3000/tcp 2>/dev/null || true
+        fuser -k ${RPROXY_PORT}/tcp 2>/dev/null || true
         ;;
     restart)
         \$0 stop
@@ -124,7 +134,7 @@ $CAT_INIT restart
 msg "Установка rProxy v${VERSION} (Go) успешно завершена!"
 printf "\n"
 msg "Консоль:  ${CYAN}rproxy${NC}"
-msg "Веб-порт: ${CYAN}3000${NC}"
+msg "Веб-порт: ${CYAN}${RPROXY_PORT}${NC}"
 msg "Статус:   ${GREEN}онлайн${NC}"
 msg ""
 msg "Примечание: Python больше НЕ ТРЕБУЕТСЯ!"
