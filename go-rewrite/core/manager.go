@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -457,6 +458,8 @@ func StartTTYD(requestedPort, command, name string) (bool, string) {
 	// Используем переданную команду без жестких путей (ttyd сам найдет через PATH)
 	realCmd := command
 
+	Msg(fmt.Sprintf("Запуск ttyd на порту %s [команда: %s]...", port, realCmd))
+
 	// Точные аргументы из старой версии rProxy: -W, --max-clients 10, -i 0.0.0.0, --
 	ttydPath := ResolveBin("ttyd")
 	logF, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -470,18 +473,27 @@ func StartTTYD(requestedPort, command, name string) (bool, string) {
 	cmd.Stdout = logF
 	cmd.Stderr = logF
 
+	// Отделяем процесс от родителя, чтобы он не завершался при выходе rProxy
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setsid: true,
+	}
+
 	if err := cmd.Start(); err != nil {
 		Err(fmt.Sprintf("Ошибка запуска ttyd: %v", err))
+		logF.Close()
 		return false, port
 	}
+	logF.Close()
 
 	// Сохраняем PID
 	os.WriteFile(pidFile, []byte(strconv.Itoa(cmd.Process.Pid)), 0644)
 
 	// Верификация порта
+	Msg("Ожидание готовности порта...")
 	portInt, _ := strconv.Atoi(port)
-	for i := 0; i < 5; i++ {
+	for i := 1; i <= 10; i++ {
 		if IsPortBusy(portInt) {
+			Msg(fmt.Sprintf("ttyd успешно запущен на порту %s", port))
 			return true, port
 		}
 		time.Sleep(1 * time.Second)
