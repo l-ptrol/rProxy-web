@@ -1658,7 +1658,7 @@ async function openAddService() {
     document.getElementById('f-host').value = '127.0.0.1';
     document.getElementById('f-port').value = '';
     document.getElementById('f-domain').value = '';
-    document.getElementById('svc-auth').value = 'no';
+    document.getElementById('f-router-auth').value = 'no';
     
     // Сброс состояния полей
     const u = document.getElementById('f-auth-user');
@@ -1702,7 +1702,7 @@ async function editService(name) {
         document.getElementById('f-domain').value = s.domain;
         document.getElementById('f-ext-port').value = s.ext_port;
         const isRouter = s.router_auth === 'yes';
-        document.getElementById('svc-auth').value = isRouter ? 'router' : (s.auth_user ? 'basic' : 'no');
+        document.getElementById('f-router-auth').value = isRouter ? 'yes' : 'no';
         
         // Обновляем состояние полей
         const u = document.getElementById('f-auth-user');
@@ -2018,6 +2018,10 @@ initCustomSelect('svc-auth-select-wrapper', (val) => {
 });
 initCustomSelect('auth-select-wrapper', (val) => {
     document.getElementById('router-ip-group').style.display = val === 'yes' ? 'block' : 'none';
+    if (val === 'yes') {
+        const ipInput = document.getElementById('s-router-ip');
+        if (!ipInput.value || ipInput.value === '127.0.0.1') ipInput.value = 'auto';
+    }
 });
 
 async function populateLogSelect() {
