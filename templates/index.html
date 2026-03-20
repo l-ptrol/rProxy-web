@@ -146,9 +146,27 @@
         .tabs button:hover { color: var(--text2); }
         .tabs button.active {
             color: var(--accent);
-            border-bottom-color: var(--accent);
             background: var(--accent-bg);
+            border-bottom-color: var(--accent);
         }
+        
+        .tab-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--accent);
+            color: #fff;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 0 5px;
+            min-width: 18px;
+            height: 18px;
+            border-radius: 9px;
+            margin-left: 6px;
+            transition: all 0.2s;
+        }
+        .tabs button.active .tab-badge { background: var(--accent); color: #fff; }
+        .tab-badge:empty { display: none; }
 
         /* Выпадающее меню */
         .dropdown { position: relative; display: inline-block; }
@@ -687,28 +705,14 @@
     <!-- Табы -->
     <div class="tabs">
         <div class="container">
-            <button data-tab="services" class="active">Сервисы</button>
-            <button data-tab="vps">VPS Серверы</button>
+            <button data-tab="services" class="active">Сервисы <span class="tab-badge" id="b-services"></span></button>
+            <button data-tab="vps">VPS <span class="tab-badge" id="b-vps"></span></button>
             <button data-tab="logs">Логи</button>
         </div>
     </div>
 
     <!-- ==================== СЕРВИСЫ ==================== -->
     <div class="page active" id="page-services">
-        <div class="stats">
-            <div class="stat">
-                <div class="stat-label">Всего</div>
-                <div class="stat-value" id="s-total">—</div>
-            </div>
-            <div class="stat">
-                <div class="stat-label">Онлайн</div>
-                <div class="stat-value" id="s-online" style="color:var(--green)">—</div>
-            </div>
-            <div class="stat">
-                <div class="stat-label">VPS</div>
-                <div class="stat-value" id="s-vps">—</div>
-            </div>
-        </div>
 
         <div class="toolbar">
             <h2>Туннели</h2>
@@ -1127,9 +1131,16 @@ let vpsData = [];
 async function loadStats() {
     try {
         const d = await api('stats');
-        document.getElementById('s-total').textContent = d.services;
-        document.getElementById('s-online').textContent = d.online;
-        document.getElementById('s-vps').textContent = d.vps;
+        const bSvc = document.getElementById('b-services');
+        const bVps = document.getElementById('b-vps');
+        
+        if (d.services > 0) {
+            bSvc.textContent = d.online > 0 ? `${d.online}/${d.services}` : d.services;
+        } else {
+            bSvc.textContent = '';
+        }
+        
+        bVps.textContent = d.vps > 0 ? d.vps : '';
     } catch(e) {}
 }
 
