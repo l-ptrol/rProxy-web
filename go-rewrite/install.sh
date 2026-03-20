@@ -1,6 +1,6 @@
 #!/bin/sh
 # rProxy Go Edition — Установщик для Keenetic (Entware)
-VERSION="1.0.4-go"
+VERSION="1.0.5-go"
 
 set -e
 

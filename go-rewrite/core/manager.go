@@ -454,11 +454,8 @@ func StartTTYD(requestedPort, command, name string) (bool, string) {
 	pidFile := filepath.Join(PIDDir, fmt.Sprintf("ttyd_%s.pid", port))
 	logFile := filepath.Join(LogDir, fmt.Sprintf("ttyd_%s.log", name))
 
-	// На Keenetic используем полный путь к login
+	// Используем переданную команду без жестких путей (ttyd сам найдет через PATH)
 	realCmd := command
-	if realCmd == "login" {
-		realCmd = "/bin/login"
-	}
 
 	// Точные аргументы из старой версии rProxy: -W, --max-clients 10, -i 0.0.0.0, --
 	ttydPath := ResolveBin("ttyd")
