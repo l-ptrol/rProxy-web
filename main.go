@@ -32,6 +32,12 @@ func main() {
 			fmt.Sscanf(os.Args[2], "%d", &port)
 		}
 		core.WebPort = port
+		// Сохраняем порт в конфиг для туннелей
+		gPath := filepath.Join(core.RProxyRoot, "rproxy.conf")
+		gCfg := core.LoadConfig(gPath)
+		gCfg["RPROXY_PORT"] = fmt.Sprintf("%d", port)
+		core.SaveConfig(gPath, gCfg)
+
 		// Запуск веб-сервера (файл встроен внутрь бинарника)
 		cmd.StartWebServer(port, indexHTML, loginHTML)
 

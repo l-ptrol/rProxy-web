@@ -158,9 +158,13 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 		cookie, err := r.Cookie("rproxy_session_id")
 		if err == nil {
 			if _, ok := sessions.Load(cookie.Value); ok {
+				fmt.Printf("[AUTH] OK: session=%s from %s\n", cookie.Value, r.RemoteAddr)
 				w.WriteHeader(http.StatusOK)
 				return
 			}
+			fmt.Printf("[AUTH] FAIL: valid cookie but session not found: %s\n", cookie.Value)
+		} else {
+			fmt.Printf("[AUTH] NO COOKIE from %s\n", r.RemoteAddr)
 		}
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 	})

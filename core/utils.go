@@ -23,10 +23,18 @@ const (
 )
 
 // Версия приложения
-const VERSION = "1.1.17-go"
+const VERSION = "1.1.18-go"
 
 // WebPort — порт веб-интерфейса rProxy (для Nginx auth_request)
 var WebPort int = 3000
+
+// LoadWebPort загружает актуальный порт из rproxy.conf
+func LoadWebPort() {
+	p := filepath.Join(RProxyRoot, "rproxy.conf")
+	if cfg := LoadConfig(p); cfg["RPROXY_PORT"] != "" {
+		fmt.Sscanf(cfg["RPROXY_PORT"], "%d", &WebPort)
+	}
+}
 
 // logHookPath — путь к файлу для лог-хука (запись при деплое из веба)
 var logHookPath string

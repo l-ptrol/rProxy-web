@@ -172,6 +172,7 @@ func StartService(svcCfg, vpsCfg map[string]string, fast bool) bool {
 	}
 
 	// 5. ЗАПУСК ТУННЕЛЯ (AUTOSSH)
+	LoadWebPort()
 	remoteTunnelPort := svcCfg["SVC_TUNNEL_PORT"]
 	vpsHost := vpsCfg["VPS_HOST"]
 	vpsUser := vpsCfg["VPS_USER"]
