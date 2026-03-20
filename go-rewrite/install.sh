@@ -1,6 +1,6 @@
 #!/bin/sh
 # rProxy Go Edition — Установщик для Keenetic (Entware)
-VERSION="1.0.1-go"
+VERSION="1.0.2-go"
 
 set -e
 
@@ -42,13 +42,9 @@ esac
 msg "Архитектура: $ARCH → Бинарник: $BINARY"
 
 # Установка минимальных зависимостей (только системные утилиты)
-msg "Установка системных зависимостей (autossh, openssh, sshpass)..."
+msg "Установка системных зависимостей (autossh, openssh)..."
 opkg update
-opkg install autossh psmisc procps-ng-pkill openssh-keygen openssh-client openssl-util ttyd socat curl sshpass
-
-if [ ! -x "/opt/bin/sshpass" ] && ! command -v sshpass >/dev/null; then
-    msg "${RED}Внимание: пакет sshpass не был установлен. Авто-настройка VPS может не работать.${NC}"
-fi
+opkg install autossh psmisc procps-ng-pkill openssh-keygen openssh-client openssl-util ttyd socat curl
 
 INSTALL_DIR="/opt/bin"
 

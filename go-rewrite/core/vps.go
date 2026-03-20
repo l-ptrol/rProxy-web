@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"golang.org/x/crypto/ssh"
 )
 
 // Пути к данным rProxy
@@ -337,34 +339,18 @@ func HealthCheck(vpsCfg map[string]string) map[string]interface{} {
 	return results
 }
 
-// SetupSSHWithPassword настраивает доступ по ключу с использованием временного пароля
-func SetupSSHWithPassword(vpsCfg map[string]string, password string) (bool, string) {
+// SetupSSHWithPassword настраивает доступ по ключу с использованием временного пароля через встроенный Go SSH-клиент
+func SetupSSHWithPassword(vpsName string, vpsCfg map[string]string, password string) (bool, string) {
+	// 1. Гарантируем наличие SSH-ключа
 	EnsureSSHKey()
-
 	pubKeyPath := SSHKeyPath + ".pub"
-	if _, err := os.Stat(pubKeyPath); os.IsNotExist(err) {
-		pubKeyPath = "id_ed25519.pub"
-	}
-
-	pubKey, err := os.ReadFile(pubKeyPath)
+	keyData, err := os.ReadFile(pubKeyPath)
 	if err != nil {
 		return false, "Не удалось прочитать локальный публичный ключ: " + err.Error()
 	}
+	pubKeyStr := strings.TrimSpace(string(keyData))
 
-	sshpassCmd := "sshpass"
-	if _, err := os.Stat("/opt/bin/sshpass"); err == nil {
-		sshpassCmd = "/opt/bin/sshpass"
-	} else if _, err := exec.LookPath("sshpass"); err != nil {
-		// Пытаемся установить sshpass если его нет через opkg
-		exec.Command("/opt/bin/opkg", "update").Run()
-		exec.Command("/opt/bin/opkg", "install", "sshpass").Run()
-		if _, err := os.Stat("/opt/bin/sshpass"); err == nil {
-			sshpassCmd = "/opt/bin/sshpass"
-		} else {
-			return false, "Утилита sshpass не найдена и не удалось установить через opkg. Установите её вручную: opkg install sshpass"
-		}
-	}
-
+	// 2. Параметры подключения
 	host := vpsCfg["VPS_HOST"]
 	user := vpsCfg["VPS_USER"]
 	if user == "" {
@@ -375,15 +361,36 @@ func SetupSSHWithPassword(vpsCfg map[string]string, password string) (bool, stri
 		port = "22"
 	}
 
-	// Команда для записи публичного ключа в authorized_keys на удаленном сервере.
-	// Используем StrictHostKeyChecking=no для обхода подтверждения `yes/no`.
-	cmdLines := fmt.Sprintf(`mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo "%s" >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys`, strings.TrimSpace(string(pubKey)))
-
-	cmd := exec.Command(sshpassCmd, "-p", password, "ssh", "-p", port, "-o", "StrictHostKeyChecking=no", fmt.Sprintf("%s@%s", user, host), cmdLines)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return false, fmt.Sprintf("Ошибка sshpass: %v\nВывод: %s", err, string(out))
+	config := &ssh.ClientConfig{
+		User: user,
+		Auth: []ssh.AuthMethod{
+			ssh.Password(password),
+		},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         15 * time.Second,
 	}
 
-	return true, "Ключ успешно скопирован на сервер!"
+	addr := fmt.Sprintf("%s:%s", host, port)
+	client, err := ssh.Dial("tcp", addr, config)
+	if err != nil {
+		return false, "Ошибка подключения по SSH: " + err.Error()
+	}
+	defer client.Close()
+
+	session, err := client.NewSession()
+	if err != nil {
+		return false, "Ошибка создания SSH-сессии: " + err.Error()
+	}
+	defer session.Close()
+
+	// 3. Настройка .ssh и authorized_keys на удаленном сервере
+	// Команда для записи публичного ключа
+	setupCmd := fmt.Sprintf(`mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo "%s" >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys`, pubKeyStr)
+	err = session.Run(setupCmd)
+	if err != nil {
+		return false, "Ошибка при настройке authorized_keys на VPS: " + err.Error()
+	}
+
+	// 4. Продолжаем стандартную настройку VPS (Nginx, SSL и т.д.) через ранее созданную функцию SetupVPS
+	return SetupVPS(vpsCfg)
 }

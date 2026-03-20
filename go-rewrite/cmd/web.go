@@ -792,7 +792,7 @@ func vpsTaskWorker(name, action, pass string) {
 	case "setup":
 		if pass != "" {
 			appendToFile(logPath, "🔑 Настройка доступа по временному паролю...\n")
-			success, msg := core.SetupSSHWithPassword(vpsCfg, pass)
+			success, msg := core.SetupSSHWithPassword(name, vpsCfg, pass)
 			appendToFile(logPath, msg+"\n")
 			if !success {
 				appendToFile(logPath, "ФИНИШ: Ошибка проброса SSH ключей\n")
