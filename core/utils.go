@@ -23,7 +23,10 @@ const (
 )
 
 // Версия приложения
-const VERSION = "1.1.14-go"
+const VERSION = "1.1.15-go"
+
+// WebPort — порт веб-интерфейса rProxy (для Nginx auth_request)
+var WebPort int = 3000
 
 // logHookPath — путь к файлу для лог-хука (запись при деплое из веба)
 var logHookPath string

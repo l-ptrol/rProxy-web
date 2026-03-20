@@ -75,10 +75,10 @@ func httpProxyConf(name, domain, localPort, extPort, authUser string, useSSL boo
         auth_request /rproxy_verify;
         error_page 401 = @rproxy_login;`
 
-		rAuthHelpers = `
+		rAuthHelpers = fmt.Sprintf(`
     location = /rproxy_verify {
         internal;
-        proxy_pass http://127.0.0.1:81/api/verify;
+        proxy_pass http://127.0.0.1:%d/api/verify;
         proxy_pass_request_body off;
         proxy_set_header Content-Length "";
         proxy_set_header X-Original-URI $request_uri;
@@ -87,7 +87,7 @@ func httpProxyConf(name, domain, localPort, extPort, authUser string, useSSL boo
 
     location @rproxy_login {
         return 302 $scheme://$http_host/login?backUrl=$scheme://$http_host$request_uri;
-    }`
+    }`, WebPort)
 	}
 
 	// Блок редиректа HTTP -> HTTPS

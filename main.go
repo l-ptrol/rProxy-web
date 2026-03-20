@@ -31,6 +31,7 @@ func main() {
 		if len(os.Args) >= 3 {
 			fmt.Sscanf(os.Args[2], "%d", &port)
 		}
+		core.WebPort = port
 		// Запуск веб-сервера (файл встроен внутрь бинарника)
 		cmd.StartWebServer(port, indexHTML, loginHTML)
 
