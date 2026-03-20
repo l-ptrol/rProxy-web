@@ -1,6 +1,6 @@
 #!/bin/sh
 # rProxy Go Edition — Установщик для Keenetic (Entware)
-VERSION="1.0.13-go"
+VERSION="1.0.14-go"
 
 set -e
 
@@ -69,20 +69,27 @@ rm -f "/opt/etc/init.d/S99rproxy-web" "/opt/etc/init.d/S98rproxy"
 # Загрузка бинарника
 msg "Загрузка бинарника rProxy..."
 T_STAMP=$(date +%s)
-# Пробуем по очереди master и main
+URL="https://raw.githubusercontent.com/l-ptrol/rProxy-web/master/dist/${BINARY}?t=$T_STAMP"
+
 DL_OK=false
-for BRANCH in "master" "main"; do
-    msg "Пробуем ветку $BRANCH..."
-    URL="https://raw.githubusercontent.com/l-ptrol/rProxy-web/$BRANCH/dist/${BINARY}?t=$T_STAMP"
-    HTTP_CODE=$(curl -sL -w "%{http_code}" "$URL" -o "$INSTALL_DIR/rproxy" || echo "000")
-    if [ "$HTTP_CODE" = "200" ]; then
+if command -v wget >/dev/null 2>&1; then
+    msg "Использую wget для загрузки (рекомендуется)..."
+    if wget -q --no-check-certificate "$URL" -O "$INSTALL_DIR/rproxy"; then
         DL_OK=true
-        break
     fi
-done
+fi
 
 if [ "$DL_OK" = "false" ]; then
-    err "Не удалось скачать бинарник (HTTP: $HTTP_CODE). Проверьте интернет или URL."
+    msg "Использую curl для загрузки..."
+    # Добавляем User-Agent, чтобы GitHub не блокировал запрос
+    HTTP_CODE=$(curl -sL -A "Mozilla/5.0" -w "%{http_code}" "$URL" -o "$INSTALL_DIR/rproxy")
+    if [ "$HTTP_CODE" = "200" ]; then
+        DL_OK=true
+    fi
+fi
+
+if [ "$DL_OK" = "false" ]; then
+    err "Не удалось скачать бинарник. HTTP Статус: $HTTP_CODE. Попробуйте обновить вручную."
 fi
 
 # Проверка размера
