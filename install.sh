@@ -119,6 +119,7 @@ case "\$1" in
         echo "Starting rProxy v${VERSION}..."
         # 1. Веб-интерфейс
         echo "  ▸ Web UI (port $RPROXY_PORT)..."
+        echo "RPROXY_PORT=\"$RPROXY_PORT\"" > /opt/etc/rproxy/rproxy.conf
         mkdir -p /opt/var/log
         cd /opt/bin
         ./rproxy web $RPROXY_PORT > /opt/var/log/rproxy-web.log 2>&1 &
