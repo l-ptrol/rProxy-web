@@ -1,6 +1,6 @@
 #!/bin/sh
 # rProxy Go Edition — Установщик для Keenetic (Entware)
-VERSION="1.0.15-go"
+VERSION="1.0.16-go"
 
 set -e
 
@@ -42,7 +42,7 @@ esac
 msg "Архитектура: $ARCH → Бинарник: $BINARY"
 
 # Установка минимальных зависимостей (только системные утилиты)
-PKGS="autossh psmisc procps-ng-pkill openssh-keygen openssh-client openssl-util ttyd socat curl"
+PKGS="autossh psmisc procps-ng-pkill openssh-keygen openssh-client openssl-util ttyd socat curl wget-ssl"
 MISSING_PKGS=""
 for pkg in $PKGS; do
     if ! opkg list-installed | grep -q "^$pkg "; then
