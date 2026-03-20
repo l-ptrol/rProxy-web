@@ -940,7 +940,7 @@
                 <p style="margin-bottom: 8px;">Выполняется установка...</p>
                 <pre id="update-log">Запуск процесса...</pre>
                 <div style="text-align:center; padding: 10px;" id="update-spinner">
-                    <span class="badge badge-online">⏳ Подождите...</span>
+                    <span class="badge badge-online">Подождите...</span>
                 </div>
             </div>
             <div class="modal-footer" id="update-footer" style="display:none;">
@@ -963,7 +963,7 @@
                 </div>
                 <pre id="deploy-log">Запуск процесса...</pre>
                 <div style="text-align:center; padding: 10px;" id="deploy-spinner">
-                    <span class="badge badge-online">⏳ Подождите...</span>
+                    <span class="badge badge-online">Подождите...</span>
                 </div>
             </div>
             <div class="modal-footer" id="deploy-footer" style="display:none;">
@@ -1419,7 +1419,7 @@ async function editService(name) {
         document.getElementById('f-edit-mode').value = 'true';
         
         document.getElementById('f-name').value = s.name;
-        document.getElementById('f-name').disabled = true; 
+        document.getElementById('f-name').disabled = false; 
         document.getElementById('f-type').value = s.type;
         document.getElementById('f-vps').value = s.vps;
         document.getElementById('f-host').value = s.target_host;
@@ -1475,7 +1475,8 @@ async function submitAddService() {
 
     try {
         if (isEdit) {
-            await api(`services/${data.name}`, {method:'POST', body: JSON.stringify(data)});
+            const oldName = document.getElementById('modal-service-title').textContent.split(': ')[1];
+            await api(`services/${oldName}`, {method:'POST', body: JSON.stringify(data)});
             closeModal('modal-add-service');
             
             toast('Настройки сохранены', 'success');

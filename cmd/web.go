@@ -447,16 +447,31 @@ func handleUpdateService(w http.ResponseWriter, r *http.Request, name string) {
 		return
 	}
 
-	svcPath := filepath.Join(core.ServicesDir, name+".conf")
+	oldName := name
+	newName := strings.TrimSpace(data["name"])
+	if newName == "" {
+		newName = oldName
+	}
+
+	svcPath := filepath.Join(core.ServicesDir, oldName+".conf")
 	if _, err := os.Stat(svcPath); os.IsNotExist(err) {
 		http.Error(w, "Сервис не найден", 404)
 		return
 	}
 
+	newPath := filepath.Join(core.ServicesDir, newName+".conf")
+	// Если имя изменилось, проверяем, не занято ли новое
+	if newName != oldName {
+		if _, err := os.Stat(newPath); err == nil {
+			http.Error(w, "Сервис с таким именем уже существует", 409)
+			return
+		}
+	}
+
 	oldCfg := core.LoadConfig(svcPath)
 
 	newCfg := map[string]string{
-		"SVC_NAME":        name,
+		"SVC_NAME":        newName,
 		"SVC_TYPE":        defaultStr(data["type"], "http"),
 		"SVC_TARGET_HOST": defaultStr(data["target_host"], "127.0.0.1"),
 		"SVC_TARGET_PORT": data["target_port"],
@@ -475,8 +490,15 @@ func handleUpdateService(w http.ResponseWriter, r *http.Request, name string) {
 		newCfg["SVC_AUTH_PASS"] = authPass
 	}
 
-	core.SaveConfig(svcPath, newCfg)
-	jsonResponse(w, map[string]string{"status": "success", "name": name})
+	// Если имя изменилось, удаляем старый файл после сохранения нового
+	if newName != oldName {
+		core.SaveConfig(newPath, newCfg)
+		os.Remove(svcPath)
+	} else {
+		core.SaveConfig(svcPath, newCfg)
+	}
+
+	jsonResponse(w, map[string]string{"status": "success", "name": newName})
 }
 
 func handleDeployService(w http.ResponseWriter, r *http.Request, name string) {
