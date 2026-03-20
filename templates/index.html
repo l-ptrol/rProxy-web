@@ -605,6 +605,7 @@
                         <div class="dropdown-item" onclick="systemAction('reboot')">⟳ Перезагрузка</div>
                         <div class="dropdown-item" onclick="systemAction('stop')">⏹ Остановить</div>
                         <div class="dropdown-divider"></div>
+                        <div class="dropdown-item" onclick="openSettings()">⚙️ Настройки</div>
                         <div class="dropdown-item" onclick="updateApp()">📥 Обновить</div>
                         <div class="dropdown-divider"></div>
                         <div class="dropdown-item" style="color:var(--red)" onclick="hardReset()">🗑️ Сброс rProxy</div>
@@ -684,6 +685,27 @@
             <div class="modal-footer">
                 <button class="btn btn-outline" id="btn-confirm-no" onclick="closeModal('modal-confirm')">Отмена</button>
                 <button class="btn btn-primary" id="btn-confirm-yes">Да</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== МОДАЛКА: Настройки ==================== -->
+    <div class="modal-overlay" id="modal-settings">
+        <div class="modal" style="width: 400px;">
+            <div class="modal-header">
+                <h3>Глобальные настройки</h3>
+                <button class="btn btn-icon btn-sm" onclick="closeModal('modal-settings')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Задержка автозапуска туннелей (сек)</label>
+                    <input type="number" id="s-boot-delay" placeholder="60" min="0" max="600">
+                    <div class="form-hint">Время ожидания после загрузки роутера перед поднятием туннелей.</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeModal('modal-settings')">Отмена</button>
+                <button class="btn btn-primary" onclick="saveSettings()">Сохранить</button>
             </div>
         </div>
     </div>
@@ -1678,6 +1700,40 @@ async function hardReset() {
         await api('system/reset', {method:'POST'}); 
         toast('Очистка завершена. Перезагрузка...','warn'); 
         setTimeout(() => location.reload(), 3000);
+    } catch(e) {}
+}
+
+async function openSettings() {
+    openModal('modal-settings');
+    try {
+        const d = await api('settings/global');
+        document.getElementById('s-boot-delay').value = d.boot_delay || '60';
+    } catch(e) {}
+}
+
+async function saveSettings() {
+    const data = {
+        boot_delay: document.getElementById('s-boot-delay').value
+    };
+    try {
+        await api('settings/global', {method:'POST', body: JSON.stringify(data)});
+        toast('Настройки сохранены','success');
+        closeModal('modal-settings');
+    } catch(e) {}
+}
+
+async function systemAction(action) {
+    let msg = action === 'reboot' ? 'Перезагрузить роутер?' : 
+              (action === 'restart' ? 'Перезапустить службу rProxy?' : 'Остановить службу rProxy?');
+    
+    if (!(await confirmDialog(msg, 'Системное действие', action === 'reboot'))) return;
+
+    try {
+        await api('system/action', {method: 'POST', body: JSON.stringify({action})});
+        toast('Команда отправлена', 'success');
+        if (action === 'reboot' || action === 'restart') {
+            setTimeout(() => location.reload(), 5000);
+        }
     } catch(e) {}
 }
 

@@ -1,6 +1,6 @@
 #!/bin/sh
 # rProxy Go Edition — Установщик для Keenetic (Entware)
-VERSION="1.0.11-go"
+VERSION="1.0.12-go"
 
 set -e
 
@@ -97,12 +97,9 @@ case "\$1" in
         mkdir -p /opt/var/log
         cd /opt/bin
         ./rproxy web $RPROXY_PORT > /opt/var/log/rproxy-web.log 2>&1 &
-        # 2. Туннели (с задержкой 60с)
-        echo "  ▸ Tunnels (delayed boot)..."
-        (
-            sleep 60
-            /opt/bin/rproxy boot
-        ) > /opt/var/log/rproxy_boot.log 2>&1 &
+        # 2. Туннели (rproxy boot сам обработает задержку)
+        echo "  ▸ Tunnels (background boot)..."
+        /opt/bin/rproxy boot > /opt/var/log/rproxy_boot.log 2>&1 &
         ;;
     stop)
         echo "Stopping rProxy..."

@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"rproxy/core"
 	"sort"
@@ -185,6 +186,29 @@ func StartWebServer(port int, indexHTML []byte) {
 		})
 	})
 
+	mux.HandleFunc("/api/settings/global", func(w http.ResponseWriter, r *http.Request) {
+		gPath := filepath.Join(core.RProxyRoot, "rproxy.conf")
+		gCfg := core.LoadConfig(gPath)
+
+		if r.Method == "GET" {
+			jsonResponse(w, map[string]string{
+				"boot_delay": defaultStr(gCfg["BOOT_DELAY"], "60"),
+			})
+			return
+		}
+
+		if r.Method == "POST" {
+			var data map[string]string
+			json.NewDecoder(r.Body).Decode(&data)
+
+			if val, ok := data["boot_delay"]; ok {
+				gCfg["BOOT_DELAY"] = val
+			}
+			core.SaveConfig(gPath, gCfg)
+			jsonResponse(w, map[string]string{"status": "success"})
+		}
+	})
+
 	// ==================== API: Обновление ====================
 
 	mux.HandleFunc("/api/system/action", func(w http.ResponseWriter, r *http.Request) {
@@ -197,12 +221,22 @@ func StartWebServer(port int, indexHTML []byte) {
 
 		switch data["action"] {
 		case "restart":
-			go os.Getenv("") // placeholder
-			os.Setenv("", "")
+			go func() {
+				time.Sleep(1 * time.Second)
+				exec.Command("/opt/etc/init.d/S99rproxy", "restart").Run()
+			}()
 			jsonResponse(w, map[string]string{"status": "success"})
 		case "stop":
+			go func() {
+				time.Sleep(1 * time.Second)
+				exec.Command("/opt/etc/init.d/S99rproxy", "stop").Run()
+			}()
 			jsonResponse(w, map[string]string{"status": "success"})
 		case "reboot":
+			go func() {
+				time.Sleep(1 * time.Second)
+				exec.Command("reboot").Run()
+			}()
 			jsonResponse(w, map[string]string{"status": "success"})
 		default:
 			http.Error(w, "Unknown action", 400)

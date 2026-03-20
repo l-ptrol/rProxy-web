@@ -7,6 +7,7 @@ import (
 	"rproxy/cmd"
 	"rproxy/core"
 	"strings"
+	"sync"
 	"time"
 	_ "embed"
 )
@@ -64,7 +65,21 @@ func printHelp() {
 
 // bootServices запускает все сервисы с SVC_ENABLED=yes
 func bootServices() {
-	core.Msg("Автозапуск включенных сервисов...")
+	// Загружаем общие настройки для получения задержки
+	gPath := filepath.Join(core.RProxyRoot, "rproxy.conf")
+	gCfg := core.LoadConfig(gPath)
+
+	delaySec := 60
+	if val, ok := gCfg["BOOT_DELAY"]; ok {
+		fmt.Sscanf(val, "%d", &delaySec)
+	}
+
+	if delaySec > 0 {
+		core.Msg(fmt.Sprintf("Ожидание %d сек перед запуском туннелей...", delaySec))
+		time.Sleep(time.Duration(delaySec) * time.Second)
+	}
+
+	core.Msg("Параллельный автозапуск включенных сервисов...")
 
 	entries, err := os.ReadDir(core.ServicesDir)
 	if err != nil {
@@ -72,39 +87,42 @@ func bootServices() {
 		return
 	}
 
-	started := 0
+	var wg sync.WaitGroup
 	for _, e := range entries {
 		if !strings.HasSuffix(e.Name(), ".conf") {
 			continue
 		}
 
-		name := strings.TrimSuffix(e.Name(), ".conf")
-		cfg := core.LoadConfig(filepath.Join(core.ServicesDir, e.Name()))
+		wg.Add(1)
+		go func(entry os.DirEntry) {
+			defer wg.Done()
+			name := strings.TrimSuffix(entry.Name(), ".conf")
+			cfg := core.LoadConfig(filepath.Join(core.ServicesDir, entry.Name()))
 
-		if cfg["SVC_ENABLED"] != "yes" {
-			continue
-		}
+			if cfg["SVC_ENABLED"] != "yes" {
+				return
+			}
 
-		vpsID := cfg["SVC_VPS"]
-		if vpsID == "" {
-			core.Warn(fmt.Sprintf("Сервис '%s' — VPS не указан, пропускаю.", name))
-			continue
-		}
+			vpsID := cfg["SVC_VPS"]
+			if vpsID == "" {
+				core.Warn(fmt.Sprintf("Сервис '%s' — VPS не указан.", name))
+				return
+			}
 
-		vpsPath := filepath.Join(core.VPSDir, vpsID+".conf")
-		if _, err := os.Stat(vpsPath); os.IsNotExist(err) {
-			core.Warn(fmt.Sprintf("Сервис '%s' — VPS '%s' не найден, пропускаю.", name, vpsID))
-			continue
-		}
+			vpsPath := filepath.Join(core.VPSDir, vpsID+".conf")
+			if _, err := os.Stat(vpsPath); os.IsNotExist(err) {
+				core.Warn(fmt.Sprintf("Сервис '%s' — VPS '%s' не найден.", name, vpsID))
+				return
+			}
 
-		vpsCfg := core.LoadConfig(vpsPath)
-		core.Msg(fmt.Sprintf("Запуск '%s'...", name))
-		if core.StartService(cfg, vpsCfg) {
-			started++
-		}
+			vpsCfg := core.LoadConfig(vpsPath)
+			core.Msg(fmt.Sprintf("Запуск '%s'...", name))
+			core.StartService(cfg, vpsCfg)
+		}(e)
 	}
 
-	core.Msg(fmt.Sprintf("Автозапуск завершён: %d сервисов запущено.", started))
+	wg.Wait()
+	core.Msg("Автозапуск завершён.")
 }
 
 // stopAllServices останавливает все сервисы
