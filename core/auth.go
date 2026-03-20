@@ -6,12 +6,13 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/cookiejar"
-	"time"
 	"os/exec"
 	"regexp"
 	"strings"
+	"time"
 )
 
 func md5Hex(data string) string {
@@ -33,41 +34,58 @@ func KeeneticAuth(routerIP, login, password string) (bool, error) {
 		Timeout: 5 * time.Second,
 	}
 
+	fmt.Printf("[AUTH] Input routerIP=%q, login=%q\n", routerIP, login)
+
 	if routerIP == "" || routerIP == "auto" || routerIP == "127.0.0.1" {
 		routerIP = DetectRouterIP()
+		fmt.Printf("[AUTH] DetectRouterIP returned: %s\n", routerIP)
 	}
 
-	// Если в IP нет порта, попробуем добавить :80 или прозондировать
+	// Если в IP нет порта, зондируем
 	if !strings.Contains(routerIP, ":") {
-		// Простой зонд: если на 80 порту не 401, пробуем 81
 		testURL := fmt.Sprintf("http://%s/auth", routerIP)
 		resp, err := client.Get(testURL)
 		if err != nil || resp.StatusCode != 401 {
-			if err == nil { resp.Body.Close() }
-			// Пробуем 81
+			if err == nil {
+				fmt.Printf("[AUTH] Probe %s -> status %d (not 401)\n", testURL, resp.StatusCode)
+				resp.Body.Close()
+			} else {
+				fmt.Printf("[AUTH] Probe %s -> error: %v\n", testURL, err)
+			}
+			// Пробуем :81
 			testURL81 := fmt.Sprintf("http://%s:81/auth", routerIP)
 			resp81, err81 := client.Get(testURL81)
 			if err81 == nil {
+				fmt.Printf("[AUTH] Probe %s -> status %d\n", testURL81, resp81.StatusCode)
 				resp81.Body.Close()
 				if resp81.StatusCode == 401 {
 					routerIP = routerIP + ":81"
 				}
+			} else {
+				fmt.Printf("[AUTH] Probe %s -> error: %v\n", testURL81, err81)
 			}
 		} else {
+			fmt.Printf("[AUTH] Probe %s -> status 401 OK\n", testURL)
 			resp.Body.Close()
 		}
 	}
 
 	authURL := fmt.Sprintf("http://%s/auth", routerIP)
-	fmt.Printf("[AUTH] Probing NDM at: %s\n", authURL)
-	
+	fmt.Printf("[AUTH] Final NDM URL: %s\n", authURL)
+
 	// Шаг 1: GET запрос для получения Challenge и Realm
 	reqGet, _ := http.NewRequest("GET", authURL, nil)
 	respGet, err := client.Do(reqGet)
 	if err != nil {
 		return false, fmt.Errorf("ошибка связи с роутером (%s): %v", routerIP, err)
 	}
-	respGet.Body.Close()
+	defer respGet.Body.Close()
+
+	fmt.Printf("[AUTH] GET %s -> status %d\n", authURL, respGet.StatusCode)
+	// Логируем ВСЕ заголовки ответа
+	for key, vals := range respGet.Header {
+		fmt.Printf("[AUTH] Header: %s = %s\n", key, strings.Join(vals, "; "))
+	}
 
 	challenge := respGet.Header.Get("X-NDM-Challenge")
 	realm := respGet.Header.Get("X-NDM-Realm")
@@ -75,24 +93,40 @@ func KeeneticAuth(routerIP, login, password string) (bool, error) {
 	if challenge == "" {
 		// Попытка вытащить из Www-Authenticate
 		authHeader := respGet.Header.Get("Www-Authenticate")
-		fmt.Sscanf(authHeader, `x-ndw2-interactive realm="%s" challenge="%s"`, &realm, &challenge)
-		// Убираем кавычки из realm если они захватились
-		if len(realm) > 0 && realm[len(realm)-1] == '"' {
-			realm = realm[:len(realm)-1]
+		fmt.Printf("[AUTH] Www-Authenticate: %q\n", authHeader)
+
+		// Парсинг: x-ndw2-interactive realm="XXX" challenge="YYY"
+		if strings.Contains(authHeader, "challenge=") {
+			re := regexp.MustCompile(`realm="([^"]*)"`)
+			rm := re.FindStringSubmatch(authHeader)
+			if len(rm) > 1 {
+				realm = rm[1]
+			}
+			re2 := regexp.MustCompile(`challenge="([^"]*)"`)
+			cm := re2.FindStringSubmatch(authHeader)
+			if len(cm) > 1 {
+				challenge = cm[1]
+			}
 		}
 	}
 
+	fmt.Printf("[AUTH] Challenge=%q, Realm=%q\n", challenge, realm)
+
 	if challenge == "" {
-		return false, fmt.Errorf("не удалось получить X-NDM-Challenge")
+		// Читаем тело ответа для диагностики
+		body, _ := io.ReadAll(respGet.Body)
+		return false, fmt.Errorf("не удалось получить X-NDM-Challenge (status=%d, body=%s)", respGet.StatusCode, string(body[:min(len(body), 200)]))
 	}
 	if realm == "" {
-		realm = "Keenetic" // Дефолт, если вдруг не отдался
+		realm = "Keenetic"
 	}
 
 	// Шаг 2: Расчет хэшей
 	s1 := login + ":" + realm + ":" + password
 	h1 := md5Hex(s1)
 	finalHash := sha256Hex(challenge + h1)
+
+	fmt.Printf("[AUTH] Hash input: %s:%s:<pass>, md5=%s\n", login, realm, h1[:8]+"...")
 
 	// Шаг 3: POST запрос
 	payload := map[string]string{
@@ -103,20 +137,32 @@ func KeeneticAuth(routerIP, login, password string) (bool, error) {
 
 	reqPost, _ := http.NewRequest("POST", authURL, bytes.NewBuffer(jsonData))
 	reqPost.Header.Set("Content-Type", "application/json")
-	reqPost.Header.Set("Origin", fmt.Sprintf("http://%s", routerIP))
-	reqPost.Header.Set("Referer", fmt.Sprintf("http://%s/auth", routerIP))
-	
+
 	respPost, err := client.Do(reqPost)
 	if err != nil {
 		return false, fmt.Errorf("ошибка POST-авторизации: %v", err)
 	}
-	respPost.Body.Close()
+	defer respPost.Body.Close()
+
+	fmt.Printf("[AUTH] POST %s -> status %d\n", authURL, respPost.StatusCode)
 
 	if respPost.StatusCode == http.StatusOK {
+		fmt.Printf("[AUTH] SUCCESS! Login accepted\n")
 		return true, nil
 	}
 
+	// Читаем тело для диагностики
+	body, _ := io.ReadAll(respPost.Body)
+	fmt.Printf("[AUTH] FAIL: status=%d, body=%s\n", respPost.StatusCode, string(body[:min(len(body), 200)]))
+
 	return false, nil
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // DetectRouterIP пытается автоматически найти IP роутера
@@ -127,26 +173,37 @@ func DetectRouterIP() string {
 	// 1. Пробуем найти через ip route (самый надежный способ для Keenetic/Entware)
 	out, err := exec.Command("ip", "route", "show", "default").Output()
 	if err == nil {
+		fmt.Printf("[DETECT] ip route output: %s\n", strings.TrimSpace(string(out)))
 		re := regexp.MustCompile(`via\s+([0-9.]+)`)
 		match := re.FindStringSubmatch(string(out))
 		if len(match) > 1 {
 			gw := match[1]
+			fmt.Printf("[DETECT] Gateway found: %s\n", gw)
 			for _, p := range ports {
-				resp, err := client.Get(fmt.Sprintf("http://%s:%s/auth", gw, p))
+				url := fmt.Sprintf("http://%s:%s/auth", gw, p)
+				resp, err := client.Get(url)
 				if err == nil {
+					fmt.Printf("[DETECT] Probe %s -> status %d\n", url, resp.StatusCode)
 					resp.Body.Close()
 					if resp.StatusCode == 401 {
+						fmt.Printf("[DETECT] Found NDM at %s:%s\n", gw, p)
 						return gw + ":" + p
 					}
+				} else {
+					fmt.Printf("[DETECT] Probe %s -> error: %v\n", url, err)
 				}
 			}
 		}
+	} else {
+		fmt.Printf("[DETECT] ip route error: %v\n", err)
 	}
 
 	// 2. Пробуем 127.0.0.1 (запасной вариант)
 	for _, p := range ports {
-		resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%s/auth", p))
+		url := fmt.Sprintf("http://127.0.0.1:%s/auth", p)
+		resp, err := client.Get(url)
 		if err == nil {
+			fmt.Printf("[DETECT] Probe %s -> status %d\n", url, resp.StatusCode)
 			resp.Body.Close()
 			if resp.StatusCode == 401 {
 				return "127.0.0.1:" + p
@@ -158,8 +215,10 @@ func DetectRouterIP() string {
 	defaults := []string{"192.168.1.1", "192.168.0.1", "192.168.10.1", "192.168.60.1"}
 	for _, ip := range defaults {
 		for _, p := range ports {
-			resp, err := client.Get(fmt.Sprintf("http://%s:%s/auth", ip, p))
+			url := fmt.Sprintf("http://%s:%s/auth", ip, p)
+			resp, err := client.Get(url)
 			if err == nil {
+				fmt.Printf("[DETECT] Probe %s -> status %d\n", url, resp.StatusCode)
 				resp.Body.Close()
 				if resp.StatusCode == 401 {
 					return ip + ":" + p
@@ -168,5 +227,6 @@ func DetectRouterIP() string {
 		}
 	}
 
+	fmt.Printf("[DETECT] WARN: No NDM endpoint found, falling back to 127.0.0.1\n")
 	return "127.0.0.1"
 }
