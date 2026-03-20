@@ -86,6 +86,24 @@ func httpProxyConf(name, domain, localPort, extPort, authUser string, useSSL boo
         proxy_set_header X-Forwarded-For $remote_addr;
     }
 
+    location = /login {
+        auth_request off;
+        proxy_pass http://127.0.0.1:28181/login;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location = /api/login {
+        auth_request off;
+        proxy_pass http://127.0.0.1:28181/api/login;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
     location @rproxy_login {
         return 302 $scheme://$http_host/login?backUrl=$scheme://$http_host$request_uri;
     }`
