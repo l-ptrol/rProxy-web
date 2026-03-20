@@ -1,10 +1,10 @@
-# 🚀 rProxy v1.0.9-go (Native Go Edition)
+# 🚀 rProxy
 
-[![Version](https://img.shields.io/badge/version-1.0.9--go-blue.svg)](https://github.com/l-ptrol/rProxy-web)
+[![Version](https://img.shields.io/badge/version-1.1.0--go-blue.svg)](https://github.com/l-ptrol/rProxy-web)
 [![Platform](https://img.shields.io/badge/platform-Keenetic%20%7C%20Entware-orange.svg)](https://keenetic.net/)
 [![Interface](https://img.shields.io/badge/interface-CLI%20%26%20Web-green.svg)](#)
 
-**rProxy** — это профессиональная модульная система для управления SSH-туннелями и VPS-хостами, оптимизированная для роутеров Keenetic. Полностью переписанная на нативном **Go**, система работает без зависимостей (Python больше не требуется), обеспечивая максимальную стабильность и минимальное потребление ресурсов.
+**rProxy** — это профессиональная модульная система для управления SSH-туннелями и VPS-хостами, оптимизированная для роутеров Keenetic. Полностью написанная на нативном **Go**, система работает без зависимостей, обеспечивая максимальную стабильность и минимальное потребление ресурсов.
 
 ---
 
@@ -12,11 +12,12 @@
 
 ### ⚡ Нативное ядро на Go
 - **Zero Dependencies**: Больше не нужно устанавливать Python или пакеты `pip`. Всё включено в один бинарный файл.
-- **Native SSH Client**: Использование встроенного Go SSH-клиента вместо внешних утилит типа `sshpass`.
-- **High Performance**: Минимальное потребление ОЗУ и мгновенный запуск сервисов.
+- **Native SSH Client**: Использование встроенного Go SSH-клиента вместо внешних утилит.
+- **High Performance**: Минимальное потребление ОЗУ и мгновенный запуск сервисов за счет параллельного выполнения задач.
 
 ### 🌐 Премиальный Web-интерфейс
-- **Glassmorphism Design**: Современный "стеклянный" интерфейс с эффектом размытия и поддержкой темной темы.
+- **Modern Premium Design**: Строгий и чистый интерфейс с карточной системой отображения туннелей.
+- **Dual Theme Support**: Полноценная поддержка Темной и Светлой тем с быстрым переключением.
 - **Real-time Logs**: Интерактивные консоли деплоя и выполнения задач прямо в браузере.
 - **Mobile Ready**: Идеально адаптирован под вертикальные экраны мобильных устройств.
 
@@ -29,7 +30,7 @@
 
 ## 📦 Установка
 
-Для установки на Keenetic (с установленным Entware) выполните одну команду:
+Для установки на Keenetic (с установленным Entware) выполните одну команду в SSH-консоли:
 
 ```bash
 wget -O - https://raw.githubusercontent.com/l-ptrol/rProxy-web/master/install.sh | sh
@@ -40,31 +41,31 @@ wget -O - https://raw.githubusercontent.com/l-ptrol/rProxy-web/master/install.sh
 ## 🚀 Использование
 
 ### Консольный интерфейс (CLI)
-Команда `rproxy` теперь предоставляет прямой доступ к управлению без посредников:
+Команда `rproxy` предоставляет прямой доступ к управлению:
 ```bash
 rproxy --help
 ```
 
 ### Веб-интерфейс
-1. Убедитесь, что служба запущена: `/opt/etc/init.d/S99rproxy-web start`
+1. Убедитесь, что служба запущена (по умолчанию стартует сама): `/opt/etc/init.d/S99rproxy start`
 2. Откройте в браузере: `http://<IP-роутера>:3000`
 
 ---
 
 ## 🏗 Архитектура проекта
-- `main.go`: Точка входа, встроенный веб-сервер и CLI-команды.
+- `main.go`: Точка входа и CLI-команды.
 - `core/`: Ядро системы (SSH-туннели, управление VPS, шаблоны Nginx).
-- `cmd/`: Обработчики Web API.
+- `cmd/`: Обработчики Web API и веб-сервер.
 - `templates/`: Фронтенд (HTML/JS/Vanilla CSS), встроенный прямо в исполняемый файл.
-- `install.sh`: Компактный установщик, автоматически определяющий архитектуру (mipsle/mips/arm64).
+- `install.sh`: Универсальный инсталлер для всех поддерживаемых архитектур.
 
 ---
 
 ## 🛠 Технический стек
-- **Backend**: Go 1.23+
-- **Frontend**: Vanilla JS, Glassmorphism CSS UI.
+- **Backend**: Go (Toolchain 1.23.8)
+- **Frontend**: Vanilla JS, Modern CSS Grid UI.
 - **Tunneling**: Native Go SSH, Nginx.
-- **Security**: Basic Auth, Let's Encrypt, SSH Key Auth.
+- **Security**: Basic Auth, Let's Encrypt (SSL), SSH Key Auth.
 
 ---
 
