@@ -1,6 +1,6 @@
 #!/bin/sh
 # rProxy Go Edition — Установщик для Keenetic (Entware)
-VERSION="1.0.12-go"
+VERSION="1.0.13-go"
 
 set -e
 
@@ -69,8 +69,21 @@ rm -f "/opt/etc/init.d/S99rproxy-web" "/opt/etc/init.d/S98rproxy"
 # Загрузка бинарника
 msg "Загрузка бинарника rProxy..."
 T_STAMP=$(date +%s)
-# Качаем из основной ветки master
-curl -f -sL "https://raw.githubusercontent.com/l-ptrol/rProxy-web/master/dist/${BINARY}?t=$T_STAMP" -o "$INSTALL_DIR/rproxy" || err "Не удалось скачать бинарник. Проверьте интернет или URL."
+# Пробуем по очереди master и main
+DL_OK=false
+for BRANCH in "master" "main"; do
+    msg "Пробуем ветку $BRANCH..."
+    URL="https://raw.githubusercontent.com/l-ptrol/rProxy-web/$BRANCH/dist/${BINARY}?t=$T_STAMP"
+    HTTP_CODE=$(curl -sL -w "%{http_code}" "$URL" -o "$INSTALL_DIR/rproxy" || echo "000")
+    if [ "$HTTP_CODE" = "200" ]; then
+        DL_OK=true
+        break
+    fi
+done
+
+if [ "$DL_OK" = "false" ]; then
+    err "Не удалось скачать бинарник (HTTP: $HTTP_CODE). Проверьте интернет или URL."
+fi
 
 # Проверка размера
 if [ ! -s "$INSTALL_DIR/rproxy" ]; then
@@ -79,7 +92,7 @@ fi
 
 # Назначение прав
 chmod +x "$INSTALL_DIR/rproxy"
-msg "Права доступа установлены: $(ls -l $INSTALL_DIR/rproxy)"
+msg "Права доступа установлены."
 
 msg "Настройка прав доступа..."
 [ -f "/opt/etc/rproxy/id_ed25519" ] && chmod 600 "/opt/etc/rproxy/id_ed25519"
