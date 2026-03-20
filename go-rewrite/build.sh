@@ -4,7 +4,7 @@
 
 set -e
 
-VERSION="1.0.8-go"
+VERSION="1.0.9-go"
 OUTPUT_DIR="./dist"
 
 mkdir -p "$OUTPUT_DIR"
