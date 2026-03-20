@@ -4,9 +4,11 @@
 
 set -e
 
-VERSION="1.0.9-go"
+VERSION="1.0.10-go"
 OUTPUT_DIR="./dist"
 
+# Очистка старых сборок
+rm -rf "$OUTPUT_DIR"
 mkdir -p "$OUTPUT_DIR"
 
 echo "🔨 Сборка rProxy v${VERSION}..."

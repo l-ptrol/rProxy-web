@@ -1,6 +1,6 @@
 #!/bin/sh
 # rProxy Go Edition — Установщик для Keenetic (Entware)
-VERSION="1.0.9-go"
+VERSION="1.0.10-go"
 
 set -e
 
@@ -42,9 +42,21 @@ esac
 msg "Архитектура: $ARCH → Бинарник: $BINARY"
 
 # Установка минимальных зависимостей (только системные утилиты)
-msg "Установка системных зависимостей (autossh, openssh)..."
-opkg update
-opkg install autossh psmisc procps-ng-pkill openssh-keygen openssh-client openssl-util ttyd socat curl
+PKGS="autossh psmisc procps-ng-pkill openssh-keygen openssh-client openssl-util ttyd socat curl"
+MISSING_PKGS=""
+for pkg in $PKGS; do
+    if ! opkg list-installed | grep -q "^$pkg "; then
+        MISSING_PKGS="$MISSING_PKGS $pkg"
+    fi
+done
+
+if [ -n "$MISSING_PKGS" ]; then
+    msg "Установка недостающих системных зависимостей:$MISSING_PKGS..."
+    opkg update
+    opkg install $MISSING_PKGS
+else
+    msg "Все системные зависимости (autossh, ttyd и др.) уже установлены."
+fi
 
 INSTALL_DIR="/opt/bin"
 
@@ -54,8 +66,8 @@ msg "Очистка старой версии..."
 # Загрузка бинарника
 msg "Загрузка бинарника rProxy..."
 T_STAMP=$(date +%s)
-# Для тестирования качаем прямо из ветки test-go этого репозитория
-curl -f -sL "https://raw.githubusercontent.com/l-ptrol/rProxy-web/test-go/go-rewrite/dist/${BINARY}?t=$T_STAMP" -o "$INSTALL_DIR/rproxy" || err "Не удалось скачать бинарник. Проверьте интернет или URL."
+# Качаем из основной ветки master
+curl -f -sL "https://raw.githubusercontent.com/l-ptrol/rProxy-web/master/dist/${BINARY}?t=$T_STAMP" -o "$INSTALL_DIR/rproxy" || err "Не удалось скачать бинарник. Проверьте интернет или URL."
 
 # Проверка размера
 if [ ! -s "$INSTALL_DIR/rproxy" ]; then
