@@ -68,24 +68,24 @@ func httpProxyConf(name, domain, localPort, extPort, authUser string, useSSL boo
 	}
 
 	// Блок Router Auth
-	rAuthBlock := ""
+	rAuthDirectives := ""
+	rAuthHelpers := ""
 	if routerAuth == "yes" {
-		rAuthBlock = `
-    # Защита через Keenetic Router Auth
-    auth_request /rproxy_verify;
-    error_page 401 = @rproxy_login;
+		rAuthDirectives = `
+        auth_request /rproxy_verify;
+        error_page 401 = @rproxy_login;`
 
+		rAuthHelpers = `
     location = /rproxy_verify {
         internal;
         proxy_pass http://127.0.0.1:81/api/verify;
         proxy_pass_request_body off;
         proxy_set_header Content-Length "";
         proxy_set_header X-Original-URI $request_uri;
+        proxy_set_header X-Forwarded-For $remote_addr;
     }
 
     location @rproxy_login {
-        # Если не авторизован — перекидываем на страницу логина основного rProxy
-        # Предполагаем, что rProxy доступен по тому же домену/порту или через заголовок
         return 302 $scheme://$http_host/login?backUrl=$scheme://$http_host$request_uri;
     }`
 	}
@@ -177,6 +177,8 @@ server {
         proxy_send_timeout 7d;
     }
     
+    %s
+
     # Редирект с некорректного HTTPS порта
     error_page 497 301 =307 https://$host:$server_port$request_uri;
 }
@@ -186,7 +188,7 @@ server {
 		serverName,
 		sslConfig,
 		authConfig,
-		rAuthBlock,
+		rAuthDirectives,
 		localPort,
 		stealthHost,
 		proto,
@@ -194,6 +196,7 @@ server {
 		stealthHost,
 		stealthHost,
 		targetHost,
+		rAuthHelpers,
 	)
 }
 

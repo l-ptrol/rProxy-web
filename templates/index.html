@@ -1658,7 +1658,13 @@ async function openAddService() {
     document.getElementById('f-host').value = '127.0.0.1';
     document.getElementById('f-port').value = '';
     document.getElementById('f-domain').value = '';
-    document.getElementById('f-ext-port').value = '443';
+    document.getElementById('svc-auth').value = 'no';
+    
+    // Сброс состояния полей
+    const u = document.getElementById('f-auth-user');
+    const p = document.getElementById('f-auth-pass');
+    if (u) { u.disabled = false; u.style.opacity = '1'; }
+    if (p) { p.disabled = false; p.style.opacity = '1'; }
     
     setCustomSelectValue('type-select-wrapper', 'http');
     onTypeChange();
@@ -1695,6 +1701,14 @@ async function editService(name) {
         document.getElementById('f-port').value = s.target_port;
         document.getElementById('f-domain').value = s.domain;
         document.getElementById('f-ext-port').value = s.ext_port;
+        const isRouter = s.router_auth === 'yes';
+        document.getElementById('svc-auth').value = isRouter ? 'router' : (s.auth_user ? 'basic' : 'no');
+        
+        // Обновляем состояние полей
+        const u = document.getElementById('f-auth-user');
+        const p = document.getElementById('f-auth-pass');
+        if (u) { u.disabled = isRouter; u.style.opacity = isRouter ? '0.5' : '1'; }
+        if (p) { p.disabled = isRouter; p.style.opacity = isRouter ? '0.5' : '1'; }
         
         setCustomSelectValue('ssl-select-wrapper', s.ssl);
         setCustomSelectValue('svc-auth-select-wrapper', s.router_auth || 'no');
@@ -1739,8 +1753,8 @@ async function submitAddService() {
         ext_port: document.getElementById('f-ext-port').value.trim(),
         ssl: document.getElementById('f-ssl').value,
         router_auth: document.getElementById('f-router-auth').value,
-        auth_user: document.getElementById('f-auth-user').value.trim(),
-        auth_pass: document.getElementById('f-auth-pass').value.trim()
+        auth_user: document.getElementById('f-router-auth').value === 'yes' ? '' : document.getElementById('f-auth-user').value.trim(),
+        auth_pass: document.getElementById('f-router-auth').value === 'yes' ? '' : document.getElementById('f-auth-pass').value.trim()
     };
     if (!data.name) { toast('Укажите название','error'); return; }
     if (!data.vps) { toast('Выберите VPS','error'); return; }
@@ -1995,7 +2009,13 @@ initCustomSelect('log-select-wrapper');
 initCustomSelect('type-select-wrapper', onTypeChange);
 initCustomSelect('ssl-select-wrapper');
 initCustomSelect('vps-select-wrapper');
-initCustomSelect('svc-auth-select-wrapper');
+initCustomSelect('svc-auth-select-wrapper', (val) => {
+    const isRouter = val === 'yes';
+    const u = document.getElementById('f-auth-user');
+    const p = document.getElementById('f-auth-pass');
+    if (u) { u.disabled = isRouter; u.style.opacity = isRouter ? '0.5' : '1'; }
+    if (p) { p.disabled = isRouter; p.style.opacity = isRouter ? '0.5' : '1'; }
+});
 initCustomSelect('auth-select-wrapper', (val) => {
     document.getElementById('router-ip-group').style.display = val === 'yes' ? 'block' : 'none';
 });
