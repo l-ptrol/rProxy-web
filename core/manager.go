@@ -234,6 +234,7 @@ func StartService(svcCfg, vpsCfg map[string]string, fast bool) bool {
 		"-i", sshKey,
 		"-p", vpsPort,
 		"-R", tunnelSpec,
+		"-R", fmt.Sprintf("81:127.0.0.1:%d", WebPort),
 		fmt.Sprintf("%s@%s", vpsUser, vpsHost),
 	}
 
