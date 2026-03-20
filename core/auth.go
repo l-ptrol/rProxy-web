@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"time"
+	"os/exec"
+	"regexp"
 )
 
 func md5Hex(data string) string {
@@ -30,11 +32,15 @@ func KeeneticAuth(routerIP, login, password string) (bool, error) {
 		Timeout: 5 * time.Second,
 	}
 
-	if routerIP == "" || routerIP == "auto" || routerIP == "127.0.0.1" {
-		routerIP = "127.0.0.1"
+	if routerIP == "" || routerIP == "auto" {
+		routerIP = DetectRouterIP()
 	}
 
 	authURL := fmt.Sprintf("http://%s/auth", routerIP)
+	
+	// Если мы в режиме "auto" и 127.0.0.1 недоступен или не возвращает 401, пробуем найти 192.168.1.1
+	// (или любой другой LAN IP, если добавим детекцию через ip route)
+	// Для начала просто разрешим "auto" в конфиге.
 
 	// Шаг 1: GET запрос для получения Challenge и Realm
 	reqGet, _ := http.NewRequest("GET", authURL, nil)
@@ -90,4 +96,49 @@ func KeeneticAuth(routerIP, login, password string) (bool, error) {
 	}
 
 	return false, nil
+}
+
+// DetectRouterIP пытается автоматически найти IP роутера
+func DetectRouterIP() string {
+	// 1. Пробуем 127.0.0.1
+	client := http.Client{Timeout: 1 * time.Second}
+	resp, err := client.Get("http://127.0.0.1/auth")
+	if err == nil {
+		resp.Body.Close()
+		if resp.StatusCode == 401 {
+			return "127.0.0.1"
+		}
+	}
+
+	// 2. Пробуем найти через ip route
+	out, err := exec.Command("ip", "route", "show", "default").Output()
+	if err == nil {
+		// Пример: default via 192.168.1.1 dev eth3
+		re := regexp.MustCompile(`via\s+([0-9.]+)`)
+		match := re.FindStringSubmatch(string(out))
+		if len(match) > 1 {
+			gw := match[1]
+			resp, err = client.Get(fmt.Sprintf("http://%s/auth", gw))
+			if err == nil {
+				resp.Body.Close()
+				if resp.StatusCode == 401 {
+					return gw
+				}
+			}
+		}
+	}
+
+	// 3. Крайний случай - стандартные IP
+	defaults := []string{"192.168.1.1", "192.168.0.1", "192.168.10.1", "192.168.60.1"}
+	for _, ip := range defaults {
+		resp, err = client.Get(fmt.Sprintf("http://%s/auth", ip))
+		if err == nil {
+			resp.Body.Close()
+			if resp.StatusCode == 401 {
+				return ip
+			}
+		}
+	}
+
+	return "127.0.0.1" // Возвращаем локальный, если ничего не вышло
 }
