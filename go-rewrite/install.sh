@@ -57,10 +57,16 @@ msg "Очистка старой версии..."
 msg "Загрузка бинарника rProxy..."
 T_STAMP=$(date +%s)
 # Для тестирования качаем прямо из ветки test-go этого репозитория
-curl -sL "https://raw.githubusercontent.com/l-ptrol/rProxy-web/test-go/go-rewrite/dist/${BINARY}?t=$T_STAMP" -o "$INSTALL_DIR/rproxy"
+curl -f -sL "https://raw.githubusercontent.com/l-ptrol/rProxy-web/test-go/go-rewrite/dist/${BINARY}?t=$T_STAMP" -o "$INSTALL_DIR/rproxy" || err "Не удалось скачать бинарник. Проверьте интернет или URL."
+
+# Проверка размера
+if [ ! -s "$INSTALL_DIR/rproxy" ]; then
+    err "Скачанный файл пуст. Возможно, URL неверен."
+fi
 
 # Назначение прав
 chmod +x "$INSTALL_DIR/rproxy"
+msg "Права доступа установлены: $(ls -l $INSTALL_DIR/rproxy)"
 
 msg "Настройка прав доступа..."
 [ -f "/opt/etc/rproxy/id_ed25519" ] && chmod 600 "/opt/etc/rproxy/id_ed25519"
@@ -133,8 +139,12 @@ $CAT_INIT restart
 
 msg "Установка rProxy v${VERSION} (Go) успешно завершена!"
 printf "\n"
-msg "Консоль:  ${CYAN}rproxy${NC}"
+msg "Консоль:  ${CYAN}/opt/bin/rproxy${NC}"
 msg "Веб-порт: ${CYAN}${RPROXY_PORT}${NC}"
 msg "Статус:   ${GREEN}онлайн${NC}"
+
+# Проверка работоспособности
+msg "Тестовый запуск версии..."
+/opt/bin/rproxy version || msg "${RED}Внимание: бинарник не запускается. Возможно, не та архитектура.${NC}"
 msg ""
 msg "Примечание: Python больше НЕ ТРЕБУЕТСЯ!"
