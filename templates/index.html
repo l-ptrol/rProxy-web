@@ -1135,13 +1135,13 @@ async function loadStats() {
         const bVps = document.getElementById('b-vps');
         
         if (d.services > 0) {
-            bSvc.textContent = (d.online > 0 && d.online < d.services) ? `${d.online}/${d.services}` : d.services;
+            bSvc.textContent = d.online > 0 ? `${d.online}/${d.services}` : d.services;
         } else {
             bSvc.textContent = '';
         }
         
         if (d.vps > 0) {
-            bVps.textContent = (d.vps_online > 0 && d.vps_online < d.vps) ? `${d.vps_online}/${d.vps}` : d.vps;
+            bVps.textContent = d.vps_online > 0 ? `${d.vps_online}/${d.vps}` : d.vps;
         } else {
             bVps.textContent = '';
         }
