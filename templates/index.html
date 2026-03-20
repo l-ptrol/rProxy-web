@@ -962,6 +962,19 @@
                     </div>
                 </div>
 
+                <div class="form-group">
+                    <label>Единая авторизация (Router Auth)</label>
+                    <div class="c-select-wrapper" id="svc-auth-select-wrapper">
+                        <div class="c-select" id="svc-auth-select-current" tabindex="0">Нет</div>
+                        <div class="c-options">
+                            <div class="c-option" data-value="yes">Использовать пароль роутера</div>
+                            <div class="c-option selected" data-value="no">Нет</div>
+                        </div>
+                        <input type="hidden" id="f-router-auth" value="no">
+                    </div>
+                    <div class="form-hint">Позволяет заходить в сервис по паролю роутера (сессия rProxy). Работает только для HTTP/HTTPS.</div>
+                </div>
+
                 <div class="form-row">
                     <div class="form-group" style="position:relative;">
                         <label>
@@ -1616,6 +1629,7 @@ async function openAddService() {
     setCustomSelectValue('type-select-wrapper', 'http');
     onTypeChange();
     setCustomSelectValue('ssl-select-wrapper', 'yes');
+    setCustomSelectValue('svc-auth-select-wrapper', 'no');
 
     document.getElementById('f-auth-user').value = '';
     document.getElementById('f-auth-pass').value = '';
@@ -1649,6 +1663,7 @@ async function editService(name) {
         document.getElementById('f-ext-port').value = s.ext_port;
         
         setCustomSelectValue('ssl-select-wrapper', s.ssl);
+        setCustomSelectValue('svc-auth-select-wrapper', s.router_auth || 'no');
         
         document.getElementById('f-auth-user').value = s.auth_user;
         document.getElementById('f-auth-pass').value = s.auth_pass;
@@ -1689,6 +1704,7 @@ async function submitAddService() {
         domain: document.getElementById('f-domain').value.trim(),
         ext_port: document.getElementById('f-ext-port').value.trim(),
         ssl: document.getElementById('f-ssl').value,
+        router_auth: document.getElementById('f-router-auth').value,
         auth_user: document.getElementById('f-auth-user').value.trim(),
         auth_pass: document.getElementById('f-auth-pass').value.trim()
     };
@@ -1945,6 +1961,7 @@ initCustomSelect('log-select-wrapper');
 initCustomSelect('type-select-wrapper', onTypeChange);
 initCustomSelect('ssl-select-wrapper');
 initCustomSelect('vps-select-wrapper');
+initCustomSelect('svc-auth-select-wrapper');
 initCustomSelect('auth-select-wrapper', (val) => {
     document.getElementById('router-ip-group').style.display = val === 'yes' ? 'block' : 'none';
 });

@@ -30,6 +30,10 @@ func KeeneticAuth(routerIP, login, password string) (bool, error) {
 		Timeout: 5 * time.Second,
 	}
 
+	if routerIP == "" || routerIP == "auto" || routerIP == "127.0.0.1" {
+		routerIP = "127.0.0.1"
+	}
+
 	authURL := fmt.Sprintf("http://%s/auth", routerIP)
 
 	// Шаг 1: GET запрос для получения Challenge и Realm

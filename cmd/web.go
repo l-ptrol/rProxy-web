@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -23,6 +24,10 @@ func generateSessionID() string {
 	b := make([]byte, 32)
 	crand.Read(b)
 	return fmt.Sprintf("%x", b)
+}
+
+func isIP(host string) bool {
+	return net.ParseIP(host) != nil
 }
 
 // vpsStatusCache — кэш статусов VPS (online/offline)
@@ -75,10 +80,20 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 			sid := generateSessionID()
 			sessions.Store(sid, time.Now().Unix())
 			
+			// Попытка определить базовый домен для кросс-доменной авторизации
+			host := strings.Split(r.Host, ":")[0]
+			parts := strings.Split(host, ".")
+			domain := ""
+			// Если хост вида a.b.c (не IP), берем последние две части (.mysite.com)
+			if len(parts) >= 2 && !isIP(host) {
+				domain = "." + strings.Join(parts[len(parts)-2:], ".")
+			}
+
 			http.SetCookie(w, &http.Cookie{
 				Name:     "rproxy_session_id",
 				Value:    sid,
 				Path:     "/",
+				Domain:   domain,
 				HttpOnly: true,
 				MaxAge:   86400 * 30, // 30 дней
 			})
@@ -120,14 +135,34 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 		if cookie, err := r.Cookie("rproxy_session_id"); err == nil {
 			sessions.Delete(cookie.Value)
 		}
+		// Определяем тот же домен для корректного удаления
+		host := strings.Split(r.Host, ":")[0]
+		parts := strings.Split(host, ".")
+		domain := ""
+		if len(parts) >= 2 && !isIP(host) {
+			domain = "." + strings.Join(parts[len(parts)-2:], ".")
+		}
+
 		http.SetCookie(w, &http.Cookie{
 			Name:     "rproxy_session_id",
 			Value:    "",
 			Path:     "/",
+			Domain:   domain,
 			HttpOnly: true,
 			MaxAge:   -1,
 		})
 		jsonResponse(w, map[string]string{"status": "success"})
+	})
+
+	mux.HandleFunc("/api/verify", func(w http.ResponseWriter, r *http.Request) {
+		cookie, err := r.Cookie("rproxy_session_id")
+		if err == nil {
+			if _, ok := sessions.Load(cookie.Value); ok {
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+		}
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 	})
 
 	// ==================== API: Система ====================
@@ -423,7 +458,7 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 	authMiddleware := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Публичные маршруты
-			if r.URL.Path == "/login" || r.URL.Path == "/api/login" || r.URL.Path == "/api/logout" {
+			if r.URL.Path == "/login" || r.URL.Path == "/api/login" || r.URL.Path == "/api/logout" || r.URL.Path == "/api/verify" {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -494,7 +529,8 @@ func handleListServices(w http.ResponseWriter, r *http.Request) {
 				"ext_port": cfg["SVC_EXT_PORT"],
 				"domain":   cfg["SVC_DOMAIN"],
 				"ssl":      cfg["SVC_SSL"] == "yes",
-				"auth":     cfg["SVC_AUTH_USER"] != "",
+				"auth":     cfg["SVC_AUTH_USER"] != "" || cfg["SVC_ROUTER_AUTH"] == "yes",
+				"r_auth":   cfg["SVC_ROUTER_AUTH"] == "yes",
 				"status":   status,
 			})
 		}
@@ -543,6 +579,7 @@ func handleCreateService(w http.ResponseWriter, r *http.Request) {
 		"SVC_EXT_PORT":    defaultStr(data["ext_port"], "443"),
 		"SVC_DOMAIN":      data["domain"],
 		"SVC_SSL":         defaultStr(data["ssl"], "no"),
+		"SVC_ROUTER_AUTH": defaultStr(data["router_auth"], "no"),
 		"SVC_TUNNEL_PORT": fmt.Sprintf("%d", tunnelPort),
 		"SVC_ENABLED":     "yes",
 	}
@@ -577,6 +614,7 @@ func handleGetService(w http.ResponseWriter, r *http.Request, name string) {
 		"ssl":         defaultStr(cfg["SVC_SSL"], "no"),
 		"auth_user":   cfg["SVC_AUTH_USER"],
 		"auth_pass":   cfg["SVC_AUTH_PASS"],
+		"router_auth": defaultStr(cfg["SVC_ROUTER_AUTH"], "no"),
 		"tunnel_port": cfg["SVC_TUNNEL_PORT"],
 	})
 }
@@ -620,6 +658,7 @@ func handleUpdateService(w http.ResponseWriter, r *http.Request, name string) {
 		"SVC_EXT_PORT":    defaultStr(data["ext_port"], "443"),
 		"SVC_DOMAIN":      data["domain"],
 		"SVC_SSL":         defaultStr(data["ssl"], "no"),
+		"SVC_ROUTER_AUTH": defaultStr(data["router_auth"], "no"),
 		"SVC_TUNNEL_PORT": oldCfg["SVC_TUNNEL_PORT"],
 		"SVC_ENABLED":     defaultStr(oldCfg["SVC_ENABLED"], "yes"),
 	}

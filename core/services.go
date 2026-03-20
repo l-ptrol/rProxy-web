@@ -41,7 +41,7 @@ func GenerateNginxConf(svcCfg map[string]string, useSSLPaths bool) string {
 
 	switch svcType {
 	case "http", "ttyd":
-		return httpProxyConf(name, domain, tunnelPort, extPort, svcCfg["SVC_AUTH_USER"], useSSLPaths, targetHost, targetPort)
+		return httpProxyConf(name, domain, tunnelPort, extPort, svcCfg["SVC_AUTH_USER"], useSSLPaths, targetHost, targetPort, svcCfg["SVC_ROUTER_AUTH"])
 	case "tcp", "ssh":
 		domainForSSL := ""
 		if useSSLPaths {
@@ -54,7 +54,7 @@ func GenerateNginxConf(svcCfg map[string]string, useSSLPaths bool) string {
 }
 
 // httpProxyConf генерирует конфиг для HTTP/HTTPS прокси
-func httpProxyConf(name, domain, localPort, extPort, authUser string, useSSL bool, targetHost, targetPort string) string {
+func httpProxyConf(name, domain, localPort, extPort, authUser string, useSSL bool, targetHost, targetPort string, routerAuth string) string {
 	// Блок авторизации
 	authConfig := ""
 	if authUser != "" {
@@ -65,6 +65,29 @@ func httpProxyConf(name, domain, localPort, extPort, authUser string, useSSL boo
     proxy_set_header Authorization "";
     proxy_set_header X-Forwarded-User $remote_user;
     `, name, name)
+	}
+
+	// Блок Router Auth
+	rAuthBlock := ""
+	if routerAuth == "yes" {
+		rAuthBlock = `
+    # Защита через Keenetic Router Auth
+    auth_request /rproxy_verify;
+    error_page 401 = @rproxy_login;
+
+    location = /rproxy_verify {
+        internal;
+        proxy_pass http://127.0.0.1:81/api/verify;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        proxy_set_header X-Original-URI $request_uri;
+    }
+
+    location @rproxy_login {
+        # Если не авторизован — перекидываем на страницу логина основного rProxy
+        # Предполагаем, что rProxy доступен по тому же домену/порту или через заголовок
+        return 302 $scheme://$http_host/login?backUrl=$scheme://$http_host$request_uri;
+    }`
 	}
 
 	// Блок редиректа HTTP -> HTTPS
@@ -122,6 +145,7 @@ server {
 
     location / {
         %s
+        %s
         proxy_pass http://127.0.0.1:%s;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
@@ -162,6 +186,7 @@ server {
 		serverName,
 		sslConfig,
 		authConfig,
+		rAuthBlock,
 		localPort,
 		stealthHost,
 		proto,
