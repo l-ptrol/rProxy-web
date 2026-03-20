@@ -1,6 +1,6 @@
 #!/bin/sh
 # rProxy Go Edition — Установщик для Keenetic (Entware)
-VERSION="1.0.16-go"
+VERSION="1.0.17-go"
 
 set -e
 
@@ -66,8 +66,8 @@ msg "Очистка и остановка старой версии..."
 [ -f "/opt/etc/init.d/S99rproxy-web" ] && /opt/etc/init.d/S99rproxy-web stop 2>/dev/null || true
 [ -f "/opt/etc/init.d/S98rproxy" ] && /opt/etc/init.d/S98rproxy stop 2>/dev/null || true
 
-# Принудительно убиваем процессы, если они зависли
-pkill -9 -f rproxy 2>/dev/null || true
+# Принудительно убиваем только бинарные файлы rproxy, чтобы не задеть сам скрипт (sh)
+pkill -9 -x rproxy 2>/dev/null || true
 rm -f "/opt/etc/init.d/S99rproxy-web" "/opt/etc/init.d/S98rproxy"
 
 # Загрузка бинарника
@@ -127,7 +127,8 @@ case "\$1" in
         ;;
     stop)
         echo "Stopping rProxy..."
-        pkill -f "rproxy web" || true
+        # Используем -x для точного совпадения, чтобы не убить другие процессы с похожим именем
+        pkill -x rproxy || true
         fuser -k ${RPROXY_PORT}/tcp 2>/dev/null || true
         /opt/bin/rproxy stop || true
         ;;
