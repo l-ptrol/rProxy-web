@@ -73,18 +73,17 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 		gCfg := core.LoadConfig(gPath)
 		routerIP := defaultStr(gCfg["ROUTER_AUTH_IP"], "127.0.0.1")
 
-		// Пробуем авторизоваться через ядро
 		ok, err := core.KeeneticAuth(routerIP, login, password)
 		if ok {
 			// Успешная авторизация, выдаем сессию
 			sid := generateSessionID()
 			sessions.Store(sid, time.Now().Unix())
+			fmt.Printf("[LOGIN] Success for user: %s\n", login)
 			
-			// Попытка определить базовый домен для кросс-доменной авторизации
+			// ... (остальной код куки)
+			domain := ""
 			host := strings.Split(r.Host, ":")[0]
 			parts := strings.Split(host, ".")
-			domain := ""
-			// Если хост вида a.b.c (не IP), берем последние две части (.mysite.com)
 			if len(parts) >= 2 && !isIP(host) {
 				domain = "." + strings.Join(parts[len(parts)-2:], ".")
 			}
@@ -95,15 +94,18 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 				Path:     "/",
 				Domain:   domain,
 				HttpOnly: true,
-				MaxAge:   86400 * 30, // 30 дней
+				MaxAge:   86400 * 30,
 			})
 			jsonResponse(w, map[string]string{"status": "success"})
 		} else {
+			errMsg := "Неверный логин или пароль"
 			if err != nil {
-				jsonResponse(w, map[string]string{"status": "error", "message": err.Error()})
+				errMsg = err.Error()
+				fmt.Printf("[LOGIN] System error: %v\n", err)
 			} else {
-				jsonResponse(w, map[string]string{"status": "error", "message": "Неверный логин или пароль"})
+				fmt.Printf("[LOGIN] Auth failed: invalid credentials for %s\n", login)
 			}
+			jsonResponse(w, map[string]string{"status": "error", "message": errMsg})
 		}
 	})
 

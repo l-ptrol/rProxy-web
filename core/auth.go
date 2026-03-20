@@ -100,29 +100,36 @@ func KeeneticAuth(routerIP, login, password string) (bool, error) {
 
 // DetectRouterIP пытается автоматически найти IP роутера
 func DetectRouterIP() string {
-	// 1. Пробуем 127.0.0.1
 	client := http.Client{Timeout: 1 * time.Second}
-	resp, err := client.Get("http://127.0.0.1/auth")
-	if err == nil {
-		resp.Body.Close()
-		if resp.StatusCode == 401 {
-			return "127.0.0.1"
+	
+	// Список портов для проверки (80 - дефолт, 81 - часто используется если 80 занят rProxy)
+	ports := []string{"80", "81", "8080"}
+
+	// 1. Пробуем 127.0.0.1 (самый быстрый путь)
+	for _, p := range ports {
+		resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%s/auth", p))
+		if err == nil {
+			resp.Body.Close()
+			if resp.StatusCode == 401 {
+				return "127.0.0.1:" + p
+			}
 		}
 	}
 
 	// 2. Пробуем найти через ip route
 	out, err := exec.Command("ip", "route", "show", "default").Output()
 	if err == nil {
-		// Пример: default via 192.168.1.1 dev eth3
 		re := regexp.MustCompile(`via\s+([0-9.]+)`)
 		match := re.FindStringSubmatch(string(out))
 		if len(match) > 1 {
 			gw := match[1]
-			resp, err = client.Get(fmt.Sprintf("http://%s/auth", gw))
-			if err == nil {
-				resp.Body.Close()
-				if resp.StatusCode == 401 {
-					return gw
+			for _, p := range ports {
+				resp, err := client.Get(fmt.Sprintf("http://%s:%s/auth", gw, p))
+				if err == nil {
+					resp.Body.Close()
+					if resp.StatusCode == 401 {
+						return gw + ":" + p
+					}
 				}
 			}
 		}
@@ -131,14 +138,16 @@ func DetectRouterIP() string {
 	// 3. Крайний случай - стандартные IP
 	defaults := []string{"192.168.1.1", "192.168.0.1", "192.168.10.1", "192.168.60.1"}
 	for _, ip := range defaults {
-		resp, err = client.Get(fmt.Sprintf("http://%s/auth", ip))
-		if err == nil {
-			resp.Body.Close()
-			if resp.StatusCode == 401 {
-				return ip
+		for _, p := range ports {
+			resp, err := client.Get(fmt.Sprintf("http://%s:%s/auth", ip, p))
+			if err == nil {
+				resp.Body.Close()
+				if resp.StatusCode == 401 {
+					return ip + ":" + p
+				}
 			}
 		}
 	}
 
-	return "127.0.0.1" // Возвращаем локальный, если ничего не вышло
+	return "127.0.0.1"
 }
