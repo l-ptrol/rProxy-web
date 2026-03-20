@@ -46,9 +46,8 @@ msg "Очистка старой версии..."
 # Загрузка бинарника
 msg "Загрузка бинарника rProxy..."
 T_STAMP=$(date +%s)
-# В случае релиза, качаем из github
-# curl -sL "https://github.com/l-ptrol/rProxy-go/releases/latest/download/${BINARY}?t=$T_STAMP" -o "$INSTALL_DIR/rproxy"
-# Но пока скачан вручную пользователем
+# Для тестирования качаем прямо из ветки test-go этого репозитория
+curl -sL "https://raw.githubusercontent.com/l-ptrol/rProxy-web/test-go/go-rewrite/dist/${BINARY}?t=$T_STAMP" -o "$INSTALL_DIR/rproxy"
 
 # Назначение прав
 chmod +x "$INSTALL_DIR/rproxy"
