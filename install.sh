@@ -1,6 +1,6 @@
 #!/bin/sh
 # rProxy Go Edition — Установщик для Keenetic (Entware)
-VERSION="1.0.10-go"
+VERSION="1.0.11-go"
 
 set -e
 
@@ -61,7 +61,10 @@ fi
 INSTALL_DIR="/opt/bin"
 
 msg "Очистка старой версии..."
-/opt/etc/init.d/S99rproxy-web stop 2>/dev/null || true
+# Останавливаем и удаляем старые скрипты, если они есть
+[ -f "/opt/etc/init.d/S99rproxy-web" ] && /opt/etc/init.d/S99rproxy-web stop 2>/dev/null || true
+[ -f "/opt/etc/init.d/S98rproxy" ] && /opt/etc/init.d/S98rproxy stop 2>/dev/null || true
+rm -f "/opt/etc/init.d/S99rproxy-web" "/opt/etc/init.d/S98rproxy"
 
 # Загрузка бинарника
 msg "Загрузка бинарника rProxy..."
@@ -81,22 +84,31 @@ msg "Права доступа установлены: $(ls -l $INSTALL_DIR/rpro
 msg "Настройка прав доступа..."
 [ -f "/opt/etc/rproxy/id_ed25519" ] && chmod 600 "/opt/etc/rproxy/id_ed25519"
 
-msg "Создание службы автозапуска веб-интерфейса..."
-CAT_INIT="/opt/etc/init.d/S99rproxy-web"
+msg "Создание единой службы автозапуска rProxy..."
+CAT_INIT="/opt/etc/init.d/S99rproxy"
 cat > "$CAT_INIT" <<EOF
 #!/bin/sh
 export PATH=/opt/sbin:/opt/bin:/opt/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 case "\$1" in
     start)
-        echo "Starting rProxy Web (Go) v${VERSION}..."
+        echo "Starting rProxy v${VERSION}..."
+        # 1. Веб-интерфейс
+        echo "  ▸ Web UI (port $RPROXY_PORT)..."
         mkdir -p /opt/var/log
         cd /opt/bin
         ./rproxy web $RPROXY_PORT > /opt/var/log/rproxy-web.log 2>&1 &
+        # 2. Туннели (с задержкой 60с)
+        echo "  ▸ Tunnels (delayed boot)..."
+        (
+            sleep 60
+            /opt/bin/rproxy boot
+        ) > /opt/var/log/rproxy_boot.log 2>&1 &
         ;;
     stop)
-        echo "Stopping rProxy Web..."
+        echo "Stopping rProxy..."
         pkill -f "rproxy web" || true
         fuser -k ${RPROXY_PORT}/tcp 2>/dev/null || true
+        /opt/bin/rproxy stop || true
         ;;
     restart)
         \$0 stop
@@ -104,7 +116,10 @@ case "\$1" in
         \$0 start
         ;;
     status)
-        if pgrep -f "rproxy web" > /dev/null; then echo "online"; else echo "offline"; fi
+        WEB_ST=\$(pgrep -f "rproxy web" > /dev/null && echo "online" || echo "offline")
+        TUN_ST=\$(pgrep -f "autossh" > /dev/null && echo "active" || echo "inactive")
+        echo "Web UI:  \$WEB_ST"
+        echo "Tunnels: \$TUN_ST"
         ;;
     *)
         echo "Usage: \$0 {start|stop|restart|status}"
@@ -114,37 +129,7 @@ esac
 EOF
 chmod +x "$CAT_INIT"
 
-msg "Создание скрипта автозапуска туннелей..."
-SVC_INIT="/opt/etc/init.d/S98rproxy"
-cat > "$SVC_INIT" <<EOF
-#!/bin/sh
-export PATH=/opt/sbin:/opt/bin:/opt/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-case "\$1" in
-    start)
-        echo "Autostarting rProxy tunnels in background (delayed)..."
-        (
-            sleep 60
-            /opt/bin/rproxy boot
-        ) > /opt/var/log/rproxy_boot.log 2>&1 &
-        ;;
-    stop)
-        echo "Stopping all rProxy tunnels..."
-        /opt/bin/rproxy stop
-        ;;
-    restart)
-        \$0 stop
-        sleep 1
-        \$0 start
-        ;;
-    *)
-        echo "Usage: \$0 {start|stop|restart}"
-        exit 1
-        ;;
-esac
-EOF
-chmod +x "$SVC_INIT"
-
-msg "Перезапуск веб-интерфейса..."
+msg "Перезапуск службы rProxy..."
 $CAT_INIT restart
 
 msg "Установка rProxy v${VERSION} (Go) успешно завершена!"
