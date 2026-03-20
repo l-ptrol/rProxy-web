@@ -1,29 +1,29 @@
-# 🚀 rProxy v7.4.2 (Python Core Edition)
+# 🚀 rProxy v1.0.9-go (Native Go Edition)
 
-[![Version](https://img.shields.io/badge/version-7.4.2-blue.svg)](https://github.com/l-ptrol/rProxy-web)
+[![Version](https://img.shields.io/badge/version-1.0.9--go-blue.svg)](https://github.com/l-ptrol/rProxy-web)
 [![Platform](https://img.shields.io/badge/platform-Keenetic%20%7C%20Entware-orange.svg)](https://keenetic.net/)
 [![Interface](https://img.shields.io/badge/interface-CLI%20%26%20Web-green.svg)](#)
 
-**rProxy** — это профессиональная модульная система для управления SSH-туннелями и VPS-хостами, специально оптимизированная для роутеров Keenetic. Полностью переписанная на Python, система обеспечивает максимальную стабильность, скорость и безопасность при публикации внутренних сервисов в глобальную сеть.
+**rProxy** — это профессиональная модульная система для управления SSH-туннелями и VPS-хостами, оптимизированная для роутеров Keenetic. Полностью переписанная на нативном **Go**, система работает без зависимостей (Python больше не требуется), обеспечивая максимальную стабильность и минимальное потребление ресурсов.
 
 ---
 
 ## ✨ Основные возможности
 
-### 🛠 Мощное ядро на Python
-- **Modular Core**: Единая бизнес-логика для консольного (CLI) и графического (Web) интерфейсов.
-- **AutoSSH Engine**: Интеллектуальное управление туннелями с автоматическим переподключением.
-- **Nginx Automation**: Полная автоматизация конфигураций проксирования на стороне VPS.
+### ⚡ Нативное ядро на Go
+- **Zero Dependencies**: Больше не нужно устанавливать Python или пакеты `pip`. Всё включено в один бинарный файл.
+- **Native SSH Client**: Использование встроенного Go SSH-клиента вместо внешних утилит типа `sshpass`.
+- **High Performance**: Минимальное потребление ОЗУ и мгновенный запуск сервисов.
 
 ### 🌐 Премиальный Web-интерфейс
-- **Glassmorphism Design**: Современный, "стеклянный" интерфейс с поддержкой темной темы.
-- **Real-time Logs**: Отслеживание процесса деплоя и выполнения задач в реальном времени прямо в браузере.
-- **Mobile Ready**: Адаптивная верстка, идеально подходящая для управления с мобильных устройств.
+- **Glassmorphism Design**: Современный "стеклянный" интерфейс с эффектом размытия и поддержкой темной темы.
+- **Real-time Logs**: Интерактивные консоли деплоя и выполнения задач прямо в браузере.
+- **Mobile Ready**: Идеально адаптирован под вертикальные экраны мобильных устройств.
 
 ### 🖥 Управление VPS серверами
-- **Connection Monitoring**: Автоматическая проверка статуса серверов (Online/Offline).
-- **One-Click Repair**: Система автоматического восстановления окружения на удаленном сервере.
-- **Cleanup Tool**: Умная очистка фантомных конфигураций Nginx.
+- **Health Check**: Детальный мониторинг статуса Nginx и SSL-сертификатов на удаленных VPS.
+- **One-Click Setup**: Автоматическая настройка SSH-ключей и окружения на новом сервере.
+- **Auto-Update**: Встроенная система обновления rProxy одной кнопкой.
 
 ---
 
@@ -32,7 +32,7 @@
 Для установки на Keenetic (с установленным Entware) выполните одну команду:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/l-ptrol/rProxy-web/master/install.sh -o /tmp/install.sh && sh /tmp/install.sh
+wget -O - https://raw.githubusercontent.com/l-ptrol/rProxy-web/master/install.sh | sh
 ```
 
 ---
@@ -40,9 +40,9 @@ curl -sL https://raw.githubusercontent.com/l-ptrol/rProxy-web/master/install.sh 
 ## 🚀 Использование
 
 ### Консольный интерфейс (CLI)
-Просто введите команду `rproxy` в терминале для запуска интерактивного меню:
+Команда `rproxy` теперь предоставляет прямой доступ к управлению без посредников:
 ```bash
-rproxy
+rproxy --help
 ```
 
 ### Веб-интерфейс
@@ -52,25 +52,23 @@ rproxy
 ---
 
 ## 🏗 Архитектура проекта
-
-Проект построен по модульному принципу:
-- `core/`: Ядро системы (логика туннелей, управление конфигами, VPS менеджер).
-- `main.py`: Быстрый веб-сервер на Bottle с поддержкой многопоточности.
-- `rproxy.py`: Удобный интерактивный CLI на базе Python.
-- `templates/`: Фронтенд-составляющая (HTML/JS/Vanilla CSS).
-- `install.sh`: Интеллектуальный установщик, настраивающий окружение и зависимости.
+- `main.go`: Точка входа, встроенный веб-сервер и CLI-команды.
+- `core/`: Ядро системы (SSH-туннели, управление VPS, шаблоны Nginx).
+- `cmd/`: Обработчики Web API.
+- `templates/`: Фронтенд (HTML/JS/Vanilla CSS), встроенный прямо в исполняемый файл.
+- `install.sh`: Компактный установщик, автоматически определяющий архитектуру (mipsle/mips/arm64).
 
 ---
 
 ## 🛠 Технический стек
-- **Backend**: Python 3.x, Bottle Framework.
-- **Frontend**: Vanilla JS, Vanilla CSS (Glassmorphism), WebSocket-like polling.
-- **Tunneling**: AutoSSH, Nginx (Stream & HTTP modules).
-- **Security**: Basic Auth, Certbot (Let's Encrypt), SSH Key Auth.
+- **Backend**: Go 1.23+
+- **Frontend**: Vanilla JS, Glassmorphism CSS UI.
+- **Tunneling**: Native Go SSH, Nginx.
+- **Security**: Basic Auth, Let's Encrypt, SSH Key Auth.
 
 ---
 
 ## 🤝 Разработка
-Проект активно развивается. При обнаружении ошибок или наличии предложений — создавайте Issue или Pull Request.
+Проект активно развивается. Если у вас есть предложения или вы нашли ошибку — создавайте Issue или Pull Request.
 
 *Разработано с заботой о пользователях Keenetic.*

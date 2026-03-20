@@ -1,15 +1,22 @@
-**/node_modules
-**/dist
+# Бинарники
+rproxy-*
+dist/
 
-.env
-*.log
+# Go
+*.exe
+*.test
+*.out
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
 .DS_Store
-.git/index.lock
+Thumbs.db
 
-# Gemini Rules
-GEMINI.md
-
-# Python
-__pycache__/
-*.pyc
-.pytest_cache/
+# Временные файлы
+*.log
+*.tmp
