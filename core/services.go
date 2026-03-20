@@ -78,9 +78,10 @@ func httpProxyConf(name, domain, localPort, extPort, authUser string, useSSL boo
 		rAuthHelpers = `
     location = /rproxy_verify {
         internal;
-        proxy_pass http://127.0.0.1:81/api/verify;
+        proxy_pass http://127.0.0.1:28181/api/verify;
         proxy_pass_request_body off;
         proxy_set_header Content-Length "";
+        proxy_set_header Cookie $http_cookie;
         proxy_set_header X-Original-URI $request_uri;
         proxy_set_header X-Forwarded-For $remote_addr;
     }
