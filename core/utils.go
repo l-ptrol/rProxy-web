@@ -23,7 +23,7 @@ const (
 )
 
 // Версия приложения
-const VERSION = "1.1.3-go"
+const VERSION = "1.1.4-go"
 
 // logHookPath — путь к файлу для лог-хука (запись при деплое из веба)
 var logHookPath string

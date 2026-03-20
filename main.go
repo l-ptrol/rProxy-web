@@ -33,7 +33,11 @@ func main() {
 
 	case "boot":
 		// Автозагрузка: запуск всех enabled сервисов
-		bootServices()
+		delayOverride := ""
+		if len(os.Args) >= 3 {
+			delayOverride = os.Args[2]
+		}
+		bootServices(delayOverride)
 
 	case "stop":
 		// Остановка всех сервисов
@@ -43,7 +47,7 @@ func main() {
 		// Перезапуск
 		stopAllServices()
 		time.Sleep(2 * time.Second)
-		bootServices()
+		bootServices("")
 
 	case "version", "-v", "--version":
 		fmt.Printf("rProxy v%s (Go)\n", core.VERSION)
@@ -64,13 +68,15 @@ func printHelp() {
 }
 
 // bootServices запускает все сервисы с SVC_ENABLED=yes
-func bootServices() {
+func bootServices(delayOverride string) {
 	// Загружаем общие настройки для получения задержки
 	gPath := filepath.Join(core.RProxyRoot, "rproxy.conf")
 	gCfg := core.LoadConfig(gPath)
 
 	delaySec := 60
-	if val, ok := gCfg["BOOT_DELAY"]; ok {
+	if delayOverride != "" {
+		fmt.Sscanf(delayOverride, "%d", &delaySec)
+	} else if val, ok := gCfg["BOOT_DELAY"]; ok {
 		fmt.Sscanf(val, "%d", &delaySec)
 	}
 

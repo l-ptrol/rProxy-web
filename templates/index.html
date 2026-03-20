@@ -1135,12 +1135,16 @@ async function loadStats() {
         const bVps = document.getElementById('b-vps');
         
         if (d.services > 0) {
-            bSvc.textContent = d.online > 0 ? `${d.online}/${d.services}` : d.services;
+            bSvc.textContent = (d.online > 0 && d.online < d.services) ? `${d.online}/${d.services}` : d.services;
         } else {
             bSvc.textContent = '';
         }
         
-        bVps.textContent = d.vps > 0 ? d.vps : '';
+        if (d.vps > 0) {
+            bVps.textContent = (d.vps_online > 0 && d.vps_online < d.vps) ? `${d.vps_online}/${d.vps}` : d.vps;
+        } else {
+            bVps.textContent = '';
+        }
     } catch(e) {}
 }
 
@@ -1356,10 +1360,10 @@ async function checkDomainVps() {
             const vps = vpsData.find(v => v.host === res.ip);
             if (vps) {
                 document.getElementById('f-vps').value = vps.id;
-                hint.innerHTML = `✓ Домен указывает на ${res.ip}. Выбран VPS: ${vps.name}`;
+                hint.innerHTML = `Домен указывает на ${res.ip}. Выбран VPS: ${vps.name}`;
                 hint.style.color = 'var(--green)';
             } else {
-                hint.innerHTML = `⚠ Домен указывает на ${res.ip}, но такого VPS у вас нет. <a href="#" onclick="closeModal('modal-add-service'); document.querySelector('[data-tab=vps]').click(); openModal('modal-add-vps');" style="color:var(--orange); text-decoration:underline;">Добавить?</a>`;
+                hint.innerHTML = `Домен указывает на ${res.ip}, но такого VPS у вас нет. <a href="#" onclick="closeModal('modal-add-service'); document.querySelector('[data-tab=vps]').click(); openModal('modal-add-vps');" style="color:var(--orange); text-decoration:underline;">Добавить?</a>`;
                 hint.style.color = 'var(--orange)';
             }
         } else {
@@ -1474,12 +1478,8 @@ async function submitAddService() {
             await api(`services/${data.name}`, {method:'POST', body: JSON.stringify(data)});
             closeModal('modal-add-service');
             
-            if (await confirmDialog(`Настройки сохранены. Хотите пересобрать Nginx и перезапустить сервис <b>${data.name}</b> прямо сейчас?`, 'Применить изменения', false, 'Применить')) {
-                startDeploy(data.name);
-            } else {
-                toast('Настройки сохранены', 'success');
-                setTimeout(refreshAll, 1000);
-            }
+            toast('Настройки сохранены', 'success');
+            setTimeout(() => startDeploy(data.name), 300);
         } else {
             // Шаг 1: Создаём конфиг
             await api('services', {method:'POST', body: JSON.stringify(data)});
@@ -1794,8 +1794,8 @@ async function updateApp() {
             
             // Проверяем завершение
             if (cleanLog && (cleanLog.includes('Restarting rProxy') || cleanLog.includes('успешно завершена') || cleanLog.includes('rProxy installed') || cleanLog.includes('Статус:'))) {
-                el.textContent += '\n\n✅ Обновление физически завершено!\nТеперь вы можете перезагрузить страницу.';
-                document.getElementById('update-spinner').innerHTML = '<span class="badge badge-online">✅ Готово!</span>';
+                el.textContent += '\n\nОбновление физически завершено!\nТеперь вы можете перезагрузить страницу.';
+                document.getElementById('update-spinner').innerHTML = '<span class="badge badge-online">Готово!</span>';
                 document.getElementById('update-footer').style.display = 'flex';
                 clearInterval(updateLogTimer);
                 _suppressToasts = false;
@@ -1805,8 +1805,8 @@ async function updateApp() {
             // Показываем сообщение только один раз
             if (!disconnected && fails > 2) {
                 disconnected = true;
-                document.getElementById('update-log').textContent += '\n\n⏳ Сервер перезапускается... Ожидание.';
-                document.getElementById('update-spinner').innerHTML = '<span class="badge" style="background:var(--orange);color:#fff;">⏳ Перезапуск...</span>';
+                document.getElementById('update-log').textContent += '\n\nСервер перезапускается... Ожидание.';
+                document.getElementById('update-spinner').innerHTML = '<span class="badge" style="background:var(--orange);color:#fff;">Перезапуск...</span>';
             }
             if (fails > 15) {
                 // Слишком долго недоступен — просто перезагружаем

@@ -1,7 +1,7 @@
 #!/bin/sh
 # rProxy Go Edition
-# Version: 1.1.3-go
-VERSION="1.1.3-go"
+# Version: 1.1.4-go
+VERSION="1.1.4-go"
 
 set -e
 
@@ -122,9 +122,9 @@ case "\$1" in
         mkdir -p /opt/var/log
         cd /opt/bin
         ./rproxy web $RPROXY_PORT > /opt/var/log/rproxy-web.log 2>&1 &
-        # 2. Туннели (rproxy boot сам обработает задержку)
+        # 2. Туннели (rproxy boot 0 для немедленного запуска)
         echo "  ▸ Tunnels (background boot)..."
-        /opt/bin/rproxy boot > /opt/var/log/rproxy_boot.log 2>&1 &
+        /opt/bin/rproxy boot 0 > /opt/var/log/rproxy_boot.log 2>&1 &
         ;;
     stop)
         echo "Stopping rProxy..."

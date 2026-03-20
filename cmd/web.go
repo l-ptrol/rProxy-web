@@ -54,19 +54,27 @@ func StartWebServer(port int, indexHTML []byte) {
 		}
 
 		vpsCount := 0
+		vpsOnline := 0
 		if entries, err := os.ReadDir(core.VPSDir); err == nil {
 			for _, e := range entries {
 				if strings.HasSuffix(e.Name(), ".conf") {
 					vpsCount++
+					name := strings.TrimSuffix(e.Name(), ".conf")
+					if v, ok := vpsStatusCache.Load(name); ok {
+						if v.(string) == "online" {
+							vpsOnline++
+						}
+					}
 				}
 			}
 		}
 
 		jsonResponse(w, map[string]interface{}{
-			"services": svcCount,
-			"online":   onlineCount,
-			"vps":      vpsCount,
-			"version":  core.VERSION,
+			"services":   svcCount,
+			"online":     onlineCount,
+			"vps":        vpsCount,
+			"vps_online": vpsOnline,
+			"version":    core.VERSION,
 		})
 	})
 
