@@ -1057,6 +1057,55 @@ function switchTab(tabId) {
     if (btn) btn.click();
 }
 
+// ========== Поддержка свайпов для вкладок ==========
+let touchStartX = 0;
+let touchStartY = 0;
+const tabOrder = ['services', 'vps', 'logs'];
+
+document.addEventListener('touchstart', e => {
+    // Не реагируем, если открыта модалка
+    if (document.querySelector('.modal-overlay.visible')) return;
+    
+    // Не реагируем, если касание внутри элемента с горизонтальным скроллом
+    const skipSelectors = '.log-panel, pre, table, .services-grid, .vps-grid';
+    if (e.target.closest(skipSelectors)) {
+        const el = e.target.closest(skipSelectors);
+        if (el.scrollWidth > el.clientWidth) return;
+    }
+
+    touchStartX = e.changedTouches[0].screenX;
+    touchStartY = e.changedTouches[0].screenY;
+}, {passive: true});
+
+document.addEventListener('touchend', e => {
+    if (document.querySelector('.modal-overlay.visible')) return;
+    
+    const touchEndX = e.changedTouches[0].screenX;
+    const touchEndY = e.changedTouches[0].screenY;
+    
+    const diffX = touchEndX - touchStartX;
+    const diffY = touchEndY - touchStartY;
+    
+    // Порог: 80px по горизонтали, < 50px по вертикали (чтобы не мешать скроллу)
+    if (Math.abs(diffX) > 80 && Math.abs(diffY) < 50) {
+        const activeBtn = document.querySelector('.tabs button.active');
+        if (!activeBtn) return;
+        
+        const currentIndex = tabOrder.indexOf(activeBtn.dataset.tab);
+        if (currentIndex === -1) return;
+        
+        if (diffX < 0) {
+            // Свайп влево -> Следующая вкладка
+            const nextIndex = (currentIndex + 1) % tabOrder.length;
+            switchTab(tabOrder[nextIndex]);
+        } else {
+            // Свайп вправо -> Предыдущая вкладка
+            const nextIndex = (currentIndex - 1 + tabOrder.length) % tabOrder.length;
+            switchTab(tabOrder[nextIndex]);
+        }
+    }
+}, {passive: true});
+
 function closeModal(id) { document.getElementById(id).classList.remove('visible'); }
 function openModal(id) { document.getElementById(id).classList.add('visible'); }
 
