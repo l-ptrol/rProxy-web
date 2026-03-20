@@ -463,8 +463,9 @@ func StartTTYD(requestedPort, command, name string) (bool, string) {
 
 	ttydPath := ResolveBin("ttyd")
 
-	// Генерируем watchdog-скрипт (в точности как в старой версии)
+	// Генерируем watchdog-скрипт (в точности как в старой версии — минимальное окружение, только PATH)
 	scriptContent := fmt.Sprintf(`#!/bin/sh
+export PATH="/opt/bin:/opt/sbin:$PATH"
 trap 'exit 0' TERM INT
 
 while true; do
@@ -483,17 +484,10 @@ done
 
 	os.WriteFile(watchdogScript, []byte(scriptContent), 0755)
 
-	// Запускаем watchdog-скрипт независимо
-	setsidBin := ResolveBin("setsid")
+	// Запускаем watchdog-скрипт независимо (БЕЗ GetProcessEnv — только системное окружение)
 	var cmd *exec.Cmd
-	if _, err := os.Stat(setsidBin); err == nil {
-		cmd = exec.Command(setsidBin, "sh", watchdogScript)
-	} else {
-		cmd = exec.Command("sh", watchdogScript)
-		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-	}
-
-	cmd.Env = GetProcessEnv()
+	cmd = exec.Command("sh", watchdogScript)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 
 	if err := cmd.Start(); err != nil {
 		Err(fmt.Sprintf("Ошибка запуска watchdog ttyd: %v", err))
