@@ -2200,7 +2200,10 @@ async function commitSaveSettings(routerAuth, routerIp) {
     };
     try {
         await api('settings/global', {method:'POST', body: JSON.stringify(data)});
-        if (routerAuth !== 'yes') toast('Настройки сохранены','success');
+        if (routerAuth !== 'yes') {
+            toast('Настройки сохранены','success');
+            refreshAll();
+        }
         closeModal('modal-settings');
         if (routerAuth === 'yes') {
             setTimeout(() => location.reload(), 1500);
