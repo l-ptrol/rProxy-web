@@ -103,6 +103,8 @@ func KeeneticAuth(routerIP, login, password string) (bool, error) {
 
 	reqPost, _ := http.NewRequest("POST", authURL, bytes.NewBuffer(jsonData))
 	reqPost.Header.Set("Content-Type", "application/json")
+	reqPost.Header.Set("Origin", fmt.Sprintf("http://%s", routerIP))
+	reqPost.Header.Set("Referer", fmt.Sprintf("http://%s/auth", routerIP))
 	
 	respPost, err := client.Do(reqPost)
 	if err != nil {
