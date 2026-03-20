@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	crand "crypto/rand"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -15,24 +16,118 @@ import (
 	"time"
 )
 
+// Сессии для авторизации
+var sessions = sync.Map{}
+
+func generateSessionID() string {
+	b := make([]byte, 32)
+	crand.Read(b)
+	return fmt.Sprintf("%x", b)
+}
+
 // vpsStatusCache — кэш статусов VPS (online/offline)
 var vpsStatusCache = sync.Map{}
 
 // StartWebServer запускает HTTP-сервер на указанном порту
-func StartWebServer(port int, indexHTML []byte) {
+func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 	mux := http.NewServeMux()
 
-	// Страницы
+	// Страница входа
+	mux.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
+		content := strings.ReplaceAll(string(loginHTML), "{{version}}", core.VERSION)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write([]byte(content))
+	})
+
+	// Главная (защищенная)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
 			return
 		}
 		
-		// Заменяем {{version}} на текущую версию
 		content := strings.ReplaceAll(string(indexHTML), "{{version}}", core.VERSION)
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write([]byte(content))
+	})
+
+	// ==================== API: Авторизация ====================
+
+	mux.HandleFunc("/api/login", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Method not allowed", 405)
+			return
+		}
+
+		var data map[string]string
+		json.NewDecoder(r.Body).Decode(&data)
+		login := data["login"]
+		password := data["password"]
+
+		gPath := filepath.Join(core.RProxyRoot, "rproxy.conf")
+		gCfg := core.LoadConfig(gPath)
+		routerIP := defaultStr(gCfg["ROUTER_AUTH_IP"], "127.0.0.1")
+
+		// Пробуем авторизоваться через ядро
+		ok, err := core.KeeneticAuth(routerIP, login, password)
+		if ok {
+			// Успешная авторизация, выдаем сессию
+			sid := generateSessionID()
+			sessions.Store(sid, time.Now().Unix())
+			
+			http.SetCookie(w, &http.Cookie{
+				Name:     "rproxy_session_id",
+				Value:    sid,
+				Path:     "/",
+				HttpOnly: true,
+				MaxAge:   86400 * 30, // 30 дней
+			})
+			jsonResponse(w, map[string]string{"status": "success"})
+		} else {
+			if err != nil {
+				jsonResponse(w, map[string]string{"status": "error", "message": err.Error()})
+			} else {
+				jsonResponse(w, map[string]string{"status": "error", "message": "Неверный логин или пароль"})
+			}
+		}
+	})
+
+	mux.HandleFunc("/api/check-auth", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Method not allowed", 405)
+			return
+		}
+
+		var data map[string]string
+		json.NewDecoder(r.Body).Decode(&data)
+		login := data["login"]
+		password := data["password"]
+		routerIP := defaultStr(data["router_ip"], "127.0.0.1")
+
+		ok, err := core.KeeneticAuth(routerIP, login, password)
+		if ok {
+			jsonResponse(w, map[string]string{"status": "success"})
+		} else {
+			if err != nil {
+				jsonResponse(w, map[string]string{"status": "error", "message": err.Error()})
+			} else {
+				jsonResponse(w, map[string]string{"status": "error", "message": "Неверный логин или пароль"})
+			}
+		}
+	})
+
+	mux.HandleFunc("/api/logout", func(w http.ResponseWriter, r *http.Request) {
+		if cookie, err := r.Cookie("rproxy_session_id"); err == nil {
+			sessions.Delete(cookie.Value)
+		}
+		http.SetCookie(w, &http.Cookie{
+			Name:     "rproxy_session_id",
+			Value:    "",
+			Path:     "/",
+			HttpOnly: true,
+			MaxAge:   -1,
+		})
+		jsonResponse(w, map[string]string{"status": "success"})
 	})
 
 	// ==================== API: Система ====================
@@ -200,7 +295,9 @@ func StartWebServer(port int, indexHTML []byte) {
 
 		if r.Method == "GET" {
 			jsonResponse(w, map[string]string{
-				"boot_delay": defaultStr(gCfg["BOOT_DELAY"], "60"),
+				"boot_delay":  defaultStr(gCfg["BOOT_DELAY"], "60"),
+				"router_auth": defaultStr(gCfg["ROUTER_AUTH"], "no"),
+				"router_ip":   defaultStr(gCfg["ROUTER_AUTH_IP"], "127.0.0.1"),
 			})
 			return
 		}
@@ -211,6 +308,12 @@ func StartWebServer(port int, indexHTML []byte) {
 
 			if val, ok := data["boot_delay"]; ok {
 				gCfg["BOOT_DELAY"] = val
+			}
+			if val, ok := data["router_auth"]; ok {
+				gCfg["ROUTER_AUTH"] = val
+			}
+			if val, ok := data["router_ip"]; ok {
+				gCfg["ROUTER_AUTH_IP"] = val
 			}
 			core.SaveConfig(gPath, gCfg)
 			jsonResponse(w, map[string]string{"status": "success"})
@@ -316,8 +419,46 @@ func StartWebServer(port int, indexHTML []byte) {
 	// Запуск фонового мониторинга VPS
 	go vpsHealthMonitor()
 
+	// Middleware для авторизации
+	authMiddleware := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Публичные маршруты
+			if r.URL.Path == "/login" || r.URL.Path == "/api/login" || r.URL.Path == "/api/logout" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Проверка настроек
+			gPath := filepath.Join(core.RProxyRoot, "rproxy.conf")
+			gCfg := core.LoadConfig(gPath)
+
+			// Если авторизация через роутер включена
+			if gCfg["ROUTER_AUTH"] == "yes" {
+				cookie, err := r.Cookie("rproxy_session_id")
+				validSession := false
+				if err == nil {
+					if _, ok := sessions.Load(cookie.Value); ok {
+						validSession = true
+					}
+				}
+
+				if !validSession {
+					if strings.HasPrefix(r.URL.Path, "/api/") {
+						http.Error(w, `{"error": "unauthorized"}`, http.StatusUnauthorized)
+					} else {
+						http.Redirect(w, r, "/login", http.StatusFound)
+					}
+					return
+				}
+			}
+
+			// Если ROUTER_AUTH != "yes", мы не проверяем куки (остается Basic Auth от Nginx)
+			next.ServeHTTP(w, r)
+		})
+	}
+
 	core.Msg(fmt.Sprintf("Веб-сервер запущен на порту %d", port))
-	if err := http.ListenAndServe(fmt.Sprintf("0.0.0.0:%d", port), mux); err != nil {
+	if err := http.ListenAndServe(fmt.Sprintf("0.0.0.0:%d", port), authMiddleware(mux)); err != nil {
 		core.Err(fmt.Sprintf("Ошибка запуска веб-сервера: %v", err))
 	}
 }

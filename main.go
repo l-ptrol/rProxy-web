@@ -15,6 +15,9 @@ import (
 //go:embed templates/index.html
 var indexHTML []byte
 
+//go:embed templates/login.html
+var loginHTML []byte
+
 func main() {
 
 	if len(os.Args) < 2 {
@@ -29,7 +32,7 @@ func main() {
 			fmt.Sscanf(os.Args[2], "%d", &port)
 		}
 		// Запуск веб-сервера (файл встроен внутрь бинарника)
-		cmd.StartWebServer(port, indexHTML)
+		cmd.StartWebServer(port, indexHTML, loginHTML)
 
 	case "boot":
 		// Автозагрузка: запуск всех enabled сервисов
