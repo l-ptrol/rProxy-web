@@ -1249,7 +1249,7 @@ async function svcAction(name, action) {
         btnText = 'Пересобрать';
     }
 
-    if (!(await confirmDialog(msg, title, isDanger, btnText))) return;
+    if (action === 'redeploy_nginx' && !(await confirmDialog(msg, title, isDanger, btnText))) return;
 
     openActionProgressModal(name, action, title);
 }
