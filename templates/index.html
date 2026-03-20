@@ -477,11 +477,65 @@
             background-position: right 12px center;
             padding-right: 40px;
         }
-        .form-group input:focus, .form-group select:focus { 
+        .form-group input:focus, .form-group select:focus, .c-select:focus { 
             border-color: var(--accent); 
             box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
             background: var(--surface);
         }
+
+        /* Кастомный селект */
+        .c-select-wrapper { position: relative; width: 100%; min-width: 200px; cursor: pointer; }
+        .c-select {
+            width: 100%;
+            padding: 9px 14px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text);
+            font-size: 13px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.2s;
+            user-select: none;
+        }
+        .c-select::after {
+            content: "";
+            width: 16px;
+            height: 16px;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: center;
+            transition: transform 0.2s;
+        }
+        .c-select-wrapper.open .c-select::after { transform: rotate(180deg); }
+        .c-select-wrapper.open .c-select { border-color: var(--accent); }
+        
+        .c-options {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            z-index: 100;
+            display: none;
+            max-height: 240px;
+            overflow-y: auto;
+            backdrop-filter: blur(10px);
+        }
+        .c-select-wrapper.open .c-options { display: block; }
+        .c-option {
+            padding: 10px 14px;
+            font-size: 13px;
+            color: var(--text2);
+            transition: all 0.1s;
+        }
+        .c-option:hover { background: var(--accent-bg); color: var(--accent); }
+        .c-option.selected { color: var(--accent); font-weight: 600; background: var(--accent-bg); }
+        .c-option.placeholder { opacity: 0.5; }
         .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
         /* Общий стиль для всех панелей логов во всех модалках */
@@ -736,9 +790,11 @@
         <div class="toolbar">
             <h2>Логи сервисов</h2>
             <div style="display:flex;gap:8px;align-items:center;">
-                <select id="log-service-select" style="padding:7px 12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:13px;font-family:inherit;">
-                    <option value="">Выберите сервис...</option>
-                </select>
+                <div class="c-select-wrapper" id="log-select-wrapper">
+                    <div class="c-select" id="log-select-current" tabindex="0">Выберите сервис...</div>
+                    <div class="c-options" id="log-select-options"></div>
+                    <input type="hidden" id="log-service-select" value="">
+                </div>
                 <button class="btn btn-sm" onclick="loadLogs()">Загрузить</button>
             </div>
         </div>
@@ -798,13 +854,17 @@
                 </div>
                 <div class="form-group">
                     <label>Тип сервиса</label>
-                    <select id="f-type" onchange="onTypeChange()">
-                        <option value="http">HTTP Proxy</option>
-                        <option value="tcp">TCP Tunnel</option>
-                        <option value="ttyd">Web Terminal</option>
-                        <option value="ssh">SSH Access</option>
-                        <option value="udp">UDP Port</option>
-                    </select>
+                    <div class="c-select-wrapper" id="type-select-wrapper">
+                        <div class="c-select" id="type-select-current" tabindex="0">HTTP Proxy</div>
+                        <div class="c-options">
+                            <div class="c-option selected" data-value="http">HTTP Proxy</div>
+                            <div class="c-option" data-value="tcp">TCP Tunnel</div>
+                            <div class="c-option" data-value="ttyd">Web Terminal</div>
+                            <div class="c-option" data-value="ssh">SSH Access</div>
+                            <div class="c-option" data-value="udp">UDP Port</div>
+                        </div>
+                        <input type="hidden" id="f-type" value="http">
+                    </div>
                 </div>
                 
                 <div class="form-row" id="target-row">
@@ -829,9 +889,13 @@
 
                 <div class="form-group">
                     <label>VPS сервер</label>
-                    <select id="f-vps">
-                        <option value="">-- Выберите VPS --</option>
-                    </select>
+                    <div class="c-select-wrapper" id="vps-select-wrapper">
+                        <div class="c-select" id="vps-select-current" tabindex="0">-- Выберите VPS --</div>
+                        <div class="c-options" id="vps-select-options">
+                            <div class="c-option placeholder" data-value="">-- Выберите VPS --</div>
+                        </div>
+                        <input type="hidden" id="f-vps" value="">
+                    </div>
                 </div>
 
                 <div class="form-row">
@@ -841,10 +905,14 @@
                     </div>
                     <div class="form-group">
                         <label>Обеспечить SSL</label>
-                        <select id="f-ssl">
-                            <option value="yes">Да</option>
-                            <option value="no">Нет</option>
-                        </select>
+                        <div class="c-select-wrapper" id="ssl-select-wrapper">
+                            <div class="c-select" id="ssl-select-current" tabindex="0">Да</div>
+                            <div class="c-options">
+                                <div class="c-option selected" data-value="yes">Да</div>
+                                <div class="c-option" data-value="no">Нет</div>
+                            </div>
+                            <input type="hidden" id="f-ssl" value="yes">
+                        </div>
                     </div>
                 </div>
 
@@ -1056,6 +1124,62 @@ function switchTab(tabId) {
     const btn = document.querySelector(`.tabs button[data-tab="${tabId}"]`);
     if (btn) btn.click();
 }
+
+// ========== Логика Кастомного Селекта ==========
+function initCustomSelect(wrapperId, onSelect) {
+    const wrapper = document.getElementById(wrapperId);
+    const trigger = wrapper.querySelector('.c-select');
+    const options = wrapper.querySelector('.c-options');
+    const hidden = wrapper.querySelector('input[type="hidden"]');
+
+    trigger.onclick = (e) => {
+        e.stopPropagation();
+        const isOpen = wrapper.classList.toggle('open');
+        if (isOpen) {
+            document.querySelectorAll('.c-select-wrapper').forEach(w => {
+                if (w.id !== wrapperId) w.classList.remove('open');
+            });
+        }
+    };
+
+    // Делегирование клика для динамических опций
+    options.onclick = (e) => {
+        const opt = e.target.closest('.c-option');
+        if (!opt) return;
+        
+        const val = opt.dataset.value;
+        const text = opt.textContent;
+        
+        trigger.textContent = text;
+        hidden.value = val;
+        wrapper.classList.remove('open');
+        
+        options.querySelectorAll('.c-option').forEach(o => o.classList.toggle('selected', o === opt));
+        
+        if (onSelect) onSelect(val);
+        // Генерируем стандартное событие change для совместимости
+        hidden.dispatchEvent(new Event('change', {bubbles: true}));
+    };
+}
+
+// Утилита для програмного изменения значения кастомного селекта
+function setCustomSelectValue(wrapperId, val) {
+    const wrapper = document.getElementById(wrapperId);
+    const hidden = wrapper.querySelector('input[type="hidden"]');
+    const trigger = wrapper.querySelector('.c-select');
+    const options = wrapper.querySelector('.c-options');
+    
+    hidden.value = val;
+    const opt = options.querySelector(`.c-option[data-value="${val}"]`);
+    if (opt) {
+        trigger.textContent = opt.textContent;
+        options.querySelectorAll('.c-option').forEach(o => o.classList.toggle('selected', o === opt));
+    }
+}
+
+document.addEventListener('click', () => {
+    document.querySelectorAll('.c-select-wrapper').forEach(w => w.classList.remove('open'));
+});
 
 // ========== Поддержка свайпов для вкладок ==========
 let touchStartX = 0;
@@ -1426,10 +1550,10 @@ async function checkDomainVps() {
 }
 
 async function openAddService() {
-    // Заполнить select VPS
-    const sel = document.getElementById('f-vps');
-    sel.innerHTML = '<option value="">-- Выберите VPS --</option>' + vpsData.map(v => `<option value="${v.id}">${v.name} (${v.host})</option>`).join('');
-    if (vpsData.length === 0) sel.innerHTML = '<option value="">Нет VPS</option>';
+    setCustomSelectValue('vps-select-wrapper', '');
+    if (vpsData.length === 0) {
+        document.getElementById('vps-select-current').textContent = 'Нет VPS';
+    }
     
     document.getElementById('modal-service-title').textContent = 'Деплой нового сервиса';
     document.getElementById('btn-save-service').textContent = 'Создать';
@@ -1442,7 +1566,11 @@ async function openAddService() {
     document.getElementById('f-port').value = '';
     document.getElementById('f-domain').value = '';
     document.getElementById('f-ext-port').value = '443';
-    document.getElementById('f-ssl').value = 'yes';
+    
+    setCustomSelectValue('type-select-wrapper', 'http');
+    onTypeChange();
+    setCustomSelectValue('ssl-select-wrapper', 'yes');
+
     document.getElementById('f-auth-user').value = '';
     document.getElementById('f-auth-pass').value = '';
     document.getElementById('domain-hint').innerHTML = '';
@@ -1459,23 +1587,23 @@ async function editService(name) {
     try {
         const s = await api(`services/${name}`);
         
-        // Заполнить select VPS (нужно для отображения правильного имени)
-        const sel = document.getElementById('f-vps');
-        sel.innerHTML = '<option value="">-- Выберите VPS --</option>' + vpsData.map(v => `<option value="${v.id}">${v.name} (${v.host})</option>`).join('');
-
         document.getElementById('modal-service-title').textContent = `Редактирование: ${name}`;
         document.getElementById('btn-save-service').textContent = 'Сохранить';
         document.getElementById('f-edit-mode').value = 'true';
         
         document.getElementById('f-name').value = s.name;
         document.getElementById('f-name').disabled = false; 
-        document.getElementById('f-type').value = s.type;
-        document.getElementById('f-vps').value = s.vps;
+        
+        setCustomSelectValue('type-select-wrapper', s.type);
+        setCustomSelectValue('vps-select-wrapper', s.vps);
+        
         document.getElementById('f-host').value = s.target_host;
         document.getElementById('f-port').value = s.target_port;
         document.getElementById('f-domain').value = s.domain;
         document.getElementById('f-ext-port').value = s.ext_port;
-        document.getElementById('f-ssl').value = s.ssl;
+        
+        setCustomSelectValue('ssl-select-wrapper', s.ssl);
+        
         document.getElementById('f-auth-user').value = s.auth_user;
         document.getElementById('f-auth-pass').value = s.auth_pass;
         document.getElementById('domain-hint').innerHTML = '';
@@ -1606,6 +1734,16 @@ async function loadVps() {
         const d = await api('vps');
         vpsData = d.vps || [];
         renderVps();
+        
+        // Обновляем список VPS в кастомных селектах
+        const vpsOptionsEl = document.getElementById('vps-select-options');
+        if (vpsOptionsEl) {
+            let html = '<div class="c-option placeholder" data-value="">-- Выберите VPS --</div>';
+            vpsData.forEach(v => {
+                html += `<div class="c-option" data-value="${v.id}">${v.name} (${v.host})</div>`;
+            });
+            vpsOptionsEl.innerHTML = html;
+        }
     } catch(e) {}
 }
 
@@ -1757,12 +1895,22 @@ function openVpsProgressModal(name, type, title, payload = null) {
 }
 
 // ========== Логи ==========
+initCustomSelect('log-select-wrapper');
+initCustomSelect('type-select-wrapper', onTypeChange);
+initCustomSelect('ssl-select-wrapper');
+initCustomSelect('vps-select-wrapper');
+
 async function populateLogSelect() {
     try {
         const d = await api('services');
-        const sel = document.getElementById('log-service-select');
+        const optionsEl = document.getElementById('log-select-options');
         const svcs = d.services || [];
-        sel.innerHTML = '<option value="">Выберите сервис...</option>' + svcs.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+        
+        let html = '<div class="c-option placeholder" data-value="">Выберите сервис...</div>';
+        svcs.forEach(s => {
+            html += `<div class="c-option" data-value="${s.id}">${s.name}</div>`;
+        });
+        optionsEl.innerHTML = html;
     } catch(e) {}
 }
 
