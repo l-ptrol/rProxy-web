@@ -1,7 +1,7 @@
 #!/bin/sh
 # rProxy Go Edition
-# Version: 1.1.20-go
-VERSION="1.1.20-go"
+# Version: 1.1.21-go
+VERSION="1.1.21-go"
 
 set -e
 

@@ -11,6 +11,7 @@ import (
 	"time"
 	"os/exec"
 	"regexp"
+	"strings"
 )
 
 func md5Hex(data string) string {
@@ -32,21 +33,39 @@ func KeeneticAuth(routerIP, login, password string) (bool, error) {
 		Timeout: 5 * time.Second,
 	}
 
-	if routerIP == "" || routerIP == "auto" {
+	if routerIP == "" || routerIP == "auto" || routerIP == "127.0.0.1" {
 		routerIP = DetectRouterIP()
 	}
 
-	authURL := fmt.Sprintf("http://%s/auth", routerIP)
-	
-	// Если мы в режиме "auto" и 127.0.0.1 недоступен или не возвращает 401, пробуем найти 192.168.1.1
-	// (или любой другой LAN IP, если добавим детекцию через ip route)
-	// Для начала просто разрешим "auto" в конфиге.
+	// Если в IP нет порта, попробуем добавить :80 или прозондировать
+	if !strings.Contains(routerIP, ":") {
+		// Простой зонд: если на 80 порту не 401, пробуем 81
+		testURL := fmt.Sprintf("http://%s/auth", routerIP)
+		resp, err := client.Get(testURL)
+		if err != nil || resp.StatusCode != 401 {
+			if err == nil { resp.Body.Close() }
+			// Пробуем 81
+			testURL81 := fmt.Sprintf("http://%s:81/auth", routerIP)
+			resp81, err81 := client.Get(testURL81)
+			if err81 == nil {
+				resp81.Body.Close()
+				if resp81.StatusCode == 401 {
+					routerIP = routerIP + ":81"
+				}
+			}
+		} else {
+			resp.Body.Close()
+		}
+	}
 
+	authURL := fmt.Sprintf("http://%s/auth", routerIP)
+	fmt.Printf("[AUTH] Probing NDM at: %s\n", authURL)
+	
 	// Шаг 1: GET запрос для получения Challenge и Realm
 	reqGet, _ := http.NewRequest("GET", authURL, nil)
 	respGet, err := client.Do(reqGet)
 	if err != nil {
-		return false, fmt.Errorf("ошибка связи с роутером: %v", err)
+		return false, fmt.Errorf("ошибка связи с роутером (%s): %v", routerIP, err)
 	}
 	respGet.Body.Close()
 
@@ -101,22 +120,9 @@ func KeeneticAuth(routerIP, login, password string) (bool, error) {
 // DetectRouterIP пытается автоматически найти IP роутера
 func DetectRouterIP() string {
 	client := http.Client{Timeout: 1 * time.Second}
-	
-	// Список портов для проверки (80 - дефолт, 81 - часто используется если 80 занят rProxy)
 	ports := []string{"80", "81", "8080"}
 
-	// 1. Пробуем 127.0.0.1 (самый быстрый путь)
-	for _, p := range ports {
-		resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%s/auth", p))
-		if err == nil {
-			resp.Body.Close()
-			if resp.StatusCode == 401 {
-				return "127.0.0.1:" + p
-			}
-		}
-	}
-
-	// 2. Пробуем найти через ip route
+	// 1. Пробуем найти через ip route (самый надежный способ для Keenetic/Entware)
 	out, err := exec.Command("ip", "route", "show", "default").Output()
 	if err == nil {
 		re := regexp.MustCompile(`via\s+([0-9.]+)`)
@@ -131,6 +137,17 @@ func DetectRouterIP() string {
 						return gw + ":" + p
 					}
 				}
+			}
+		}
+	}
+
+	// 2. Пробуем 127.0.0.1 (запасной вариант)
+	for _, p := range ports {
+		resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%s/auth", p))
+		if err == nil {
+			resp.Body.Close()
+			if resp.StatusCode == 401 {
+				return "127.0.0.1:" + p
 			}
 		}
 	}
