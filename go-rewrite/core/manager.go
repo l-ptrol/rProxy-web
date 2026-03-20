@@ -148,9 +148,15 @@ func StartService(svcCfg, vpsCfg map[string]string) bool {
 		if ttydCmd == "" {
 			ttydCmd = "login"
 		}
-		if StartTTYD(ttydPort, ttydCmd, name) {
+		ok, actualPort := StartTTYD(ttydPort, ttydCmd, name)
+		if ok {
 			targetHost = "127.0.0.1"
-			targetPort = ttydPort
+			targetPort = actualPort
+			// Если порт изменился, сохраняем его в конфиг для будущих запусков
+			if actualPort != svcCfg["SVC_TARGET_PORT"] {
+				svcCfg["SVC_TARGET_PORT"] = actualPort
+				SaveConfig(filepath.Join(ServicesDir, name+".conf"), svcCfg)
+			}
 		} else {
 			logPath := filepath.Join(LogDir, fmt.Sprintf("ttyd_%s.log", name))
 			Err(fmt.Sprintf("Не удалось запустить ttyd. Подробности см. в логе: %s", logPath))
@@ -407,7 +413,20 @@ func StopService(name string, svcCfg map[string]string) {
 }
 
 // StartTTYD запускает ttyd с Watchdog-скриптом
-func StartTTYD(port, command, name string) bool {
+// StartTTYD — запуск ttyd терминала. Возвращает успех и реально использованный порт.
+func StartTTYD(requestedPort, command, name string) (bool, string) {
+	port := requestedPort
+	pInt, _ := strconv.Atoi(port)
+
+	// Автоподбор порта если занят
+	for i := 0; i < 100; i++ {
+		if !IsPortBusy(pInt) {
+			port = strconv.Itoa(pInt)
+			break
+		}
+		pInt++
+	}
+
 	StopTTYD(port)
 
 	// Агрессивная очистка порта
@@ -417,7 +436,7 @@ func StartTTYD(port, command, name string) bool {
 		cmd.Env = GetProcessEnv()
 		cmd.Run()
 	}
-	time.Sleep(1 * time.Second)
+	time.Sleep(500 * time.Millisecond)
 
 	// Проверка наличия ttyd
 	ttydBin := ResolveBin("ttyd")
@@ -427,7 +446,7 @@ func StartTTYD(port, command, name string) bool {
 		exec.Command(opkgBin, "update").Run()
 		if err := exec.Command(opkgBin, "install", "ttyd").Run(); err != nil {
 			Err("Не удалось установить ttyd. Установите вручную: opkg install ttyd")
-			return false
+			return false, port
 		}
 		Msg("ttyd успешно установлен.")
 	}
@@ -441,23 +460,22 @@ func StartTTYD(port, command, name string) bool {
 		realCmd = "/bin/login"
 	}
 
-	// Запускаем ttyd как фоновый процесс (Go-watchdog не нужен — Go сам следит)
+	// Точные аргументы из старой версии rProxy: -W, --max-clients 10, -i 0.0.0.0, --
 	ttydPath := ResolveBin("ttyd")
 	logF, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		Err(fmt.Sprintf("Не удалось открыть лог: %v", err))
-		return false
+		return false, port
 	}
 
-	// Запускаем ttyd: -W для записи, -i 127.0.0.1 для локальной привязки (безопасность)
-	cmd := exec.Command(ttydPath, "-p", port, "-W", "-i", "127.0.0.1", realCmd)
+	cmd := exec.Command(ttydPath, "-p", port, "-W", "--max-clients", "10", "-i", "0.0.0.0", "--", realCmd)
 	cmd.Env = GetProcessEnv()
 	cmd.Stdout = logF
 	cmd.Stderr = logF
 
 	if err := cmd.Start(); err != nil {
 		Err(fmt.Sprintf("Ошибка запуска ttyd: %v", err))
-		return false
+		return false, port
 	}
 
 	// Сохраняем PID
@@ -467,11 +485,11 @@ func StartTTYD(port, command, name string) bool {
 	portInt, _ := strconv.Atoi(port)
 	for i := 0; i < 5; i++ {
 		if IsPortBusy(portInt) {
-			return true
+			return true, port
 		}
 		time.Sleep(1 * time.Second)
 	}
-	return false
+	return false, port
 }
 
 // StopTTYD — остановка ttyd по порту
