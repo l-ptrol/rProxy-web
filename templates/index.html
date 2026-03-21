@@ -1399,6 +1399,7 @@ async function systemAction(act) {
 // ========== Сервисы ==========
 let servicesData = [];
 let vpsData = [];
+let runningTasks = {}; // name -> { action, title, log, lastLine }
 
 async function loadStats() {
     try {
@@ -1453,8 +1454,39 @@ function renderServices() {
 
         const authIcon = s.auth ? '<span title="Защищено паролем" style="margin-left:4px;display:inline-flex;align-items:center;opacity:0.6;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>' : '';
 
+        const task = runningTasks[s.name];
+        let footerHtml = '';
+        if (task) {
+            footerHtml = `
+            <div class="service-card-footer" style="padding-top: 10px; border-top: 1px solid var(--border);">
+                <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px; cursor: pointer;" onclick="showLogModal('${s.name}')">
+                    <div style="display:flex; align-items: center; gap: 8px; overflow: hidden;">
+                        <span style="width: 14px; height: 14px; flex-shrink: 0; border: 2px solid var(--accent); border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite;"></span>
+                        <span id="progress-text-${s.name}" style="font-size: 11px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px;">${task.lastLine || 'Инициализация...'}</span>
+                    </div>
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="var(--text3)" stroke-width="2" style="flex-shrink:0;"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </div>
+            </div>`;
+        } else {
+            footerHtml = `
+            <div class="service-card-footer">
+                <div style="display:flex; gap:6px;">
+                    ${isOn 
+                        ? `<button class="btn btn-icon btn-sm" style="color:var(--yellow)" title="Остановить" onclick="svcAction('${s.name}','stop')"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12"></rect></svg></button>`
+                        : `<button class="btn btn-icon btn-sm" style="color:var(--green)" title="Запустить" onclick="svcAction('${s.name}','start')"><svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg></button>`
+                    }
+                    <button class="btn btn-icon btn-sm" title="Перезапустить" onclick="svcAction('${s.name}','restart')"><svg viewBox="0 0 24 24"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg></button>
+                    <button class="btn btn-icon btn-sm" title="Обновить Nginx" onclick="svcAction('${s.name}','redeploy_nginx')"><svg viewBox="0 0 24 24"><path d="M12 2v4"></path><path d="M12 18v4"></path><path d="M4.93 4.93l2.83 2.83"></path><path d="M16.24 16.24l2.83 2.83"></path><path d="M2 12h4"></path><path d="M18 12h4"></path><path d="M4.93 19.07l2.83-2.83"></path><path d="M16.24 7.76l2.83-2.83"></path></svg></button>
+                </div>
+                <div style="display:flex; gap:6px;">
+                    <button class="btn btn-icon btn-sm" title="Редактировать" onclick="editService('${s.name}')"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button>
+                    <button class="btn btn-icon btn-sm" style="color:var(--red)" title="Удалить" onclick="svcDelete('${s.name}')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
+                </div>
+            </div>`;
+        }
+
         html += `
-        <div class="service-card">
+        <div class="service-card" id="card-${s.name}">
             <div class="service-card-header">
                 <div class="service-card-title">
                     <span class="status-dot ${dotClass}"></span>
@@ -1480,20 +1512,7 @@ function renderServices() {
                 </div>
             </div>
 
-            <div class="service-card-footer">
-                <div style="display:flex; gap:6px;">
-                    ${isOn 
-                        ? `<button class="btn btn-icon btn-sm" style="color:var(--yellow)" title="Остановить" onclick="svcAction('${s.name}','stop')"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12"></rect></svg></button>`
-                        : `<button class="btn btn-icon btn-sm" style="color:var(--green)" title="Запустить" onclick="svcAction('${s.name}','start')"><svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg></button>`
-                    }
-                    <button class="btn btn-icon btn-sm" title="Перезапустить" onclick="svcAction('${s.name}','restart')"><svg viewBox="0 0 24 24"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg></button>
-                    <button class="btn btn-icon btn-sm" title="Обновить Nginx" onclick="svcAction('${s.name}','redeploy_nginx')"><svg viewBox="0 0 24 24"><path d="M12 2v4"></path><path d="M12 18v4"></path><path d="M4.93 4.93l2.83 2.83"></path><path d="M16.24 16.24l2.83 2.83"></path><path d="M2 12h4"></path><path d="M18 12h4"></path><path d="M4.93 19.07l2.83-2.83"></path><path d="M16.24 7.76l2.83-2.83"></path></svg></button>
-                </div>
-                <div style="display:flex; gap:6px;">
-                    <button class="btn btn-icon btn-sm" title="Редактировать" onclick="editService('${s.name}')"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button>
-                    <button class="btn btn-icon btn-sm" style="color:var(--red)" title="Удалить" onclick="svcDelete('${s.name}')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
-                </div>
-            </div>
+            ${footerHtml}
         </div>`;
     });
     html += '</div>';
@@ -1501,6 +1520,8 @@ function renderServices() {
 }
 
 async function svcAction(name, action) {
+    if (runningTasks[name]) return; // Защита от дублей фоновой задачи
+
     let msg = '', title = '', isDanger = false, btnText = 'Выполнить';
     if (action === 'start') {
         title = 'Запуск сервиса';
@@ -1523,44 +1544,61 @@ async function svcAction(name, action) {
 
     if (action === 'redeploy_nginx' && !(await confirmDialog(msg, title, isDanger, btnText))) return;
 
-    openActionProgressModal(name, action, title);
-}
+    // Инициализация фоновой задачи
+    runningTasks[name] = { action: action, title: title, log: 'Запуск задачи...', lastLine: 'Запуск процесса...' };
+    renderServices(); // Скрываем кнопки, показываем бар загрузки карточки
 
-function openActionProgressModal(name, action, title) {
-    document.getElementById('vps-progress-title').innerText = title;
-    document.getElementById('vps-progress-log').innerText = 'Запуск задачи...';
-    openModal('modal-vps-progress');
-    
     api(`action/${name}/${action}`, {method: 'POST'}).then((res) => {
-        if (action === 'delete') {
-            closeModal('modal-vps-progress');
-            toast('Успешно удалено', 'success');
-            setTimeout(refreshAll, 1000);
-            return;
-        }
-
         const interval = setInterval(async () => {
-            const modal = document.getElementById('modal-vps-progress');
-            if (!modal || !modal.classList.contains('visible')) {
+            if (!runningTasks[name]) {
                 clearInterval(interval);
                 return;
             }
             try {
                 const log = await api(`action/${name}/${action}/log`);
-                const logEl = document.getElementById('vps-progress-log');
-                logEl.innerText = log;
-                logEl.scrollTop = logEl.scrollHeight;
+                runningTasks[name].log = log;
+                
+                // Парсим последнюю непустую строку для инлайн-прогресса
+                const lines = log.split('\n').filter(l => l.trim().length > 0);
+                if (lines.length > 0) runningTasks[name].lastLine = lines[lines.length - 1];
+                
+                // Обновляем текст в карточке (без полного перерендера)
+                const textEl = document.getElementById(`progress-text-${name}`);
+                if (textEl) textEl.innerText = runningTasks[name].lastLine;
+                
+                // Если открыта модалка ИМЕННО для этого сервиса, обновляем и её
+                const modal = document.getElementById('modal-vps-progress');
+                const modalNameInput = document.getElementById('vps-progress-name');
+                if (modal && modal.classList.contains('visible') && modalNameInput && modalNameInput.value === name) {
+                    const logEl = document.getElementById('vps-progress-log');
+                    const isScrolledToBottom = logEl.scrollHeight - logEl.clientHeight <= logEl.scrollTop + 10;
+                    logEl.innerText = log;
+                    if (isScrolledToBottom) logEl.scrollTop = logEl.scrollHeight;
+                }
                 
                 if (log.includes('ФИНИШ')) {
                     clearInterval(interval);
+                    delete runningTasks[name];
                     setTimeout(refreshAll, 1000);
                 }
-            } catch(e) { clearInterval(interval); }
+            } catch(e) { clearInterval(interval); delete runningTasks[name]; renderServices(); }
         }, 1000);
     }).catch(e => {
-        closeModal('modal-vps-progress');
+        delete runningTasks[name];
+        renderServices();
         toast('Ошибка: ' + (e.message || e), 'error');
     });
+}
+
+function showLogModal(name) {
+    const task = runningTasks[name];
+    if (!task) return;
+    document.getElementById('vps-progress-title').innerText = task.title;
+    document.getElementById('vps-progress-log').innerText = task.log;
+    document.getElementById('vps-progress-name').value = name;
+    openModal('modal-vps-progress');
+    const logEl = document.getElementById('vps-progress-log');
+    logEl.scrollTop = logEl.scrollHeight;
 }
 
 async function svcDelete(name) {
