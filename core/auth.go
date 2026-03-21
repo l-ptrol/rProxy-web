@@ -1,5 +1,6 @@
 package core
 
+import (
 	"bytes"
 	"crypto/md5"
 	"crypto/sha256"
