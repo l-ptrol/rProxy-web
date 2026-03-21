@@ -43,7 +43,7 @@ func GenerateNginxConf(svcCfg map[string]string, useSSLPaths bool) string {
 	case "http", "ttyd":
 		apiPort := svcCfg["SVC_API_PORT"]
 		if apiPort == "" {
-			apiPort = "28181" // Фолбек на случай старых конфигов без передеплоя
+			apiPort = "28181"
 		}
 		return httpProxyConf(name, domain, tunnelPort, extPort, svcCfg["SVC_AUTH_USER"], useSSLPaths, targetHost, targetPort, svcCfg["SVC_ROUTER_AUTH"], apiPort)
 	case "tcp", "ssh":
@@ -59,28 +59,18 @@ func GenerateNginxConf(svcCfg map[string]string, useSSLPaths bool) string {
 
 // httpProxyConf генерирует конфиг для HTTP/HTTPS прокси
 func httpProxyConf(name, domain, localPort, extPort, authUser string, useSSL bool, targetHost, targetPort string, routerAuth string, apiTunnelPort string) string {
-	// Блок авторизации
-	authConfig := ""
-	if authUser != "" {
-		authConfig = fmt.Sprintf(`
-    auth_basic "rProxy: %s";
-    auth_basic_user_file /etc/nginx/rproxy_%s.htpasswd;
-    # ТОТАЛЬНАЯ ИЗОЛЯЦИЯ: Бэкенд никогда не видит пароль Nginx
-    proxy_set_header Authorization "";
-    proxy_set_header X-Forwarded-User $remote_user;
-    `, name, name)
-	}
+	// Блок авторизации (Унифицированный Identity Provider v1.2.0)
+	authDirectives := ""
+	authHelpers := ""
 
-	// Блок Router Auth
-	rAuthDirectives := ""
-	rAuthHelpers := ""
-	if routerAuth == "yes" {
-		rAuthDirectives = `
-        auth_request /rproxy_verify;
+	if routerAuth == "yes" || authUser != "" {
+		authDirectives = `
+        auth_request /rproxy_auth_verify;
         error_page 401 = @rproxy_login;`
 
-		rAuthHelpers = fmt.Sprintf(`
-    location = /rproxy_verify {
+		authHelpers = fmt.Sprintf(`
+    # Проверка сессии через Identity Provider
+    location = /rproxy_auth_verify {
         internal;
         proxy_pass http://127.0.0.1:%s/api/verify;
         proxy_pass_request_body off;
@@ -89,10 +79,9 @@ func httpProxyConf(name, domain, localPort, extPort, authUser string, useSSL boo
         proxy_set_header Host 127.0.0.1;
         proxy_set_header X-Original-URI $request_uri;
         proxy_set_header X-Forwarded-For $remote_addr;
-        proxy_connect_timeout 5s;
-        proxy_read_timeout 10s;
     }
 
+    # Эндпоинты входа
     location = /login {
         auth_request off;
         proxy_pass http://127.0.0.1:%s/login;
@@ -111,12 +100,12 @@ func httpProxyConf(name, domain, localPort, extPort, authUser string, useSSL boo
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
+    # Редирект на логин при 401 Unauthorized
     location @rproxy_login {
-        return 302 $scheme://$http_host/login?backUrl=$scheme://$http_host$request_uri;
+        return 302 $scheme://$http_host/login?next=$scheme://$http_host$request_uri;
     }`, apiTunnelPort, apiTunnelPort, apiTunnelPort)
 	}
 
-	// Блок редиректа HTTP -> HTTPS
 	listen80 := ""
 	if useSSL && domain != "" && extPort == "443" {
 		listen80 = fmt.Sprintf(`
@@ -127,13 +116,11 @@ server {
 }`, domain)
 	}
 
-	// Блок listen
 	listenMain := fmt.Sprintf("listen %s;", extPort)
 	if useSSL {
 		listenMain = fmt.Sprintf("listen %s ssl;", extPort)
 	}
 
-	// Блок SSL сертификатов
 	sslConfig := ""
 	if useSSL {
 		sslConfig = fmt.Sprintf(`
@@ -144,7 +131,6 @@ server {
     `, domain, domain)
 	}
 
-	// "Стелс-режим": для бэкенда прикидываемся локальным пользователем
 	stealthHost := targetHost
 	if targetPort != "80" {
 		stealthHost = fmt.Sprintf("%s:%s", targetHost, targetPort)
@@ -171,8 +157,7 @@ server {
 
     location / {
         %s
-        %s
-        proxy_pass http://127.0.0.1:%s;
+        proxy_pass http://127.0.0.1:%s/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -182,10 +167,8 @@ server {
         proxy_set_header X-Forwarded-Proto %s;
         proxy_set_header X-Forwarded-Port %s;
         
-        # СТЕЛС-РЕЖИМ 2.0: Прикидываемся локальным браузером
+        # СТЕЛС-РЕЖИМ 2.0
         proxy_set_header X-Forwarded-Host "";
-        
-        # Origin и Referer строго на внутренний IP
         proxy_set_header Origin "http://%s";
         proxy_set_header Referer "http://%s/";
         
@@ -205,7 +188,6 @@ server {
     
     %s
 
-    # Редирект с некорректного HTTPS порта
     error_page 497 301 =307 https://$host:$server_port$request_uri;
 }
 `,
@@ -213,8 +195,7 @@ server {
 		listenMain,
 		serverName,
 		sslConfig,
-		authConfig,
-		rAuthDirectives,
+		authDirectives,
 		localPort,
 		stealthHost,
 		proto,
@@ -222,26 +203,21 @@ server {
 		stealthHost,
 		stealthHost,
 		targetHost,
-		rAuthHelpers,
+		authHelpers,
 	)
 }
 
-// streamProxyConf генерирует конфиг для TCP/UDP (Stream) прокси
 func streamProxyConf(port, localPort, domain, proto string) string {
 	if proto == "" {
 		proto = "tcp"
 	}
-
-	// TCP с SSL (через домен)
 	if domain != "" && proto == "tcp" {
 		return fmt.Sprintf(`
 server {
     listen %s ssl;
     proxy_pass 127.0.0.1:%s;
-
     ssl_certificate /etc/letsencrypt/live/%s/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/%s/privkey.pem;
-    
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers HIGH:!aNULL:!MD5;
     ssl_handshake_timeout 15s;
@@ -250,13 +226,10 @@ server {
 }
 `, port, localPort, domain, domain)
 	}
-
-	// Простой TCP/UDP
 	listenOpts := port
 	if proto == "udp" {
 		listenOpts = port + " udp"
 	}
-
 	return fmt.Sprintf(`
 server {
     listen %s;
@@ -265,7 +238,6 @@ server {
 `, listenOpts, localPort)
 }
 
-// CertbotValidationVhost — временный конфиг для валидации домена через Certbot
 func CertbotValidationVhost(domain string) string {
 	return fmt.Sprintf(`
 server {
@@ -278,13 +250,11 @@ server {
 `, domain)
 }
 
-// ListServiceConfigs возвращает список .conf файлов сервисов
 func ListServiceConfigs(servicesDir string) []string {
 	entries, err := os.ReadDir(servicesDir)
 	if err != nil {
 		return nil
 	}
-
 	var result []string
 	for _, e := range entries {
 		if strings.HasSuffix(e.Name(), ".conf") {

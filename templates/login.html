@@ -3,44 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>rProxy Login</title>
-    <!-- Шрифты (в стиле AWG) -->
+    <title>Авторизация | rProxy</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            /* Поддержка тем как в основном приложении */
-            --bg-color-from: #1e1b4b;
-            --bg-color-to: #312e81;
-            --bg-blobs-color: rgba(99, 102, 241, 0.15);
-            --card-bg: rgba(255, 255, 255, 0.05);
+            --bg-color-from: #0f172a;
+            --bg-color-to: #1e293b;
+            --accent-primary: #6366f1;
+            --accent-glow: rgba(99, 102, 241, 0.4);
+            --card-bg: rgba(255, 255, 255, 0.03);
             --card-border: rgba(255, 255, 255, 0.1);
-            --text-main: #ffffff;
-            --text-muted: #9ca3af;
-            --input-bg: rgba(0, 0, 0, 0.2);
-            --input-border: rgba(255, 255, 255, 0.1);
-            --input-focus: rgba(99, 102, 241, 0.5);
-            --btn-bg: #4f46e5;
-            --btn-hover: #4338ca;
-            --btn-text: #ffffff;
-            --error-color: #ef4444;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --input-bg: rgba(0, 0, 0, 0.3);
+            --input-focus: #6366f1;
+            --error-bg: rgba(239, 68, 68, 0.15);
+            --error-text: #fca5a5;
         }
 
         [data-theme="light"] {
             --bg-color-from: #f8fafc;
-            --bg-color-to: #e2e8f0;
-            --bg-blobs-color: rgba(99, 102, 241, 0.08);
+            --bg-color-to: #f1f5f9;
             --card-bg: rgba(255, 255, 255, 0.7);
             --card-border: rgba(255, 255, 255, 0.5);
             --text-main: #0f172a;
             --text-muted: #64748b;
-            --input-bg: rgba(255, 255, 255, 0.9);
-            --input-border: rgba(0, 0, 0, 0.1);
-            --input-focus: rgba(99, 102, 241, 0.3);
-            --btn-bg: #4f46e5;
-            --btn-hover: #4338ca;
-            --btn-text: #ffffff;
+            --input-bg: #ffffff;
+            --input-focus: #4f46e5;
         }
 
         body {
@@ -48,249 +39,240 @@
             background: linear-gradient(135deg, var(--bg-color-from), var(--bg-color-to)) fixed;
             color: var(--text-main);
             margin: 0;
-            padding: 0;
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
             overflow: hidden;
             position: relative;
-            transition: background 0.3s ease;
         }
 
-        /* Glassmorphism декорации */
-        body::before, body::after {
-            content: '';
+        /* Динамические фоновые пятна */
+        .blob {
             position: absolute;
-            background: var(--bg-blobs-color);
-            filter: blur(80px);
-            border-radius: 50%;
-            z-index: -1;
-            transition: all 0.5s ease;
-        }
-        body::before {
-            width: 400px;
-            height: 400px;
-            top: -100px;
-            left: -100px;
-        }
-        body::after {
             width: 500px;
             height: 500px;
-            bottom: -150px;
-            right: -100px;
+            background: var(--accent-glow);
+            filter: blur(120px);
+            border-radius: 50%;
+            z-index: -1;
+            animation: move 20s infinite alternate;
+        }
+        .blob-1 { top: -10%; left: -10%; background: rgba(99, 102, 241, 0.2); }
+        .blob-2 { bottom: -10%; right: -10%; background: rgba(168, 85, 247, 0.2); }
+
+        @keyframes move {
+            from { transform: translate(0, 0) scale(1); }
+            to { transform: translate(50px, 50px) scale(1.1); }
         }
 
-        .login-container {
+        .login-card {
             width: 100%;
-            max-width: 400px;
-            padding: 2rem;
-            margin: 1rem;
+            max-width: 420px;
+            padding: 2.5rem;
             background: var(--card-bg);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
             border: 1px solid var(--card-border);
-            border-radius: 20px;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.3);
-            animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-            box-sizing: border-box;
+            border-radius: 24px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            animation: fadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
         }
 
-        @keyframes slideUp {
-            from { opacity: 0; transform: translateY(20px); }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(30px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
-        .logo-placeholder {
+        .header {
             text-align: center;
-            margin-bottom: 2rem;
-            font-size: 28px;
-            font-weight: 700;
-            letter-spacing: -0.5px;
+            margin-bottom: 2.5rem;
+        }
+
+        .logo {
+            width: 48px;
+            height: 48px;
+            background: var(--accent-primary);
+            border-radius: 14px;
+            margin: 0 auto 1rem;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 10px;
+            box-shadow: 0 0 20px var(--accent-glow);
         }
 
-        .logo-icon {
-            width: 40px;
-            height: 40px;
-            background: var(--btn-bg);
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.4);
-        }
+        .logo svg { width: 28px; height: 28px; fill: white; }
 
-        .logo-icon svg {
-            width: 24px;
-            height: 24px;
-            fill: #fff;
-        }
+        h1 { font-size: 1.75rem; font-weight: 700; margin: 0; letter-spacing: -0.025em; }
+        .subtitle { color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem; }
 
-        .form-group {
-            margin-bottom: 1.25rem;
-        }
-
-        label {
-            display: block;
-            font-size: 0.875rem;
-            font-weight: 500;
-            color: var(--text-muted);
-            margin-bottom: 0.5rem;
-        }
+        .form-group { margin-bottom: 1.5rem; }
+        label { display: block; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.5rem; }
 
         input {
             width: 100%;
-            padding: 0.875rem 1rem;
+            padding: 0.875rem 1.25rem;
             background: var(--input-bg);
-            border: 1px solid var(--input-border);
-            border-radius: 10px;
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
             color: var(--text-main);
             font-size: 1rem;
-            font-family: inherit;
             outline: none;
-            transition: all 0.2s ease;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             box-sizing: border-box;
         }
 
         input:focus {
             border-color: var(--input-focus);
-            box-shadow: 0 0 0 3px var(--input-focus);
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.2);
+            background: rgba(0,0,0,0.5);
         }
 
-        button.btn-primary {
+        .btn-submit {
             width: 100%;
-            padding: 0.875rem 1rem;
-            background: var(--btn-bg);
-            color: var(--btn-text);
+            padding: 1rem;
+            background: var(--accent-primary);
+            color: white;
             border: none;
-            border-radius: 10px;
+            border-radius: 12px;
             font-size: 1rem;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.2s ease;
-            font-family: inherit;
+            transition: all 0.3s ease;
             display: flex;
-            justify-content: center;
             align-items: center;
-            gap: 8px;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 1rem;
         }
 
-        button.btn-primary:hover {
-            background: var(--btn-hover);
+        .btn-submit:hover {
+            filter: brightness(1.1);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px -5px var(--accent-glow);
         }
 
-        button.btn-primary:active {
-            transform: scale(0.98);
-        }
+        .btn-submit:active { transform: translateY(0); }
 
-        .error-message {
-            color: var(--error-color);
-            background: rgba(239, 68, 68, 0.1);
-            border-radius: 8px;
-            padding: 0.75rem;
+        .error-box {
+            background: var(--error-bg);
+            color: var(--error-text);
+            padding: 0.875rem;
+            border-radius: 12px;
             font-size: 0.875rem;
-            margin-bottom: 1rem;
+            margin-bottom: 1.5rem;
             display: none;
             text-align: center;
+            border: 1px solid rgba(239, 68, 68, 0.2);
         }
 
-        /* Анимация загрузки на кнопке */
-        .spinner {
-            width: 18px;
-            height: 18px;
-            border: 2px solid rgba(255,255,255,0.3);
+        .footer {
+            margin-top: 2rem;
+            text-align: center;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* Спиннер */
+        .loader {
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255,255,255,0.2);
+            border-top-color: white;
             border-radius: 50%;
-            border-top-color: #fff;
-            animation: spin 1s ease-in-out infinite;
+            animation: spin 0.8s linear infinite;
             display: none;
         }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .loading .spinner { display: block; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading .loader { display: block; }
         .loading .btn-text { display: none; }
     </style>
 </head>
 <body>
-    <div class="login-container">
-        <div class="logo-placeholder">
-            <div class="logo-icon">
-                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M16 11V7a4 4 0 00-8 0v4H6v10h12V11h-2zm-6-4a2 2 0 114 0v4h-4V7z"/>
-                </svg>
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+
+    <div class="login-card">
+        <div class="header">
+            <div class="logo">
+                <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg>
             </div>
-            rProxy
+            <h1>Вход в систему</h1>
+            <div class="subtitle">rProxy Web Identity v{{version}}</div>
         </div>
 
-        <div id="error-msg" class="error-message">Неверный логин или пароль</div>
+        <div id="error-msg" class="error-box"></div>
 
         <form id="login-form">
             <div class="form-group">
-                <label for="login">Пользователь</label>
-                <input type="text" id="login" name="login" placeholder="Введите логин..." required autofocus>
+                <label>Пользователь</label>
+                <input type="text" id="login" required autofocus placeholder="admin">
             </div>
             <div class="form-group">
-                <label for="password">Пароль</label>
-                <input type="password" id="password" name="password" placeholder="Введите пароль..." required>
+                <label>Пароль</label>
+                <input type="password" id="password" required placeholder="••••••••">
             </div>
-            <button type="submit" class="btn-primary" id="login-btn">
-                <span class="btn-text">Войти</span>
-                <span class="spinner"></span>
+            <button type="submit" class="btn-submit" id="submit-btn" disabled>
+                <span class="btn-text">Проверка...</span>
+                <span class="loader"></span>
             </button>
         </form>
+
+        <div class="footer">
+            &copy; 2026 rProxy Portal. Защищено NDM API.
+        </div>
     </div>
 
     <script>
-        // Восстановление темы из localStorage (чтобы совпадало с основным UI)
-        if (localStorage.getItem('theme') === 'light') {
-            document.documentElement.setAttribute('data-theme', 'light');
-        }
+        // Тема
+        if (localStorage.getItem('theme') === 'light') document.documentElement.setAttribute('data-theme', 'light');
 
-        document.getElementById('login-form').addEventListener('submit', async (e) => {
+        const form = document.getElementById('login-form');
+        const btn = document.getElementById('submit-btn');
+        const err = document.getElementById('error-msg');
+        
+        // Разблокировка кнопки после загрузки DOM
+        document.addEventListener('DOMContentLoaded', () => {
+            btn.disabled = false;
+            btn.querySelector('.btn-text').textContent = 'Войти';
+        });
+
+        form.onsubmit = async (e) => {
             e.preventDefault();
-            const btn = document.getElementById('login-btn');
-            const errorMsg = document.getElementById('error-msg');
-            const loginVal = document.getElementById('login').value;
-            const passVal = document.getElementById('password').value;
-
             btn.classList.add('loading');
             btn.disabled = true;
-            errorMsg.style.display = 'none';
+            err.style.display = 'none';
+
+            const login = document.getElementById('login').value;
+            const password = document.getElementById('password').value;
 
             try {
-                const res = await fetch('/api/login', {
+                const response = await fetch('/api/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ login: loginVal, password: passVal })
+                    body: JSON.stringify({ login, password })
                 });
 
-                if (!res.ok) {
-                    throw new Error('Server error');
-                }
+                const data = await response.json();
 
-                const data = await res.json();
-                
                 if (data.status === 'success') {
-                    // Успешный вход, перебрасываем на главную
-                    window.location.href = '/';
+                    // Обработка редиректа "next"
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const next = urlParams.get('next') || '/';
+                    window.location.href = next;
                 } else {
-                    errorMsg.textContent = data.message || 'Ошибка авторизации';
-                    errorMsg.style.display = 'block';
+                    err.textContent = data.message || 'Ошибка входа';
+                    err.style.display = 'block';
                 }
-            } catch (err) {
-                errorMsg.textContent = 'Ошибка сети';
-                errorMsg.style.display = 'block';
+            } catch (k) {
+                err.textContent = 'Ошибка соединения с сервером';
+                err.style.display = 'block';
             } finally {
                 btn.classList.remove('loading');
                 btn.disabled = false;
             }
-        });
+        };
     </script>
 </body>
 </html>

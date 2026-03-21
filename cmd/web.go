@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	crand "crypto/rand"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -16,15 +15,6 @@ import (
 	"sync"
 	"time"
 )
-
-// Сессии для авторизации
-var sessions = sync.Map{}
-
-func generateSessionID() string {
-	b := make([]byte, 32)
-	crand.Read(b)
-	return fmt.Sprintf("%x", b)
-}
 
 func isIP(host string) bool {
 	return net.ParseIP(host) != nil
@@ -68,6 +58,16 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 		json.NewDecoder(r.Body).Decode(&data)
 		login := data["login"]
 		password := data["password"]
+		ip := strings.Split(r.RemoteAddr, ":")[0]
+
+		// 1. Проверка брутфорса
+		if blocked, until := core.CheckBruteForce(ip); blocked {
+			jsonResponse(w, map[string]string{
+				"status":  "error",
+				"message": fmt.Sprintf("Слишком много попыток. IP заблокирован до %s", until.Format("15:04:05")),
+			})
+			return
+		}
 
 		gPath := filepath.Join(core.RProxyRoot, "rproxy.conf")
 		gCfg := core.LoadConfig(gPath)
@@ -75,21 +75,20 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 
 		ok, err := core.KeeneticAuth(routerIP, login, password)
 		if ok {
-			// Успешная авторизация, выдаем сессию
-			sid := generateSessionID()
-			sessions.Store(sid, time.Now().Unix())
-			fmt.Printf("[LOGIN] Success for user: %s\n", login)
+			// Успешная авторизация
+			sid := core.CreateSession()
+			core.ClearAttempts(ip)
+			fmt.Printf("[LOGIN] Success for user: %s (IP: %s)\n", login, ip)
 			
-			// ... (остальной код куки)
-			domain := ""
 			host := strings.Split(r.Host, ":")[0]
 			parts := strings.Split(host, ".")
+			domain := ""
 			if len(parts) >= 2 && !isIP(host) {
 				domain = "." + strings.Join(parts[len(parts)-2:], ".")
 			}
 
 			http.SetCookie(w, &http.Cookie{
-				Name:     "rproxy_session_id",
+				Name:     "rproxy_session",
 				Value:    sid,
 				Path:     "/",
 				Domain:   domain,
@@ -98,12 +97,11 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 			})
 			jsonResponse(w, map[string]string{"status": "success"})
 		} else {
+			// Неудачная попытка
+			core.RecordAttempt(ip)
 			errMsg := "Неверный логин или пароль"
 			if err != nil {
 				errMsg = err.Error()
-				fmt.Printf("[LOGIN] System error: %v\n", err)
-			} else {
-				fmt.Printf("[LOGIN] Auth failed: invalid credentials for %s\n", login)
 			}
 			jsonResponse(w, map[string]string{"status": "error", "message": errMsg})
 		}
@@ -134,10 +132,9 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 	})
 
 	mux.HandleFunc("/api/logout", func(w http.ResponseWriter, r *http.Request) {
-		if cookie, err := r.Cookie("rproxy_session_id"); err == nil {
-			sessions.Delete(cookie.Value)
+		if cookie, err := r.Cookie("rproxy_session"); err == nil {
+			core.DeleteSession(cookie.Value)
 		}
-		// Определяем тот же домен для корректного удаления
 		host := strings.Split(r.Host, ":")[0]
 		parts := strings.Split(host, ".")
 		domain := ""
@@ -146,7 +143,7 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 		}
 
 		http.SetCookie(w, &http.Cookie{
-			Name:     "rproxy_session_id",
+			Name:     "rproxy_session",
 			Value:    "",
 			Path:     "/",
 			Domain:   domain,
@@ -157,16 +154,13 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 	})
 
 	mux.HandleFunc("/api/verify", func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie("rproxy_session_id")
+		cookie, err := r.Cookie("rproxy_session")
 		if err == nil {
-			if _, ok := sessions.Load(cookie.Value); ok {
-				fmt.Printf("[AUTH] OK: session=%s from %s\n", cookie.Value, r.RemoteAddr)
+			if core.IsSessionValid(cookie.Value) {
 				w.WriteHeader(http.StatusOK)
 				return
 			}
-			fmt.Printf("[AUTH] FAIL: valid cookie but session not found: %s\n", cookie.Value)
-		} else {
-			fmt.Printf("[AUTH] NO COOKIE from %s\n", r.RemoteAddr)
+			fmt.Printf("[AUTH] FAIL: session not found/expired: %s\n", cookie.Value)
 		}
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 	})
@@ -475,10 +469,10 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 
 			// Если авторизация через роутер включена
 			if gCfg["ROUTER_AUTH"] == "yes" {
-				cookie, err := r.Cookie("rproxy_session_id")
+				cookie, err := r.Cookie("rproxy_session")
 				validSession := false
 				if err == nil {
-					if _, ok := sessions.Load(cookie.Value); ok {
+					if core.IsSessionValid(cookie.Value) {
 						validSession = true
 					}
 				}
@@ -487,7 +481,12 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 					if strings.HasPrefix(r.URL.Path, "/api/") {
 						http.Error(w, `{"error": "unauthorized"}`, http.StatusUnauthorized)
 					} else {
-						http.Redirect(w, r, "/login", http.StatusFound)
+						// Сохраняем путь для возврата после логина
+						nextPath := r.URL.Path
+						if r.URL.RawQuery != "" {
+							nextPath += "?" + r.URL.RawQuery
+						}
+						http.Redirect(w, r, "/login?next="+nextPath, http.StatusFound)
 					}
 					return
 				}
