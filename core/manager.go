@@ -85,13 +85,21 @@ func StartMasterTunnel(vpsCfg map[string]string) bool {
 		return true
 	}
 
-	// Освобождаем порт 28181 на VPS
+	// Освобождаем порт 28181 на VPS через более универсальный ss
 	Msg(fmt.Sprintf("Освобождение порта 28181 на VPS %s...", vHost))
-	RunRemoteSimple(vpsCfg, "fuser -k 28181/tcp || true")
+	RunRemoteSimple(vpsCfg, "ss -lptn 'sport = :28181' | grep -oE 'pid=[0-9]+' | cut -d= -f2 | xargs -r kill -9 || true")
 
 	sshKey := filepath.Join(RProxyRoot, ".ssh", "id_rsa")
-	logPath := filepath.Join(RProxyRoot, "logs", fmt.Sprintf("master_tunnel_%s.log", vHost))
-	os.MkdirAll(filepath.Dir(logPath), 0755)
+	logPath := filepath.Join(LogDir, fmt.Sprintf("master_tunnel_%s.log", vHost))
+	
+	env := GetProcessEnv()
+	env = append(env, "AUTOSSH_GATETIME=0")
+	sshBin := "/opt/bin/ssh"
+	if _, err := os.Stat(sshBin); os.IsNotExist(err) {
+		sshBin = "ssh"
+	}
+	env = append(env, "AUTOSSH_PATH="+sshBin)
+	env = append(env, "AUTOSSH_LOGFILE="+filepath.Join(LogDir, fmt.Sprintf("autossh_master_%s.log", vHost)))
 
 	autosshBin := ResolveBin("autossh")
 
@@ -113,6 +121,8 @@ func StartMasterTunnel(vpsCfg map[string]string) bool {
 
 	Msg(fmt.Sprintf("Запуск Мастер-туннеля API (VPS: %s, Port: 28181)...", vHost))
 	cmd := exec.Command(autosshBin, cmdArgs...)
+	cmd.Env = env
+	
 	if err := cmd.Run(); err != nil {
 		Warn(fmt.Sprintf("Мастер-туннель: %v", err))
 		return false
