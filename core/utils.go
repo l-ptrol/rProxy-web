@@ -23,7 +23,7 @@ const (
 )
 
 // Версия приложения
-const VERSION = "1.1.23-go"
+const VERSION = "1.1.24-go"
 
 // WebPort — порт веб-интерфейса rProxy (для Nginx auth_request)
 var WebPort int = 3000
@@ -185,6 +185,23 @@ func GenHtpasswd(user, password string) string {
 	}
 	// Фоллбэк — plaintext (nginx может не принять)
 	return fmt.Sprintf("%s:%s", user, password)
+}
+
+func defaultStr(val, def string) string {
+	if val == "" {
+		return def
+	}
+	return val
+}
+
+// IsPortOpen — алиас для IsPortBusy, проверяет занятость порта
+func IsPortOpen(host string, port int) bool {
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", host, port), 500*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	conn.Close()
+	return true
 }
 
 // GetRouterIP определяет IP роутера

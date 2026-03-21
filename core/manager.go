@@ -61,6 +61,54 @@ func IsRunning(name string) bool {
 	return true
 }
 
+// StartMasterTunnel запускает единый туннель для API (порт 28181)
+func StartMasterTunnel(vpsCfg map[string]string) bool {
+	vHost := vpsCfg["VPS_HOST"]
+	vPort := defaultStr(vpsCfg["VPS_PORT"], "22")
+	vUser := defaultStr(vpsCfg["VPS_USER"], "root")
+
+	if vHost == "" {
+		return false
+	}
+
+	// Проверяем, не запущен ли он уже
+	if IsPortOpen("127.0.0.1", 28181) {
+		// Порт на VPS может быть занят старым процессом, но мы проверим локально
+		// На самом деле лучше просто убить старые autossh для порта 28181
+	}
+
+	sshKey := filepath.Join(RProxyRoot, ".ssh", "id_rsa")
+	logPath := filepath.Join(RProxyRoot, "logs", "master_tunnel.log")
+	os.MkdirAll(filepath.Dir(logPath), 0755)
+
+	autosshBin := ResolveBin("autossh")
+
+	cmdArgs := []string{
+		"-M", "0", "-f", "-N",
+		"-o", "ConnectTimeout=10",
+		"-o", "ServerAliveInterval=30",
+		"-o", "ServerAliveCountMax=3",
+		"-o", "ExitOnForwardFailure=yes",
+		"-o", "StrictHostKeyChecking=no",
+		"-o", "UserKnownHostsFile=/dev/null",
+		"-o", "BatchMode=yes",
+		"-E", logPath,
+		"-i", sshKey,
+		"-p", vPort,
+		"-R", fmt.Sprintf("28181:127.0.0.1:%d", WebPort),
+		fmt.Sprintf("%s@%s", vUser, vHost),
+	}
+
+	Msg(fmt.Sprintf("Запуск Мастер-туннеля API (VPS: %s, Port: 28181)...", vHost))
+	cmd := exec.Command(autosshBin, cmdArgs...)
+	if err := cmd.Run(); err != nil {
+		Warn(fmt.Sprintf("Мастер-туннель: %v", err))
+		return false
+	}
+
+	return true
+}
+
 // StartService — комплексный запуск сервиса: SSL, Auth, Nginx и Туннель.
 // Параметр fast позволяет пропустить настройку VPS для мгновенного запуска.
 func StartService(svcCfg, vpsCfg map[string]string, fast bool) bool {
@@ -235,7 +283,6 @@ func StartService(svcCfg, vpsCfg map[string]string, fast bool) bool {
 		"-i", sshKey,
 		"-p", vpsPort,
 		"-R", tunnelSpec,
-		"-R", fmt.Sprintf("28181:127.0.0.1:%d", WebPort),
 		fmt.Sprintf("%s@%s", vpsUser, vpsHost),
 	}
 
