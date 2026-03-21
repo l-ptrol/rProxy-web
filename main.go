@@ -37,17 +37,6 @@ func main() {
 		gCfg := core.LoadConfig(gPath)
 		gCfg["RPROXY_PORT"] = fmt.Sprintf("%d", port)
 		core.SaveConfig(gPath, gCfg)
-
-		// Пытаемся запустить Мастер-туннель для API
-		vpsID := gCfg["MAIN_VPS"]
-		if vpsID != "" {
-			vpsPath := filepath.Join(core.VPSDir, vpsID+".conf")
-			if _, err := os.Stat(vpsPath); err == nil {
-				vpsCfg := core.LoadConfig(vpsPath)
-				core.StartMasterTunnel(vpsCfg)
-			}
-		}
-
 		// Запуск веб-сервера
 		cmd.StartWebServer(port, indexHTML, loginHTML)
 
@@ -103,16 +92,6 @@ func bootServices(delayOverride string) {
 	if delaySec > 0 {
 		core.Msg(fmt.Sprintf("Ожидание %d сек перед запуском туннелей...", delaySec))
 		time.Sleep(time.Duration(delaySec) * time.Second)
-	}
-
-	// Перед запуском всех сервисов — поднимаем Мастер-туннель
-	vpsID := gCfg["MAIN_VPS"]
-	if vpsID != "" {
-		vpsPath := filepath.Join(core.VPSDir, vpsID+".conf")
-		if _, err := os.Stat(vpsPath); err == nil {
-			vpsCfg := core.LoadConfig(vpsPath)
-			core.StartMasterTunnel(vpsCfg)
-		}
 	}
 
 	core.Msg("Параллельный автозапуск включенных сервисов...")

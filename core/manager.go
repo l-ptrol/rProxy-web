@@ -10,6 +10,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"sync"
 )
 
 // Директории для PID-файлов и логов
@@ -61,6 +62,8 @@ func IsRunning(name string) bool {
 	return true
 }
 
+var masterTunnelMu sync.Mutex
+
 // StartMasterTunnel запускает единый туннель для API (порт 28181)
 func StartMasterTunnel(vpsCfg map[string]string) bool {
 	vHost := vpsCfg["VPS_HOST"]
@@ -71,14 +74,23 @@ func StartMasterTunnel(vpsCfg map[string]string) bool {
 		return false
 	}
 
-	// Проверяем, не запущен ли он уже
-	if IsPortOpen("127.0.0.1", 28181) {
-		// Порт на VPS может быть занят старым процессом, но мы проверим локально
-		// На самом деле лучше просто убить старые autossh для порта 28181
+	masterTunnelMu.Lock()
+	defer masterTunnelMu.Unlock()
+
+	// Ищем уже запущенный autossh именно на этот VPS
+	pgrepBin := ResolveBin("pgrep")
+	checkCmd := exec.Command(pgrepBin, "-f", fmt.Sprintf("autossh.*28181:127.0.0.1:%d.*%s@%s", WebPort, vUser, vHost))
+	if err := checkCmd.Run(); err == nil {
+		// Процесс уже запущен
+		return true
 	}
 
+	// Освобождаем порт 28181 на VPS
+	Msg(fmt.Sprintf("Освобождение порта 28181 на VPS %s...", vHost))
+	RunRemoteSimple(vpsCfg, "fuser -k 28181/tcp || true")
+
 	sshKey := filepath.Join(RProxyRoot, ".ssh", "id_rsa")
-	logPath := filepath.Join(RProxyRoot, "logs", "master_tunnel.log")
+	logPath := filepath.Join(RProxyRoot, "logs", fmt.Sprintf("master_tunnel_%s.log", vHost))
 	os.MkdirAll(filepath.Dir(logPath), 0755)
 
 	autosshBin := ResolveBin("autossh")
@@ -106,6 +118,7 @@ func StartMasterTunnel(vpsCfg map[string]string) bool {
 		return false
 	}
 
+	time.Sleep(2 * time.Second)
 	return true
 }
 
@@ -221,6 +234,8 @@ func StartService(svcCfg, vpsCfg map[string]string, fast bool) bool {
 
 	// 5. ЗАПУСК ТУННЕЛЯ (AUTOSSH)
 	LoadWebPort()
+	StartMasterTunnel(vpsCfg)
+
 	remoteTunnelPort := svcCfg["SVC_TUNNEL_PORT"]
 	vpsHost := vpsCfg["VPS_HOST"]
 	vpsUser := vpsCfg["VPS_USER"]
