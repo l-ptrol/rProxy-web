@@ -108,13 +108,15 @@ func KeeneticAuth(routerIP, login, password string) (bool, error) {
 
 	reqPost, _ := http.NewRequest("POST", authURL, bytes.NewBuffer(jsonData))
 	reqPost.Header.Set("Content-Type", "application/json")
+	
 	// Важные заголовки для предотвращения CSRF-блока
 	cleanIP := routerIP
 	if strings.HasSuffix(cleanIP, ":80") {
 		cleanIP = strings.TrimSuffix(cleanIP, ":80")
 	}
+	
 	reqPost.Header.Set("Origin", fmt.Sprintf("http://%s", cleanIP))
-	reqPost.Header.Set("Referer", fmt.Sprintf("http://%s/auth", cleanIP))
+	reqPost.Header.Set("Referer", fmt.Sprintf("http://%s/", cleanIP)) // Заменено на /
 
 	respPost, err := client.Do(reqPost)
 	if err != nil {
@@ -127,7 +129,7 @@ func KeeneticAuth(routerIP, login, password string) (bool, error) {
 		return true, nil
 	}
 
-	fmt.Printf("[AUTH] FAILED: status=%d\n", respPost.StatusCode)
+	fmt.Printf("[AUTH] FAILED: status=%d, PWD=%s, Hash1=%s, FinalHash=%s\n", respPost.StatusCode, password, h1, finalHash)
 	return false, nil
 }
 
@@ -155,8 +157,29 @@ func DetectRouterIP() string {
 		}
 	}
 
-	// 2. Пробуем найти через ip route (шлюз)
-	out, err := exec.Command("ip", "route", "show", "default").Output()
+	// 2. Пробуем найти через локальный мост LAN (br0) - это 100% наш роутер
+	out, err := exec.Command("ip", "addr", "show", "br0").Output()
+	if err == nil {
+		re := regexp.MustCompile(`inet\s+([0-9.]+)/`)
+		match := re.FindStringSubmatch(string(out))
+		if len(match) > 1 {
+			br0IP := match[1]
+			for _, p := range ports {
+				url := fmt.Sprintf("http://%s:%s/auth", br0IP, p)
+				resp, err := client.Get(url)
+				if err == nil {
+					resp.Body.Close()
+					if resp.StatusCode == 401 {
+						cachedRouterIP = br0IP + ":" + p
+						return cachedRouterIP
+					}
+				}
+			}
+		}
+	}
+
+	// 3. Пробуем найти через ip route (шлюз)
+	out, err = exec.Command("ip", "route", "show", "default").Output()
 	if err == nil {
 		re := regexp.MustCompile(`via\s+([0-9.]+)`)
 		match := re.FindStringSubmatch(string(out))
@@ -178,7 +201,7 @@ func DetectRouterIP() string {
 
 
 
-	// 3. Крайний случай - стандартные IP
+	// 4. Крайний случай - стандартные IP
 	defaults := []string{"192.168.1.1", "192.168.0.1", "192.168.10.1", "192.168.60.1"}
 	for _, ip := range defaults {
 		for _, p := range ports {
