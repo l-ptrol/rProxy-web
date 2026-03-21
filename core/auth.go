@@ -1,12 +1,10 @@
 package core
 
-import (
 	"bytes"
 	"crypto/md5"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"os/exec"
