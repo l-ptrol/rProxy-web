@@ -69,22 +69,54 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 			return
 		}
 
-		gPath := filepath.Join(core.RProxyRoot, "rproxy.conf")
-		gCfg := core.LoadConfig(gPath)
-		routerIP := defaultStr(gCfg["ROUTER_AUTH_IP"], "127.0.0.1")
+		// 2. Определяем тип авторизации для конкретного сервиса
+		// Смотрим Host запроса (Nginx проксирует Host)
+		host := strings.Split(r.Host, ":")[0]
+		svcCfg := core.GetServiceByDomain(host)
 
-		ok, err := core.KeeneticAuth(routerIP, login, password)
+		isRouterAuth := true
+		expectedUser := ""
+		expectedPass := ""
+
+		if svcCfg != nil {
+			if svcCfg["SVC_ROUTER_AUTH"] != "yes" && svcCfg["SVC_AUTH_USER"] != "" {
+				isRouterAuth = false
+				expectedUser = svcCfg["SVC_AUTH_USER"]
+				expectedPass = svcCfg["SVC_AUTH_PASS"]
+			}
+		}
+
+		ok := false
+		var err error
+
+		if isRouterAuth {
+			// Авторизация через Keenetic
+			gPath := filepath.Join(core.RProxyRoot, "rproxy.conf")
+			gCfg := core.LoadConfig(gPath)
+			routerIP := defaultStr(gCfg["ROUTER_AUTH_IP"], core.GetRouterIP())
+			ok, err = core.KeeneticAuth(routerIP, login, password)
+		} else {
+			// Обычная авторизация по паролю из конфига сервиса
+			if login == expectedUser && password == expectedPass {
+				ok = true
+			} else {
+				errMsg := "Неверный логин или пароль для сервиса"
+				jsonResponse(w, map[string]string{"status": "error", "message": errMsg})
+				core.RecordAttempt(ip)
+				return
+			}
+		}
+
 		if ok {
 			// Успешная авторизация
 			sid := core.CreateSession()
 			core.ClearAttempts(ip)
-			fmt.Printf("[LOGIN] Success for user: %s (IP: %s)\n", login, ip)
+			fmt.Printf("[LOGIN] Success for %s on %s (IP: %s)\n", login, host, ip)
 			
-			host := strings.Split(r.Host, ":")[0]
-			parts := strings.Split(host, ".")
+			hostParts := strings.Split(host, ".")
 			domain := ""
-			if len(parts) >= 2 && !isIP(host) {
-				domain = "." + strings.Join(parts[len(parts)-2:], ".")
+			if len(hostParts) >= 2 && !isIP(host) {
+				domain = "." + strings.Join(hostParts[len(hostParts)-2:], ".")
 			}
 
 			http.SetCookie(w, &http.Cookie{

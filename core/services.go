@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -248,6 +249,31 @@ server {
     }
 }
 `, domain)
+}
+
+// GetServiceByDomain ищет конфиг сервиса по его домену
+func GetServiceByDomain(domain string) map[string]string {
+	if domain == "" {
+		return nil
+	}
+	// Убираем порт если есть
+	domain = strings.Split(domain, ":")[0]
+
+	entries, err := os.ReadDir(ServicesDir)
+	if err != nil {
+		return nil
+	}
+
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".conf") {
+			path := filepath.Join(ServicesDir, e.Name())
+			cfg := LoadConfig(path)
+			if cfg["SVC_DOMAIN"] == domain {
+				return cfg
+			}
+		}
+	}
+	return nil
 }
 
 func ListServiceConfigs(servicesDir string) []string {
