@@ -23,7 +23,7 @@ const (
 )
 
 // Версия приложения
-const VERSION = "1.2.2-go"
+const VERSION = "1.2.3-go"
 
 // WebPort — порт веб-интерфейса rProxy (для Nginx auth_request)
 var WebPort int = 3000
@@ -204,25 +204,48 @@ func IsPortOpen(host string, port int) bool {
 	return true
 }
 
-// GetRouterIP определяет IP роутера
+// GetRouterIP определяет IP роутера (LAN)
 func GetRouterIP() string {
-	// 1. ndmq (Keenetic)
+	// 1. Попытка через интерфейс Bridge0 (ndmq)
 	out, err := exec.Command("ndmq", "-p", "show interface Bridge0", "-path", "address").Output()
 	if err == nil {
 		ip := strings.TrimSpace(string(out))
-		if ip != "" && ip != "0.0.0.0" {
+		if ip != "" && ip != "0.0.0.0" && !strings.HasPrefix(ip, "10.") {
 			return ip
 		}
 	}
 
-	// 2. ip route
+	// 2. Попытка через интерфейс Home (ndmq)
+	out, err = exec.Command("ndmq", "-p", "show interface Home", "-path", "address").Output()
+	if err == nil {
+		ip := strings.TrimSpace(string(out))
+		if ip != "" && ip != "0.0.0.0" && !strings.HasPrefix(ip, "10.") {
+			return ip
+		}
+	}
+
+	// 3. Попытка через ip addr show br0
+	out, err = exec.Command("ip", "-4", "addr", "show", "br0").Output()
+	if err == nil {
+		re := regexp.MustCompile(`inet\s+([0-9.]+)`)
+		match := re.FindStringSubmatch(string(out))
+		if len(match) > 1 {
+			return match[1]
+		}
+	}
+
+	// 4. Попытка через системный шлюз по умолчанию
 	out, err = exec.Command("ip", "route", "show").Output()
 	if err == nil {
 		for _, line := range strings.Split(string(out), "\n") {
 			if strings.Contains(line, "default via") {
 				parts := strings.Fields(line)
 				if len(parts) > 2 {
-					return parts[2]
+					ip := parts[2]
+					// Если это 10.x.x.x, пропускаем (скорее всего VPN/WAN)
+					if !strings.HasPrefix(ip, "10.") {
+						return ip
+					}
 				}
 			}
 		}

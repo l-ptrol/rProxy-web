@@ -258,8 +258,8 @@ func GetServiceByDomain(host string) map[string]string {
 	}
 
 	parts := strings.Split(host, ":")
-	domain := parts[0]
-	port := "80"
+	domain := strings.ToLower(parts[0])
+	port := ""
 	if len(parts) > 1 {
 		port = parts[1]
 	}
@@ -274,14 +274,21 @@ func GetServiceByDomain(host string) map[string]string {
 			path := filepath.Join(ServicesDir, e.Name())
 			cfg := LoadConfig(path)
 			
-			cfgDomain := cfg["SVC_DOMAIN"]
+			cfgDomain := strings.ToLower(cfg["SVC_DOMAIN"])
 			cfgPort := cfg["SVC_EXT_PORT"]
 			if cfgPort == "" {
 				cfgPort = "80"
 			}
 
-			if cfgDomain == domain && cfgPort == port {
-				return cfg
+			if cfgDomain == domain {
+				// Если порт не указан в Host, считаем его 80 или 443
+				if port == "" {
+					if cfgPort == "80" || cfgPort == "443" {
+						return cfg
+					}
+				} else if cfgPort == port {
+					return cfg
+				}
 			}
 		}
 	}

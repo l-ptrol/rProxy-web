@@ -70,9 +70,9 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 		}
 
 		// 2. Определяем тип авторизации для конкретного сервиса
-		// Смотрим Host запроса (Nginx проксирует Host)
 		host := strings.Split(r.Host, ":")[0]
-		svcCfg := core.GetServiceByDomain(host)
+		fullHost := r.Host
+		svcCfg := core.GetServiceByDomain(fullHost)
 
 		isRouterAuth := true
 		expectedUser := ""
@@ -84,6 +84,8 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 				expectedUser = svcCfg["SVC_AUTH_USER"]
 				expectedPass = svcCfg["SVC_AUTH_PASS"]
 			}
+		} else {
+			fmt.Printf("[AUTH] No config found for host: %s (RemoteAddr: %s)\n", fullHost, r.RemoteAddr)
 		}
 
 		ok := false
@@ -93,10 +95,18 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 			// Авторизация через Keenetic
 			gPath := filepath.Join(core.RProxyRoot, "rproxy.conf")
 			gCfg := core.LoadConfig(gPath)
-			routerIP := defaultStr(gCfg["ROUTER_AUTH_IP"], core.GetRouterIP())
+			
+			// Приоритет: rproxy.conf -> Автоопределение (GetRouterIP) -> 192.168.1.1
+			routerIP := gCfg["ROUTER_AUTH_IP"]
+			if routerIP == "" {
+				routerIP = core.GetRouterIP()
+			}
+			
+			fmt.Printf("[AUTH] Using Router Auth (IP: %s) for host: %s\n", routerIP, fullHost)
 			ok, err = core.KeeneticAuth(routerIP, login, password)
 		} else {
 			// Обычная авторизация по паролю из конфига сервиса
+			fmt.Printf("[AUTH] Using Local Auth for host: %s (User: %s)\n", fullHost, expectedUser)
 			if login == expectedUser && password == expectedPass {
 				ok = true
 			} else {
