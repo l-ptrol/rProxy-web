@@ -7,6 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg viewBox='0 0 24 24' fill='none' stroke='%236366f1' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M7 18V10a2 2 0 0 1 2-2h5'/%3E%3Cpath d='M14 18V6h3a3 3 0 0 1 0 6h-3'/%3E%3C/svg%3E">
     <style>
         :root {
             --bg-color-from: #0f172a;
@@ -102,7 +103,7 @@
             box-shadow: 0 0 20px var(--accent-glow);
         }
 
-        .logo svg { width: 28px; height: 28px; fill: white; }
+        .logo svg { width: 28px; height: 28px; color: white; }
 
         h1 { font-size: 1.75rem; font-weight: 700; margin: 0; letter-spacing: -0.025em; }
         .subtitle { color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem; }
@@ -196,7 +197,10 @@
     <div class="login-card">
         <div class="header">
             <div class="logo">
-                <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M7 18V10a2 2 0 0 1 2-2h5"/>
+                    <path d="M14 18V6h3a3 3 0 0 1 0 6h-3"/>
+                </svg>
             </div>
             <h1>Вход в систему</h1>
             <div class="subtitle">rProxy Web Identity v{{version}}</div>
