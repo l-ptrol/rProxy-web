@@ -36,8 +36,19 @@ func KeeneticAuth(routerIP, login, password string) (bool, error) {
 	fmt.Printf("[AUTH] Start: routerIP=%q, login=%q\n", routerIP, login)
 
 	// Определяем IP если авто или 127.0.0.1 (который часто не работает для NDM)
-	if routerIP == "" || routerIP == "auto" || routerIP == "127.0.0.1" {
+	if routerIP == "" || routerIP == "auto" {
 		routerIP = DetectRouterIP()
+	} else if routerIP == "127.0.0.1" {
+		// Осторожно проверяем 127.0.0.1, если он отдает 403 - переключаемся на авто
+		clientCheck := &http.Client{Timeout: 1 * time.Second}
+		if r, err := clientCheck.Get("http://127.0.0.1:80/auth"); err == nil {
+			r.Body.Close()
+			if r.StatusCode == 403 {
+				routerIP = DetectRouterIP()
+			}
+		} else {
+			routerIP = DetectRouterIP()
+		}
 	}
 
 	// Гарантируем наличие порта
@@ -98,8 +109,12 @@ func KeeneticAuth(routerIP, login, password string) (bool, error) {
 	reqPost, _ := http.NewRequest("POST", authURL, bytes.NewBuffer(jsonData))
 	reqPost.Header.Set("Content-Type", "application/json")
 	// Важные заголовки для предотвращения CSRF-блока
-	reqPost.Header.Set("Origin", fmt.Sprintf("http://%s", routerIP))
-	reqPost.Header.Set("Referer", fmt.Sprintf("http://%s/auth", routerIP))
+	cleanIP := routerIP
+	if strings.HasSuffix(cleanIP, ":80") {
+		cleanIP = strings.TrimSuffix(cleanIP, ":80")
+	}
+	reqPost.Header.Set("Origin", fmt.Sprintf("http://%s", cleanIP))
+	reqPost.Header.Set("Referer", fmt.Sprintf("http://%s/auth", cleanIP))
 
 	respPost, err := client.Do(reqPost)
 	if err != nil {
@@ -116,12 +131,31 @@ func KeeneticAuth(routerIP, login, password string) (bool, error) {
 	return false, nil
 }
 
+var cachedRouterIP string
+
 // DetectRouterIP пытается автоматически найти IP роутера
 func DetectRouterIP() string {
+	if cachedRouterIP != "" {
+		return cachedRouterIP
+	}
+
 	client := http.Client{Timeout: 1 * time.Second}
 	ports := []string{"80", "81", "8080"}
 
-	// 1. Пробуем найти через ip route (самый надежный способ для Keenetic/Entware)
+	// 1. Пробуем 127.0.0.1 сначала (самый быстрый локальный тест)
+	for _, p := range ports {
+		url := fmt.Sprintf("http://127.0.0.1:%s/auth", p)
+		resp, err := client.Get(url)
+		if err == nil {
+			resp.Body.Close()
+			if resp.StatusCode == 401 {
+				cachedRouterIP = "127.0.0.1:" + p
+				return cachedRouterIP
+			}
+		}
+	}
+
+	// 2. Пробуем найти через ip route (шлюз)
 	out, err := exec.Command("ip", "route", "show", "default").Output()
 	if err == nil {
 		re := regexp.MustCompile(`via\s+([0-9.]+)`)
@@ -134,24 +168,15 @@ func DetectRouterIP() string {
 				if err == nil {
 					resp.Body.Close()
 					if resp.StatusCode == 401 {
-						return gw + ":" + p
+						cachedRouterIP = gw + ":" + p
+						return cachedRouterIP
 					}
 				}
 			}
 		}
 	}
 
-	// 2. Пробуем 127.0.0.1 (запасной вариант)
-	for _, p := range ports {
-		url := fmt.Sprintf("http://127.0.0.1:%s/auth", p)
-		resp, err := client.Get(url)
-		if err == nil {
-			resp.Body.Close()
-			if resp.StatusCode == 401 {
-				return "127.0.0.1:" + p
-			}
-		}
-	}
+
 
 	// 3. Крайний случай - стандартные IP
 	defaults := []string{"192.168.1.1", "192.168.0.1", "192.168.10.1", "192.168.60.1"}
@@ -162,11 +187,13 @@ func DetectRouterIP() string {
 			if err == nil {
 				resp.Body.Close()
 				if resp.StatusCode == 401 {
-					return ip + ":" + p
+					cachedRouterIP = ip + ":" + p
+					return cachedRouterIP
 				}
 			}
 		}
 	}
 
-	return "192.168.1.1"
+	cachedRouterIP = "192.168.1.1:80"
+	return cachedRouterIP
 }
