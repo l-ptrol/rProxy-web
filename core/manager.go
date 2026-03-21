@@ -10,7 +10,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-	"sync"
 )
 
 // Директории для PID-файлов и логов
@@ -59,76 +58,6 @@ func IsRunning(name string) bool {
 		}
 	}
 
-	return true
-}
-
-var masterTunnelMu sync.Mutex
-
-// StartMasterTunnel запускает единый туннель для API (порт 28181)
-func StartMasterTunnel(vpsCfg map[string]string) bool {
-	vHost := vpsCfg["VPS_HOST"]
-	vPort := defaultStr(vpsCfg["VPS_PORT"], "22")
-	vUser := defaultStr(vpsCfg["VPS_USER"], "root")
-
-	if vHost == "" {
-		return false
-	}
-
-	masterTunnelMu.Lock()
-	defer masterTunnelMu.Unlock()
-
-	// Ищем уже запущенный autossh именно на этот VPS
-	pgrepBin := ResolveBin("pgrep")
-	checkCmd := exec.Command(pgrepBin, "-f", fmt.Sprintf("autossh.*28181:127.0.0.1:%d.*%s@%s", WebPort, vUser, vHost))
-	if err := checkCmd.Run(); err == nil {
-		// Процесс уже запущен
-		return true
-	}
-
-	// Освобождаем порт 28181 на VPS через более универсальный ss
-	Msg(fmt.Sprintf("Освобождение порта 28181 на VPS %s...", vHost))
-	RunRemoteSimple(vpsCfg, "ss -lptn 'sport = :28181' | grep -oE 'pid=[0-9]+' | cut -d= -f2 | xargs -r kill -9 || true")
-
-	sshKey := SSHKeyPath
-	logPath := filepath.Join(LogDir, fmt.Sprintf("master_tunnel_%s.log", vHost))
-	
-	env := GetProcessEnv()
-	env = append(env, "AUTOSSH_GATETIME=0")
-	sshBin := "/opt/bin/ssh"
-	if _, err := os.Stat(sshBin); os.IsNotExist(err) {
-		sshBin = "ssh"
-	}
-	env = append(env, "AUTOSSH_PATH="+sshBin)
-	env = append(env, "AUTOSSH_LOGFILE="+filepath.Join(LogDir, fmt.Sprintf("autossh_master_%s.log", vHost)))
-
-	autosshBin := ResolveBin("autossh")
-
-	cmdArgs := []string{
-		"-M", "0", "-f", "-N",
-		"-o", "ConnectTimeout=10",
-		"-o", "ServerAliveInterval=30",
-		"-o", "ServerAliveCountMax=3",
-		"-o", "ExitOnForwardFailure=yes",
-		"-o", "StrictHostKeyChecking=no",
-		"-o", "UserKnownHostsFile=/dev/null",
-		"-o", "BatchMode=yes",
-		"-E", logPath,
-		"-i", sshKey,
-		"-p", vPort,
-		"-R", fmt.Sprintf("28181:127.0.0.1:%d", WebPort),
-		fmt.Sprintf("%s@%s", vUser, vHost),
-	}
-
-	Msg(fmt.Sprintf("Запуск Мастер-туннеля API (VPS: %s, Port: 28181)...", vHost))
-	cmd := exec.Command(autosshBin, cmdArgs...)
-	cmd.Env = env
-	
-	if err := cmd.Run(); err != nil {
-		Warn(fmt.Sprintf("Мастер-туннель: %v", err))
-		return false
-	}
-
-	time.Sleep(2 * time.Second)
 	return true
 }
 
@@ -242,9 +171,7 @@ func StartService(svcCfg, vpsCfg map[string]string, fast bool) bool {
 		}
 	}
 
-	// 5. ЗАПУСК ТУННЕЛЯ (AUTOSSH)
 	LoadWebPort()
-	StartMasterTunnel(vpsCfg)
 
 	remoteTunnelPort := svcCfg["SVC_TUNNEL_PORT"]
 	vpsHost := vpsCfg["VPS_HOST"]
@@ -308,8 +235,32 @@ func StartService(svcCfg, vpsCfg map[string]string, fast bool) bool {
 		"-i", sshKey,
 		"-p", vpsPort,
 		"-R", tunnelSpec,
-		fmt.Sprintf("%s@%s", vpsUser, vpsHost),
 	}
+
+	// Новая архитектура (v1.1.28-go): Мульти-проброс (Multi-Forward) API для каждого сервиса индивидуально
+	if svcType == "http" || svcType == "ttyd" {
+		apiTunnelPort := svcCfg["SVC_API_PORT"]
+		if apiTunnelPort == "" || apiTunnelPort == remoteTunnelPort {
+			// Выделяем уникальный порт для Router API Nginx (не конфликтующий с данными)
+			apiPortInt := 0
+			if rtPortInt, err := strconv.Atoi(remoteTunnelPort); err == nil {
+				// Псевдослучайный сдвиг, чтобы порт был уникален
+				apiPortInt = (rtPortInt % 20000) + 35000 
+			} else {
+				apiPortInt = rand.Intn(20000) + 35000
+			}
+			apiTunnelPort = strconv.Itoa(apiPortInt)
+			
+			svcCfg["SVC_API_PORT"] = apiTunnelPort
+			SaveConfig(filepath.Join(ServicesDir, name+".conf"), svcCfg)
+		}
+		
+		// Добавляем второй -R флаг в тот же самый autossh процесс! 
+		// Если порт занят, ExitOnForwardFailure=yes оборвёт оба проброса. 
+		cmdArgs = append(cmdArgs, "-R", fmt.Sprintf("%s:127.0.0.1:%d", apiTunnelPort, WebPort))
+	}
+	
+	cmdArgs = append(cmdArgs, fmt.Sprintf("%s@%s", vpsUser, vpsHost))
 
 	Msg(fmt.Sprintf("Запуск туннеля '%s' (Target: %s:%s)...", name, targetHost, targetPort))
 

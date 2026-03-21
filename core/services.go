@@ -41,7 +41,11 @@ func GenerateNginxConf(svcCfg map[string]string, useSSLPaths bool) string {
 
 	switch svcType {
 	case "http", "ttyd":
-		return httpProxyConf(name, domain, tunnelPort, extPort, svcCfg["SVC_AUTH_USER"], useSSLPaths, targetHost, targetPort, svcCfg["SVC_ROUTER_AUTH"])
+		apiPort := svcCfg["SVC_API_PORT"]
+		if apiPort == "" {
+			apiPort = "28181" // Фолбек на случай старых конфигов без передеплоя
+		}
+		return httpProxyConf(name, domain, tunnelPort, extPort, svcCfg["SVC_AUTH_USER"], useSSLPaths, targetHost, targetPort, svcCfg["SVC_ROUTER_AUTH"], apiPort)
 	case "tcp", "ssh":
 		domainForSSL := ""
 		if useSSLPaths {
@@ -54,7 +58,7 @@ func GenerateNginxConf(svcCfg map[string]string, useSSLPaths bool) string {
 }
 
 // httpProxyConf генерирует конфиг для HTTP/HTTPS прокси
-func httpProxyConf(name, domain, localPort, extPort, authUser string, useSSL bool, targetHost, targetPort string, routerAuth string) string {
+func httpProxyConf(name, domain, localPort, extPort, authUser string, useSSL bool, targetHost, targetPort string, routerAuth string, apiTunnelPort string) string {
 	// Блок авторизации
 	authConfig := ""
 	if authUser != "" {
@@ -75,10 +79,10 @@ func httpProxyConf(name, domain, localPort, extPort, authUser string, useSSL boo
         auth_request /rproxy_verify;
         error_page 401 = @rproxy_login;`
 
-		rAuthHelpers = `
+		rAuthHelpers = fmt.Sprintf(`
     location = /rproxy_verify {
         internal;
-        proxy_pass http://127.0.0.1:28181/api/verify;
+        proxy_pass http://127.0.0.1:%s/api/verify;
         proxy_pass_request_body off;
         proxy_set_header Content-Length "";
         proxy_set_header Cookie $http_cookie;
@@ -91,7 +95,7 @@ func httpProxyConf(name, domain, localPort, extPort, authUser string, useSSL boo
 
     location = /login {
         auth_request off;
-        proxy_pass http://127.0.0.1:28181/login;
+        proxy_pass http://127.0.0.1:%s/login;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -100,7 +104,7 @@ func httpProxyConf(name, domain, localPort, extPort, authUser string, useSSL boo
 
     location = /api/login {
         auth_request off;
-        proxy_pass http://127.0.0.1:28181/api/login;
+        proxy_pass http://127.0.0.1:%s/api/login;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -109,7 +113,7 @@ func httpProxyConf(name, domain, localPort, extPort, authUser string, useSSL boo
 
     location @rproxy_login {
         return 302 $scheme://$http_host/login?backUrl=$scheme://$http_host$request_uri;
-    }`
+    }`, apiTunnelPort, apiTunnelPort, apiTunnelPort)
 	}
 
 	// Блок редиректа HTTP -> HTTPS
