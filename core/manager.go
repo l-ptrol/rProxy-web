@@ -89,7 +89,7 @@ func StartMasterTunnel(vpsCfg map[string]string) bool {
 	Msg(fmt.Sprintf("Освобождение порта 28181 на VPS %s...", vHost))
 	RunRemoteSimple(vpsCfg, "ss -lptn 'sport = :28181' | grep -oE 'pid=[0-9]+' | cut -d= -f2 | xargs -r kill -9 || true")
 
-	sshKey := filepath.Join(RProxyRoot, ".ssh", "id_rsa")
+	sshKey := SSHKeyPath
 	logPath := filepath.Join(LogDir, fmt.Sprintf("master_tunnel_%s.log", vHost))
 	
 	env := GetProcessEnv()
