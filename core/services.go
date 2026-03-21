@@ -60,7 +60,7 @@ func GenerateNginxConf(svcCfg map[string]string, useSSLPaths bool) string {
 
 // httpProxyConf генерирует конфиг для HTTP/HTTPS прокси
 func httpProxyConf(name, domain, localPort, extPort, authUser string, useSSL bool, targetHost, targetPort string, routerAuth string, apiTunnelPort string) string {
-	// Блок авторизации (Унифицированный Identity Provider v1.2.0)
+	// Блок авторизации (Унифицированный Identity Provider v1.2.2)
 	authDirectives := ""
 	authHelpers := ""
 
@@ -77,7 +77,7 @@ func httpProxyConf(name, domain, localPort, extPort, authUser string, useSSL boo
         proxy_pass_request_body off;
         proxy_set_header Content-Length "";
         proxy_set_header Cookie $http_cookie;
-        proxy_set_header Host 127.0.0.1;
+        proxy_set_header Host $http_host; # Передаем оригинальный домен и ПОРТ
         proxy_set_header X-Original-URI $request_uri;
         proxy_set_header X-Forwarded-For $remote_addr;
     }
@@ -86,7 +86,7 @@ func httpProxyConf(name, domain, localPort, extPort, authUser string, useSSL boo
     location = /login {
         auth_request off;
         proxy_pass http://127.0.0.1:%s/login;
-        proxy_set_header Host $host;
+        proxy_set_header Host $http_host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
@@ -95,7 +95,7 @@ func httpProxyConf(name, domain, localPort, extPort, authUser string, useSSL boo
     location = /api/login {
         auth_request off;
         proxy_pass http://127.0.0.1:%s/api/login;
-        proxy_set_header Host $host;
+        proxy_set_header Host $http_host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
@@ -251,13 +251,18 @@ server {
 `, domain)
 }
 
-// GetServiceByDomain ищет конфиг сервиса по его домену
-func GetServiceByDomain(domain string) map[string]string {
-	if domain == "" {
+// GetServiceByDomain ищет конфиг сервиса по его домену и порту
+func GetServiceByDomain(host string) map[string]string {
+	if host == "" {
 		return nil
 	}
-	// Убираем порт если есть
-	domain = strings.Split(domain, ":")[0]
+
+	parts := strings.Split(host, ":")
+	domain := parts[0]
+	port := "80"
+	if len(parts) > 1 {
+		port = parts[1]
+	}
 
 	entries, err := os.ReadDir(ServicesDir)
 	if err != nil {
@@ -268,7 +273,14 @@ func GetServiceByDomain(domain string) map[string]string {
 		if strings.HasSuffix(e.Name(), ".conf") {
 			path := filepath.Join(ServicesDir, e.Name())
 			cfg := LoadConfig(path)
-			if cfg["SVC_DOMAIN"] == domain {
+			
+			cfgDomain := cfg["SVC_DOMAIN"]
+			cfgPort := cfg["SVC_EXT_PORT"]
+			if cfgPort == "" {
+				cfgPort = "80"
+			}
+
+			if cfgDomain == domain && cfgPort == port {
 				return cfg
 			}
 		}
