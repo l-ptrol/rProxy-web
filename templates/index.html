@@ -124,46 +124,56 @@
         .logo-badge {
             background: var(--accent);
             color: white;
-            width: 32px;
-            height: 32px;
+            width: 34px;
+            height: 34px;
             display: flex;
             align-items: center;
             justify-content: center;
-            border-radius: 9px;
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
             flex-shrink: 0;
+            transition: transform 0.2s;
         }
+        .logo-badge:hover { transform: scale(1.05); }
         .logo-badge svg {
             width: 22px;
             height: 22px;
         }
         .topbar h1 {
-            font-size: 16px;
+            font-size: 18px;
             font-weight: 800;
-            color: var(--accent);
+            color: var(--text);
             display: flex;
             align-items: center;
             gap: 10px;
-            letter-spacing: 0.5px;
+            letter-spacing: -0.2px;
             margin: 0;
+            line-height: normal;
         }
         .topbar .ver {
             font-size: 11px;
             color: var(--text3);
             font-family: 'JetBrains Mono', monospace;
+            font-weight: 500;
+            opacity: 0.8;
+            margin-top: 2px;
         }
         .topbar-right {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
         }
         .topbar-right .btn-icon {
             background: var(--surface2);
             border: 1px solid var(--border);
             color: var(--text2);
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
         }
         .topbar-right .btn-icon:hover {
             color: var(--text);
+            background: var(--surface3);
             border-color: var(--text3);
         }
 
@@ -773,7 +783,7 @@
 
     <!-- Шапка -->
     <div class="topbar">
-        <div class="container">
+        <div class="container" style="display: flex; align-items: center; justify-content: space-between;">
             <div class="topbar-left">
                 <h1>
                     <div class="logo-badge">
@@ -782,10 +792,10 @@
                             <path d="M14 18V6h3a3 3 0 0 1 0 6h-3"/>
                         </svg>
                     </div>
-                    rProxy <span class="ver">v{{version}}</span><span id="update-badge"></span>
+                    <span>rProxy <span class="ver">v{{version}}</span><span id="update-badge"></span></span>
                 </h1>
             </div>
-        </div>        <div class="topbar-right">
+            <div class="topbar-right">
                 <button class="btn btn-icon" onclick="toggleTheme()" id="theme-toggle" title="Сменить тему">
                     <!-- Иконка Луны (для темной темы по умолчанию) -->
                     <svg id="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
