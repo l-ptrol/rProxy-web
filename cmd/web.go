@@ -360,10 +360,49 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 	mux.HandleFunc("/api/settings/auth", func(w http.ResponseWriter, r *http.Request) {
 		gPath := filepath.Join(core.RProxyRoot, "rproxy.conf")
 		gCfg := core.LoadConfig(gPath)
+		// Для обратной совместимости возвращаем первый из списка или из конфига
+		user := gCfg["CUSTOM_AUTH_USER"]
+		pass := gCfg["CUSTOM_AUTH_PASS"]
+
 		jsonResponse(w, map[string]string{
-			"custom_user": gCfg["CUSTOM_AUTH_USER"],
-			"custom_pass": gCfg["CUSTOM_AUTH_PASS"],
+			"custom_user": user,
+			"custom_pass": pass,
 		})
+	})
+
+	mux.HandleFunc("/api/settings/auth/list", func(w http.ResponseWriter, r *http.Request) {
+		authPath := filepath.Join(core.RProxyRoot, "custom_auth.json")
+		
+		if r.Method == "GET" {
+			var list []map[string]string
+			if data, err := os.ReadFile(authPath); err == nil {
+				json.Unmarshal(data, &list)
+			}
+			if list == nil { list = []map[string]string{} }
+			jsonResponse(w, list)
+			return
+		}
+
+		if r.Method == "POST" {
+			var list []map[string]string
+			if err := json.NewDecoder(r.Body).Decode(&list); err != nil {
+				http.Error(w, "Invalid JSON", 400)
+				return
+			}
+			data, _ := json.MarshalIndent(list, "", "  ")
+			os.WriteFile(authPath, data, 0644)
+			
+			// Синхронизируем первый элемент с rproxy.conf для обратной совместимости
+			if len(list) > 0 {
+				gPath := filepath.Join(core.RProxyRoot, "rproxy.conf")
+				gCfg := core.LoadConfig(gPath)
+				gCfg["CUSTOM_AUTH_USER"] = list[0]["user"]
+				gCfg["CUSTOM_AUTH_PASS"] = list[0]["pass"]
+				core.SaveConfig(gPath, gCfg)
+			}
+
+			jsonResponse(w, map[string]string{"status": "success"})
+		}
 	})
 
 	mux.HandleFunc("/api/settings/global", func(w http.ResponseWriter, r *http.Request) {

@@ -64,6 +64,18 @@
             --modal-bg: #0f121b;
         }
         
+        /* Auth List Styles */
+        .auth-list { margin-top: 10px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--bg); }
+        .auth-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: var(--surface3); border-bottom: 1px solid var(--border); }
+        .auth-header span { font-size: 11px; font-weight: 700; color: var(--text3); text-transform: uppercase; }
+        .auth-list-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); transition: background 0.2s; }
+        .auth-list-item:hover { background: var(--surface2); }
+        .auth-list-item:last-child { border-bottom: none; }
+        .auth-list-item input { flex: 1; min-width: 0; background: transparent; border: 1px solid transparent; padding: 6px 10px; font-size: 13px; color: var(--text); border-radius: var(--radius-sm); outline: none; transition: border-color 0.2s; }
+        .auth-list-item input:hover, .auth-list-item input:focus { border-color: var(--border); background: var(--surface2); }
+        .auth-list-empty { padding: 20px; text-align: center; color: var(--text3); font-size: 12px; }
+        .auth-list-add { padding: 10px; border-top: 1px solid var(--border); background: var(--surface2); border-bottom: none; }
+        
         :root.theme-light {
             /* Светлая тема AWG */
             --bg: #f1f3f9;
@@ -920,10 +932,15 @@
                 </div>
                 <div style="margin: 20px 0; border-top: 1px solid var(--border);"></div>
                 <div class="form-group">
-                    <label>Кастомные данные авторизации (для сервисов)</label>
-                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-                        <input type="text" id="s-custom-user" placeholder="Логин...">
-                        <input type="password" id="s-custom-pass" placeholder="Пароль...">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <label style="margin-bottom:0;">Кастомные данные авторизации (для сервисов)</label>
+                        <button class="btn btn-sm" onclick="addAuthRow()" type="button" style="padding: 4px 8px;">
+                            <svg viewBox="0 0 24 24" style="width:12px; height:12px;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                            Добавить
+                        </button>
+                    </div>
+                    <div class="auth-list" id="s-auth-list">
+                        <!-- Динамический список -->
                     </div>
                     <div class="form-hint">Эти данные будут предлагаться в выпадающем списке при создании сервиса.</div>
                 </div>
@@ -1648,33 +1665,49 @@ async function svcDelete(name) {
 }
 
 // ========== Добавить сервис ==========
-let defaultAuth = null;
+let defaultAuthList = [];
 async function checkDefaultAuth() {
-    if (defaultAuth !== null) return;
+    if (defaultAuthList.length > 0) return;
     try {
-        const d = await api('settings/auth');
-        if (d.custom_user) defaultAuth = d;
-        else defaultAuth = {custom_user: '', custom_pass: ''};
+        defaultAuthList = await api('settings/auth/list');
     } catch(e) {
-        defaultAuth = {custom_user: '', custom_pass: ''};
+        defaultAuthList = [];
     }
 }
-async function showAuthDropdown() {
-    if (defaultAuth === null) await checkDefaultAuth();
-    if (defaultAuth && defaultAuth.custom_user) {
-        document.getElementById('auth-dropdown').classList.add('show');
+
+function renderAuthDropdown() {
+    const list = document.getElementById('auth-dropdown');
+    // Оставляем заголовок
+    list.innerHTML = '<div style="font-size:11px; color:var(--text3); margin: 0 6px 6px">Сохраненные данные:</div>';
+    
+    if (defaultAuthList.length === 0) {
+        list.innerHTML += '<div style="padding:10px; font-size:12px; color:var(--text3); text-align:center;">Нет сохраненных данных</div>';
+        return;
     }
+
+    defaultAuthList.forEach((auth, idx) => {
+        const item = document.createElement('div');
+        item.className = 'dropdown-item';
+        item.innerHTML = `<svg viewBox="0 0 24 24" style="width:14px; height:14px; opacity:0.6;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg> <span>${auth.user}</span>`;
+        item.onclick = () => selectDefaultAuth(auth.user, auth.pass);
+        list.appendChild(item);
+    });
+}
+
+async function showAuthDropdown() {
+    await checkDefaultAuth();
+    renderAuthDropdown();
+    document.getElementById('auth-dropdown').classList.add('show');
 }
 function hideAuthDropdown() {
     document.getElementById('auth-dropdown').classList.remove('show');
 }
-function selectDefaultAuth() {
-    if (defaultAuth && defaultAuth.custom_user) {
-        document.getElementById('f-auth-user').value = defaultAuth.custom_user;
-        document.getElementById('f-auth-pass').value = defaultAuth.custom_pass;
-    }
+function selectDefaultAuth(user, pass) {
+    document.getElementById('f-auth-user').value = user;
+    document.getElementById('f-auth-pass').value = pass;
     hideAuthDropdown();
 }
+
 
 function clearAuth() {
     document.getElementById('f-auth-user').value = '';
@@ -1758,9 +1791,7 @@ async function openAddService() {
     document.getElementById('domain-hint').innerHTML = '';
 
     await checkDefaultAuth();
-    if (defaultAuth && defaultAuth.custom_user) {
-        document.getElementById('auth-item-user').textContent = defaultAuth.custom_user;
-    }
+    // Рендерим заранее или при показе
     
     openModal('modal-add-service');
 }
@@ -1800,9 +1831,6 @@ async function editService(name) {
         document.getElementById('domain-hint').innerHTML = '';
         
         await checkDefaultAuth();
-        if (defaultAuth && defaultAuth.custom_user) {
-            document.getElementById('auth-item-user').textContent = defaultAuth.custom_user;
-        }
         
         openModal('modal-add-service');
         onTypeChange(); // Обновить состояние поля порта
@@ -2251,12 +2279,60 @@ async function openSettings() {
         document.getElementById('s-router-ip').value = d.router_ip || '127.0.0.1';
         document.getElementById('router-ip-group').style.display = (d.router_auth === 'yes') ? 'block' : 'none';
         
-        // Подгружаем кастомные данные
-        const auth = await api('settings/auth');
-        document.getElementById('s-custom-user').value = auth.custom_user || '';
-        document.getElementById('s-custom-pass').value = auth.custom_pass || '';
+        // Подгружаем список авторизаций
+        const list = await api('settings/auth/list');
+        renderAuthList(list);
     } catch(e) {}
 }
+
+function renderAuthList(list) {
+    const container = document.getElementById('s-auth-list');
+    if (!list || list.length === 0) {
+        container.innerHTML = '<div class="auth-list-empty">Список пуст. Добавьте данные для быстрого заполнения.</div>';
+        return;
+    }
+    
+    container.innerHTML = '';
+    list.forEach((item, idx) => {
+        const row = document.createElement('div');
+        row.className = 'auth-list-item';
+        row.innerHTML = `
+            <input type="text" placeholder="Логин" value="${item.user || ''}" onchange="updateAuthListItem(${idx}, 'user', this.value)">
+            <input type="password" placeholder="Пароль" value="${item.pass || ''}" onchange="updateAuthListItem(${idx}, 'pass', this.value)">
+            <button class="btn btn-icon btn-sm" style="color:var(--red); border:none; background:none;" onclick="removeAuthRow(${idx})">
+                <svg viewBox="0 0 24 24" style="width:14px; height:14px;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            </button>
+        `;
+        container.appendChild(row);
+    });
+}
+
+let tempAuthList = [];
+function addAuthRow() {
+    // Собираем текущие данные из инпутов перед обновлением
+    syncTempAuthList();
+    tempAuthList.push({user: '', pass: ''});
+    renderAuthList(tempAuthList);
+}
+
+function removeAuthRow(idx) {
+    syncTempAuthList();
+    tempAuthList.splice(idx, 1);
+    renderAuthList(tempAuthList);
+}
+
+function syncTempAuthList() {
+    const rows = document.querySelectorAll('.auth-list-item');
+    tempAuthList = Array.from(rows).map(row => {
+        const inputs = row.querySelectorAll('input');
+        return { user: inputs[0].value, pass: inputs[1].value };
+    });
+}
+
+function updateAuthListItem(idx, field, val) {
+    // Вспомогательная функция не обязательна если есть syncTempAuthList
+}
+
 
 async function saveSettings() {
     const routerAuth = document.getElementById('s-router-auth').value;
@@ -2314,16 +2390,16 @@ async function submitTestAuth() {
 }
 
 async function commitSaveSettings(routerAuth, routerIp) {
+    syncTempAuthList();
     const data = {
         boot_delay: document.getElementById('s-boot-delay').value,
         router_auth: routerAuth,
-        router_ip: routerIp,
-        custom_auth_user: document.getElementById('s-custom-user').value,
-        custom_auth_pass: document.getElementById('s-custom-pass').value
+        router_ip: routerIp
     };
     try {
         await api('settings/global', {method:'POST', body: JSON.stringify(data)});
-        defaultAuth = null; // Сброс кэша для обновления дропдауна
+        await api('settings/auth/list', {method:'POST', body: JSON.stringify(tempAuthList)});
+        defaultAuthList = []; // Сброс кэша
         if (routerAuth !== 'yes') {
             toast('Настройки сохранены','success');
             refreshAll();

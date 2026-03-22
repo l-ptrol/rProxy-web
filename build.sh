@@ -4,7 +4,7 @@
 
 set -e
 
-VERSION="1.3.7-go"
+VERSION="1.3.8-go"
 OUTPUT_DIR="./dist"
 
 # ВАЖНО: Принудительная фиксация тулчейна Go 1.23.8
