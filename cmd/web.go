@@ -392,6 +392,12 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 			if val, ok := data["router_ip"]; ok {
 				gCfg["ROUTER_AUTH_IP"] = val
 			}
+			if val, ok := data["default_auth_user"]; ok {
+				gCfg["DEFAULT_AUTH_USER"] = val
+			}
+			if val, ok := data["default_auth_pass"]; ok {
+				gCfg["DEFAULT_AUTH_PASS"] = val
+			}
 			core.SaveConfig(gPath, gCfg)
 			jsonResponse(w, map[string]string{"status": "success"})
 		}

@@ -1043,7 +1043,7 @@
                 </div>
 
                 <div class="form-row" id="basic-auth-group">
-                    <div class="form-group" style="position:relative;">
+                    <div class="form-group dropdown" style="position:relative;">
                         <label>
                             Логин (Basic Auth)
                             <span style="float:right;cursor:pointer;color:var(--text3);" onclick="clearAuth()" title="Очистить данные">✕</span>
@@ -1650,7 +1650,8 @@ async function checkDefaultAuth() {
         defaultAuth = {user: '', pass: ''};
     }
 }
-function showAuthDropdown() {
+async function showAuthDropdown() {
+    if (defaultAuth === null) await checkDefaultAuth();
     if (defaultAuth && defaultAuth.user) {
         document.getElementById('auth-dropdown').classList.add('show');
     }
@@ -2284,7 +2285,8 @@ async function submitTestAuth() {
         if (res.status === 'success') {
             toast('Проверка пройдена, защита включена!', 'success');
             closeModal('modal-test-auth');
-            commitSaveSettings('yes', routerIp);
+            // При успешном тесте сохраняем эти данные как дефолтные
+            commitSaveSettings('yes', routerIp, login, pass);
         } else {
             errEl.innerHTML = (res.message || 'Ошибка проверки.') + '<br><b>Функционал не активирован.</b>';
             errEl.style.display = 'block';
@@ -2298,14 +2300,17 @@ async function submitTestAuth() {
     }
 }
 
-async function commitSaveSettings(routerAuth, routerIp) {
+async function commitSaveSettings(routerAuth, routerIp, user = '', pass = '') {
     const data = {
         boot_delay: document.getElementById('s-boot-delay').value,
         router_auth: routerAuth,
-        router_ip: routerIp
+        router_ip: routerIp,
+        default_auth_user: user,
+        default_auth_pass: pass
     };
     try {
         await api('settings/global', {method:'POST', body: JSON.stringify(data)});
+        defaultAuth = null; // Сброс кэша для обновления дропдауна
         if (routerAuth !== 'yes') {
             toast('Настройки сохранены','success');
             refreshAll();
