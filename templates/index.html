@@ -487,7 +487,6 @@
             border-radius: var(--radius-lg);
             width: 100%;
             max-width: 520px;
-            overflow: hidden;
             box-shadow: var(--shadow);
         }
         .modal-header {
@@ -1050,7 +1049,7 @@
                             <span style="float:right;cursor:pointer;color:var(--text3);" onclick="clearAuth()" title="Очистить данные">✕</span>
                         </label>
                         <input id="f-auth-user" placeholder="оставьте пусто для отключения" onfocus="showAuthDropdown()" onclick="showAuthDropdown(); event.stopPropagation()" onblur="setTimeout(hideAuthDropdown, 250)">
-                        <div id="auth-dropdown" class="dropdown-menu" style="left:0; right:0; bottom:100%; top:auto; transform-origin: bottom center; margin-bottom: 4px; box-shadow: 0 -4px 12px rgba(0,0,0,0.1);">
+                        <div id="auth-dropdown" class="dropdown-menu" style="left:0; right:0; top:100%; transform-origin: top center; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
                             <div style="font-size:11px; color:var(--text3); margin: 0 6px 6px">Сохраненные данные:</div>
                             <div class="dropdown-item" onclick="selectDefaultAuth()" id="auth-item-user"></div>
                         </div>
