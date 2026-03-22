@@ -119,7 +119,23 @@
         .topbar-left {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
+        }
+        .logo-badge {
+            background: var(--accent);
+            color: white;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 9px;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+            flex-shrink: 0;
+        }
+        .logo-badge svg {
+            width: 22px;
+            height: 22px;
         }
         .topbar h1 {
             font-size: 16px;
@@ -127,8 +143,9 @@
             color: var(--accent);
             display: flex;
             align-items: center;
-            gap: 8px;
-            letter-spacing: 1px;
+            gap: 10px;
+            letter-spacing: 0.5px;
+            margin: 0;
         }
         .topbar .ver {
             font-size: 11px;
@@ -758,12 +775,13 @@
     <div class="topbar">
         <div class="container">
             <div class="topbar-left">
-            <div>
                 <h1>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px;">
-                        <path d="M7 18V10a2 2 0 0 1 2-2h5"/>
-                        <path d="M14 18V6h3a3 3 0 0 1 0 6h-3"/>
-                    </svg>
+                    <div class="logo-badge">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M7 18V10a2 2 0 0 1 2-2h5"/>
+                            <path d="M14 18V6h3a3 3 0 0 1 0 6h-3"/>
+                        </svg>
+                    </div>
                     rProxy <span class="ver">v{{version}}</span><span id="update-badge"></span>
                 </h1>
             </div>
