@@ -78,9 +78,8 @@ func StartService(svcCfg, vpsCfg map[string]string, fast bool) bool {
 	StopService(name, svcCfg)
 
 	if !fast {
-		// Очистка старых конфигов Nginx на VPS и ПРИНУДИТЕЛЬНОЕ ЗАКРЫТИЕ ПОРТА
-		tunPort := svcCfg["SVC_TUNNEL_PORT"]
-		cleanupCmd := fmt.Sprintf("rm -f /etc/nginx/sites-enabled/rproxy_%s.conf /etc/nginx/streams-enabled/rproxy_%s.conf && (fuser -k %s/tcp || true) && (nginx -t && systemctl reload nginx || true)", name, name, tunPort)
+		// Очистка старых конфигов Nginx на VPS
+		cleanupCmd := fmt.Sprintf("rm -f /etc/nginx/sites-enabled/rproxy_%s.conf /etc/nginx/streams-enabled/rproxy_%s.conf && (nginx -t && systemctl reload nginx || true)", name, name)
 		RunRemoteSimple(vpsCfg, cleanupCmd)
 	}
 
@@ -207,19 +206,11 @@ func StartService(svcCfg, vpsCfg map[string]string, fast bool) bool {
 
 	// Настройка окружения
 	env := GetProcessEnv()
-	// Добавляем переменные AUTOSSH
-	env = append(env,
-		"AUTOSSH_GATETIME=0",
-	)
 
 	sshBin := "/opt/bin/ssh"
 	if _, err := os.Stat(sshBin); os.IsNotExist(err) {
 		sshBin = "ssh"
 	}
-	env = append(env,
-		"AUTOSSH_PATH="+sshBin,
-		"AUTOSSH_LOGFILE="+filepath.Join(LogDir, fmt.Sprintf("autossh_%s.log", name)),
-	)
 
 	logPath := filepath.Join(LogDir, fmt.Sprintf("tunnel_%s.log", name))
 
@@ -243,6 +234,8 @@ func StartService(svcCfg, vpsCfg map[string]string, fast bool) bool {
 		"-R", tunnelSpec,
 	}
 
+	killPorts := remoteTunnelPort
+
 	// Новая архитектура (v1.1.28-go): Мульти-проброс (Multi-Forward) API для каждого сервиса индивидуально
 	if svcType == "http" || svcType == "ttyd" {
 		apiTunnelPort := svcCfg["SVC_API_PORT"]
@@ -261,12 +254,33 @@ func StartService(svcCfg, vpsCfg map[string]string, fast bool) bool {
 			SaveConfig(filepath.Join(ServicesDir, name+".conf"), svcCfg)
 		}
 		
+		killPorts += " " + apiTunnelPort
 		// Добавляем второй -R флаг в тот же самый autossh процесс! 
 		// Если порт занят, ExitOnForwardFailure=yes оборвёт оба проброса. 
 		cmdArgs = append(cmdArgs, "-R", fmt.Sprintf("%s:127.0.0.1:%d", apiTunnelPort, WebPort))
 	}
 	
 	cmdArgs = append(cmdArgs, fmt.Sprintf("%s@%s", vpsUser, vpsHost))
+
+	// Генерируем wrapper для autossh, чтобы очищать порты на VPS перед каждым реконнектом
+	wrapperPath := filepath.Join(PIDDir, fmt.Sprintf("ssh_wrapper_%s.sh", name))
+	
+	// Безопасная очистка: мы убиваем ТОЛЬКО процессы, слушающие этот порт (sshd), чтобы не убить Nginx, у которого active/time-wait соединения!
+	vpsKillCmd := fmt.Sprintf(`for p in %s; do pids=$(ss -lptn "sport = :$p" 2>/dev/null | grep -o "pid=[0-9]*" | cut -d= -f2); for pid in $pids; do kill -9 $pid 2>/dev/null; done; lsof_pids=$(lsof -t -iTCP:$p -sTCP:LISTEN 2>/dev/null); for pid in $lsof_pids; do kill -9 $pid 2>/dev/null; done; done; sleep 1`, killPorts)
+	
+	wrapperContent := fmt.Sprintf(`#!/bin/sh
+# Kill remote ports first to avoid "remote port forwarding failed" upon autossh reconnects
+%s -i %s -p %s -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes %s@%s '%s' >/dev/null 2>&1
+exec %s "$@"
+`, sshBin, sshKey, vpsPort, vpsUser, vpsHost, vpsKillCmd, sshBin)
+
+	os.WriteFile(wrapperPath, []byte(wrapperContent), 0755)
+
+	env = append(env,
+		"AUTOSSH_GATETIME=0",
+		"AUTOSSH_PATH="+wrapperPath,
+		"AUTOSSH_LOGFILE="+filepath.Join(LogDir, fmt.Sprintf("autossh_%s.log", name)),
+	)
 
 	Msg(fmt.Sprintf("Запуск туннеля '%s' (Target: %s:%s)...", name, targetHost, targetPort))
 
@@ -424,6 +438,7 @@ func StopService(name string, svcCfg map[string]string) {
 		}
 		os.Remove(pidFile)
 	}
+	os.Remove(filepath.Join(PIDDir, fmt.Sprintf("ssh_wrapper_%s.sh", name)))
 
 	// 2. TTYD
 	if svcCfg != nil {
