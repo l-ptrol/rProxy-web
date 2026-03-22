@@ -191,15 +191,17 @@ func StartService(svcCfg, vpsCfg map[string]string, fast bool) bool {
 	monPort := rand.Intn(1000) + 20000
 
 	// 5.1 СПЕЦИФИКАЦИЯ ТУННЕЛЯ
+	// Форсированно биндим на 127.0.0.1 на удаленном сервере.
+	// Иначе sshd (при GatewayPorts yes) занимает 0.0.0.0 и не дает Nginx-у слушать этот же порт,
+	// если пользователь указал одинаковые Внутренний и Внешний порты.
 	var tunnelSpec string
 	svcType := svcCfg["SVC_TYPE"]
 	switch {
 	case svcType == "udp":
-		tunnelSpec = fmt.Sprintf("%s:127.0.0.1:%s", remoteTunnelPort, remoteTunnelPort)
-	case svcType == "http" || svcType == "ttyd":
-		tunnelSpec = fmt.Sprintf("%s:%s:%s", remoteTunnelPort, targetHost, targetPort)
+		tunnelSpec = fmt.Sprintf("127.0.0.1:%s:127.0.0.1:%s", remoteTunnelPort, remoteTunnelPort)
 	default:
-		tunnelSpec = fmt.Sprintf("0.0.0.0:%s:%s:%s", remoteTunnelPort, targetHost, targetPort)
+		// tcp, ssh, http, ttyd
+		tunnelSpec = fmt.Sprintf("127.0.0.1:%s:%s:%s", remoteTunnelPort, targetHost, targetPort)
 	}
 
 	// Настройка окружения

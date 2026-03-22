@@ -23,7 +23,7 @@ const (
 )
 
 // Версия приложения
-const VERSION = "1.3.1-go"
+const VERSION = "1.3.2-go"
 
 // WebPort — порт веб-интерфейса rProxy (для Nginx auth_request)
 var WebPort int = 3000
