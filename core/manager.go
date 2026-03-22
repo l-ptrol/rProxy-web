@@ -78,8 +78,9 @@ func StartService(svcCfg, vpsCfg map[string]string, fast bool) bool {
 	StopService(name, svcCfg)
 
 	if !fast {
-		// Очистка старых конфигов Nginx на VPS
-		cleanupCmd := fmt.Sprintf("rm -f /etc/nginx/sites-enabled/rproxy_%s.conf /etc/nginx/streams-enabled/rproxy_%s.conf && (nginx -t && systemctl reload nginx || true)", name, name)
+		// Очистка старых конфигов Nginx на VPS и ПРИНУДИТЕЛЬНОЕ ЗАКРЫТИЕ ПОРТА
+		tunPort := svcCfg["SVC_TUNNEL_PORT"]
+		cleanupCmd := fmt.Sprintf("rm -f /etc/nginx/sites-enabled/rproxy_%s.conf /etc/nginx/streams-enabled/rproxy_%s.conf && (fuser -k %s/tcp || true) && (nginx -t && systemctl reload nginx || true)", name, name, tunPort)
 		RunRemoteSimple(vpsCfg, cleanupCmd)
 	}
 
