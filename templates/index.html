@@ -1016,7 +1016,7 @@
                         <label>Внешний порт</label>
                         <input id="f-ext-port" value="443" placeholder="443">
                     </div>
-                    <div class="form-group">
+                    <div class="form-group" id="ssl-group">
                         <label>Обеспечить SSL</label>
                         <div class="c-select-wrapper" id="ssl-select-wrapper">
                             <div class="c-select" id="ssl-select-current" tabindex="0">Да</div>
@@ -1029,7 +1029,7 @@
                     </div>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group" id="router-auth-group">
                     <label>Единая авторизация (Router Auth)</label>
                     <div class="c-select-wrapper" id="svc-auth-select-wrapper">
                         <div class="c-select" id="svc-auth-select-current" tabindex="0">Нет</div>
@@ -1042,14 +1042,14 @@
                     <div class="form-hint">Позволяет заходить в сервис по паролю роутера (сессия rProxy). Работает только для HTTP/HTTPS.</div>
                 </div>
 
-                <div class="form-row">
+                <div class="form-row" id="basic-auth-group">
                     <div class="form-group" style="position:relative;">
                         <label>
                             Логин (Basic Auth)
                             <span style="float:right;cursor:pointer;color:var(--text3);" onclick="clearAuth()" title="Очистить данные">✕</span>
                         </label>
                         <input id="f-auth-user" placeholder="оставьте пусто для отключения" onfocus="showAuthDropdown()" onclick="showAuthDropdown(); event.stopPropagation()" onblur="setTimeout(hideAuthDropdown, 250)">
-                        <div id="auth-dropdown" class="dropdown-menu" style="left:0; right:0; top:100%; transform-origin: top center; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                        <div id="auth-dropdown" class="dropdown-menu" style="left:0; right:0; top:100%; transform-origin: top center; z-index: 10001; margin-top: 5px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); pointer-events: all;">
                             <div style="font-size:11px; color:var(--text3); margin: 0 6px 6px">Сохраненные данные:</div>
                             <div class="dropdown-item" onclick="selectDefaultAuth()" id="auth-item-user"></div>
                         </div>
@@ -1803,7 +1803,17 @@ async function editService(name) {
 
 function onTypeChange() {
     const t = document.getElementById('f-type').value;
-    const row = document.getElementById('target-row');
+    const isSpecial = (t === 'ssh' || t === 'tcp' || t === 'udp');
+    
+    // Скрытие групп
+    const sslGrp = document.getElementById('ssl-group');
+    const rAuthGrp = document.getElementById('router-auth-group');
+    const bAuthGrp = document.getElementById('basic-auth-group');
+    
+    if (sslGrp) sslGrp.style.display = isSpecial ? 'none' : 'block';
+    if (rAuthGrp) rAuthGrp.style.display = isSpecial ? 'none' : 'block';
+    if (bAuthGrp) bAuthGrp.style.display = isSpecial ? 'none' : 'grid';
+
     if (t === 'ttyd') {
         document.getElementById('f-host').value = '127.0.0.1';
         document.getElementById('f-port').value = String(7682 + Math.floor(Math.random() * 100));
