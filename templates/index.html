@@ -918,6 +918,15 @@
                     </div>
                     <div class="form-hint">Адрес, куда будут отправляться запросы на аутентификацию (127.0.0.1 для локального).</div>
                 </div>
+                <div style="margin: 20px 0; border-top: 1px solid var(--border);"></div>
+                <div class="form-group">
+                    <label>Кастомные данные авторизации (для сервисов)</label>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                        <input type="text" id="s-custom-user" placeholder="Логин...">
+                        <input type="password" id="s-custom-pass" placeholder="Пароль...">
+                    </div>
+                    <div class="form-hint">Эти данные будут предлагаться в выпадающем списке при создании сервиса.</div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn" onclick="closeModal('modal-settings')">Отмена</button>
@@ -1644,15 +1653,15 @@ async function checkDefaultAuth() {
     if (defaultAuth !== null) return;
     try {
         const d = await api('settings/auth');
-        if (d.user) defaultAuth = d;
-        else defaultAuth = {user: '', pass: ''};
+        if (d.custom_user) defaultAuth = d;
+        else defaultAuth = {custom_user: '', custom_pass: ''};
     } catch(e) {
-        defaultAuth = {user: '', pass: ''};
+        defaultAuth = {custom_user: '', custom_pass: ''};
     }
 }
 async function showAuthDropdown() {
     if (defaultAuth === null) await checkDefaultAuth();
-    if (defaultAuth && defaultAuth.user) {
+    if (defaultAuth && defaultAuth.custom_user) {
         document.getElementById('auth-dropdown').classList.add('show');
     }
 }
@@ -1660,9 +1669,9 @@ function hideAuthDropdown() {
     document.getElementById('auth-dropdown').classList.remove('show');
 }
 function selectDefaultAuth() {
-    if (defaultAuth && defaultAuth.user) {
-        document.getElementById('f-auth-user').value = defaultAuth.user;
-        document.getElementById('f-auth-pass').value = defaultAuth.pass;
+    if (defaultAuth && defaultAuth.custom_user) {
+        document.getElementById('f-auth-user').value = defaultAuth.custom_user;
+        document.getElementById('f-auth-pass').value = defaultAuth.custom_pass;
     }
     hideAuthDropdown();
 }
@@ -1749,8 +1758,8 @@ async function openAddService() {
     document.getElementById('domain-hint').innerHTML = '';
 
     await checkDefaultAuth();
-    if (defaultAuth && defaultAuth.user) {
-        document.getElementById('auth-item-user').textContent = defaultAuth.user;
+    if (defaultAuth && defaultAuth.custom_user) {
+        document.getElementById('auth-item-user').textContent = defaultAuth.custom_user;
     }
     
     openModal('modal-add-service');
@@ -1791,8 +1800,8 @@ async function editService(name) {
         document.getElementById('domain-hint').innerHTML = '';
         
         await checkDefaultAuth();
-        if (defaultAuth && defaultAuth.user) {
-            document.getElementById('auth-item-user').textContent = defaultAuth.user;
+        if (defaultAuth && defaultAuth.custom_user) {
+            document.getElementById('auth-item-user').textContent = defaultAuth.custom_user;
         }
         
         openModal('modal-add-service');
@@ -2241,6 +2250,11 @@ async function openSettings() {
         setCustomSelectValue('auth-select-wrapper', d.router_auth || 'no');
         document.getElementById('s-router-ip').value = d.router_ip || '127.0.0.1';
         document.getElementById('router-ip-group').style.display = (d.router_auth === 'yes') ? 'block' : 'none';
+        
+        // Подгружаем кастомные данные
+        const auth = await api('settings/auth');
+        document.getElementById('s-custom-user').value = auth.custom_user || '';
+        document.getElementById('s-custom-pass').value = auth.custom_pass || '';
     } catch(e) {}
 }
 
@@ -2285,8 +2299,7 @@ async function submitTestAuth() {
         if (res.status === 'success') {
             toast('Проверка пройдена, защита включена!', 'success');
             closeModal('modal-test-auth');
-            // При успешном тесте сохраняем эти данные как дефолтные
-            commitSaveSettings('yes', routerIp, login, pass);
+            commitSaveSettings('yes', routerIp);
         } else {
             errEl.innerHTML = (res.message || 'Ошибка проверки.') + '<br><b>Функционал не активирован.</b>';
             errEl.style.display = 'block';
@@ -2300,13 +2313,13 @@ async function submitTestAuth() {
     }
 }
 
-async function commitSaveSettings(routerAuth, routerIp, user = '', pass = '') {
+async function commitSaveSettings(routerAuth, routerIp) {
     const data = {
         boot_delay: document.getElementById('s-boot-delay').value,
         router_auth: routerAuth,
         router_ip: routerIp,
-        default_auth_user: user,
-        default_auth_pass: pass
+        custom_auth_user: document.getElementById('s-custom-user').value,
+        custom_auth_pass: document.getElementById('s-custom-pass').value
     };
     try {
         await api('settings/global', {method:'POST', body: JSON.stringify(data)});
