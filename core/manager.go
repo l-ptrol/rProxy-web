@@ -100,6 +100,9 @@ func StartService(svcCfg, vpsCfg map[string]string, fast bool) bool {
 	// 2. ОБРАБОТКА SSL (CERTBOT)
 	domain := svcCfg["SVC_DOMAIN"]
 	useSSL := svcCfg["SVC_SSL"] == "yes"
+	if svcCfg["SVC_TYPE"] == "ssh" {
+		useSSL = false // SSH имеет свое шифрование, SSL обертка не нужна
+	}
 	hasCertificate := false
 
 	if !fast && useSSL && domain != "" {

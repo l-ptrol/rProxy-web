@@ -49,7 +49,8 @@ func GenerateNginxConf(svcCfg map[string]string, useSSLPaths bool) string {
 		return httpProxyConf(name, domain, tunnelPort, extPort, svcCfg["SVC_AUTH_USER"], useSSLPaths, targetHost, targetPort, svcCfg["SVC_ROUTER_AUTH"], apiPort)
 	case "tcp", "ssh":
 		domainForSSL := ""
-		if useSSLPaths {
+		// Оборачиваем в SSL только если это не SSH (SSH имеет собственное шифрование)
+		if useSSLPaths && svcType != "ssh" {
 			domainForSSL = domain
 		}
 		return streamProxyConf(extPort, tunnelPort, domainForSSL, "tcp")
