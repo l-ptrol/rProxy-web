@@ -328,17 +328,16 @@ func HealthCheck(vpsCfg map[string]string) map[string]interface{} {
 	}
 
 	// 3. Список сертификатов
+	var certs []map[string]interface{}
+	
+	// 3a. Certbot
 	success, output = RunRemoteSimple(vpsCfg, "certbot certificates")
 	if success && strings.Contains(output, "Found the following certs") {
 		blocks := strings.Split(output, "Certificate Name:")
-		var certs []map[string]interface{}
-
 		for _, block := range blocks[1:] {
 			cert := make(map[string]interface{})
-
 			domainsRe := regexp.MustCompile(`Domains:\s+(.*)`)
 			expiryRe := regexp.MustCompile(`Expiry Date:\s+(.*?)\s+\(VALID:\s+(\d+)\s+days\)`)
-
 			if m := domainsRe.FindStringSubmatch(block); len(m) > 1 {
 				cert["domains"] = strings.TrimSpace(m[1])
 			}
@@ -348,13 +347,35 @@ func HealthCheck(vpsCfg map[string]string) map[string]interface{} {
 				fmt.Sscanf(m[2], "%d", &days)
 				cert["days"] = days
 			}
-
 			if len(cert) > 0 {
 				certs = append(certs, cert)
 			}
 		}
-		results["certs"] = certs
 	}
+
+	// 3b. acme.sh (для IP)
+	acmeSuccess, acmeOutput := RunRemoteSimple(vpsCfg, "$HOME/.acme.sh/acme.sh --list")
+	if acmeSuccess && strings.Contains(acmeOutput, "Main_Domain") {
+		lines := strings.Split(acmeOutput, "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.Contains(line, "Main_Domain") {
+				continue
+			}
+			f := strings.Fields(line)
+			if len(f) >= 1 {
+				cert := make(map[string]interface{})
+				cert["domains"] = f[0] + " (IP SSL)"
+				cert["expiry"] = "Managed by acme.sh"
+				if len(f) >= 6 {
+					cert["expiry"] = "Next renew: " + f[5]
+				}
+				cert["days"] = 6 // Условно для индикации
+				certs = append(certs, cert)
+			}
+		}
+	}
+	results["certs"] = certs
 
 	return results
 }
