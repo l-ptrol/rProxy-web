@@ -15,19 +15,19 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pquerna/otp/totp"
+	otp_totp "github.com/pquerna/otp/totp"
 )
 
 // --- Вспомогательные функции криптографии ---
 
 // ValidateTOTP проверяет 6-значный код (v1.7.0-go)
 func ValidateTOTP(secret, code string) bool {
-	return totp.Validate(code, secret)
+	return otp_totp.Validate(code, secret)
 }
 
 // GenerateTOTPSecret создает новый секрет (v1.7.0-go)
 func GenerateTOTPSecret(accountName string) (string, string, error) {
-	key, err := totp.Generate(totp.GenerateOptions{
+	key, err := otp_totp.Generate(otp_totp.GenerateOpts{
 		Issuer:      "rProxy",
 		AccountName: accountName,
 	})
