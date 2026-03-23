@@ -1,5 +1,5 @@
 # Build script for rProxy Go on Windows
-$VERSION = "1.9.0-go"
+$VERSION = "1.9.1-go"
 $OUTPUT_DIR = "./dist"
 
 # Set Go toolchain

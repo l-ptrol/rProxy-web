@@ -4,7 +4,7 @@
 
 set -e
 
-VERSION="1.9.0-go"
+VERSION="1.9.1-go"
 
 OUTPUT_DIR="./dist"
 

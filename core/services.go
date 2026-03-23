@@ -124,7 +124,7 @@ func httpProxyConf(name, domain, localPort, extPort, authUser string, useSSL boo
     # Редирект на логин при 401 Unauthorized
     location @rproxy_login {
         return 302 $scheme://$http_host/login?next=$scheme://$http_host$request_uri;
-    }`, apiTunnelPort, apiTunnelPort, apiTunnelPort, apiTunnelPort)
+    }`, apiTunnelPort, apiTunnelPort, apiTunnelPort, apiTunnelPort, apiTunnelPort)
 	}
 
 	listen80 := ""
