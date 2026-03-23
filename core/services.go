@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 )
 
@@ -126,14 +125,9 @@ server {
 
 	sslConfig := ""
 	if useSSL {
-		certPath := fmt.Sprintf("/etc/letsencrypt/live/%s/fullchain.pem", domain)
-		keyPath := fmt.Sprintf("/etc/letsencrypt/live/%s/privkey.pem", domain)
-		
-		// Если это IP-адрес, используем кастомные пути от acme.sh (bashdays.ru)
-		if regexp.MustCompile(`^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$`).MatchString(domain) {
-			certPath = fmt.Sprintf("/etc/nginx/ssl/%s.crt", domain)
-			keyPath = fmt.Sprintf("/etc/nginx/ssl/%s.key", domain)
-		}
+		// Единый стандарт путей для всех типов сертификатов (v1.5.0-go)
+		certPath := fmt.Sprintf("/etc/nginx/ssl/%s.crt", domain)
+		keyPath := fmt.Sprintf("/etc/nginx/ssl/%s.key", domain)
 
 		sslConfig = fmt.Sprintf(`
     ssl_certificate %s;

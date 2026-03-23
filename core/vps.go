@@ -122,24 +122,23 @@ func FindVPSByDomain(domain string) string {
 	return ""
 }
 
-// SetupVPS выполняет первичную настройку окружения на удаленном VPS
+// SetupVPS выполняет первичную настройку окружения на удаленном VPS (v1.5.0-go)
 func SetupVPS(vpsCfg map[string]string) (bool, string) {
 	setupScript := `
 export DEBIAN_FRONTEND=noninteractive
 mkdir -p /etc/nginx/sites-enabled
 mkdir -p /etc/nginx/streams-enabled
-mkdir -p /var/www/letsencrypt
 mkdir -p /etc/nginx/ssl
 
 if command -v apt-get >/dev/null 2>&1; then
-    apt-get update -qq && apt-get install -y -qq nginx libnginx-mod-stream certbot python3-certbot-nginx psmisc socat curl cron
+    apt-get update -qq && apt-get install -y -qq nginx libnginx-mod-stream psmisc socat curl cron
 elif command -v yum >/dev/null 2>&1; then
-    yum install -y epel-release && yum install -y nginx nginx-mod-stream certbot python3-certbot-nginx psmisc socat curl cron
+    yum install -y epel-release && yum install -y nginx nginx-mod-stream psmisc socat curl cron
 fi
 
-# Установка acme.sh для SSL на IP
+# Установка acme.sh для всех типов сертификатов
 if [ ! -f ~/.acme.sh/acme.sh ]; then
-    curl https://get.acme.sh | sh -s email=rproxy-ssl@$(hostname) || true
+    curl -sL https://get.acme.sh | sh -s email=admin@$(hostname -I | awk '{print $1}') --force || true
 fi
 
 grep -q 'sites-enabled' /etc/nginx/nginx.conf || sed -i '/http {/a\    include /etc/nginx/sites-enabled/*.conf;' /etc/nginx/nginx.conf
@@ -157,21 +156,15 @@ systemctl enable nginx && systemctl restart nginx
 sed -i 's/^#*GatewayPorts.*/GatewayPorts yes/' /etc/ssh/sshd_config
 sed -i 's/^#*AllowTcpForwarding.*/AllowTcpForwarding yes/' /etc/ssh/sshd_config
 systemctl restart ssh || systemctl restart sshd
-
-(crontab -l 2>/dev/null; echo "0 0,12 * * * certbot renew -q --deploy-hook 'systemctl reload nginx'") | sort -u | crontab -
 `
 	Msg(fmt.Sprintf("Настройка окружения на VPS %s...", vpsCfg["VPS_HOST"]))
 	return RunRemote(vpsCfg, setupScript, 300*time.Second)
 }
 
-// CheckSSLExists проверяет наличие SSL сертификата для домена на VPS
+// CheckSSLExists проверяет наличие SSL сертификата для домена на VPS (v1.5.0-go)
 func CheckSSLExists(vpsCfg map[string]string, domain string) bool {
-	isIP := regexp.MustCompile(`^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$`).MatchString(domain)
-	if isIP {
-		success, _ := RunRemoteSimple(vpsCfg, fmt.Sprintf("[ -f /etc/nginx/ssl/rproxy_%s.crt ]", domain))
-		return success
-	}
-	success, _ := RunRemoteSimple(vpsCfg, fmt.Sprintf("[ -d /etc/letsencrypt/live/%s ]", domain))
+	// Проверяем единый путь в /etc/nginx/ssl
+	success, _ := RunRemoteSimple(vpsCfg, fmt.Sprintf("[ -f /etc/nginx/ssl/%s.crt ]", domain))
 	return success
 }
 
@@ -237,25 +230,26 @@ func RemoveVhost(vpsCfg map[string]string, name string) (bool, string) {
 	return RunRemoteSimple(vpsCfg, cmd)
 }
 
-// RunCertbot запускает Certbot (или acme.sh для IP) для получения SSL
+// RunCertbot запускает выпуск SSL через acme.sh (v1.5.0-go)
 func RunCertbot(vpsCfg map[string]string, domain string) (bool, string) {
 	isIP := regexp.MustCompile(`^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$`).MatchString(domain)
+	acmePath := "$HOME/.acme.sh/acme.sh"
 
+	// Параметры выпуска
+	profile := ""
 	if isIP {
-		// Используем acme.sh для IP-адресов по образу rProxy-desktop
-		// 1. Поиск или установка acme.sh
-		acmePath := "$HOME/.acme.sh/acme.sh"
-		setupCmd := fmt.Sprintf("if [ ! -f %s ]; then curl -sL https://get.acme.sh | sh -s email=admin@$(hostname -I | awk '{print $1}') --force; fi", acmePath)
-		RunRemoteSimple(vpsCfg, setupCmd)
-
-		// 2. Выпуск и установка (используем --nginx для автоматизации валидации)
-		// Явно указываем --server letsencrypt, так как ZeroSSL (дефолт в v3+) не поддерживает IP
-		cmd := fmt.Sprintf("%s --issue --nginx --server letsencrypt -d %s --certificate-profile shortlived --days 3 --force && mkdir -p /etc/nginx/ssl && %s --install-cert -d %s --key-file /etc/nginx/ssl/%s.key --fullchain-file /etc/nginx/ssl/%s.crt --reloadcmd 'systemctl reload nginx'", acmePath, domain, acmePath, domain, domain, domain)
-		return RunRemote(vpsCfg, cmd, 300*time.Second)
+		profile = "--certificate-profile shortlived --days 3"
 	}
 
-	cmd := fmt.Sprintf("certbot certonly --nginx -d %s --non-interactive --agree-tos --register-unsafely-without-email", domain)
-	return RunRemote(vpsCfg, cmd, 120*time.Second)
+	// Команда выпуска через acme.sh в режиме --nginx
+	// Мы всегда используем Let's Encrypt для стабильности (v1.5.0-go)
+	cmd := fmt.Sprintf("%s --issue --nginx --server letsencrypt -d %s %s --force", acmePath, domain, profile)
+	
+	// Команда установки сертификата в системную папку Nginx
+	installCmd := fmt.Sprintf("mkdir -p /etc/nginx/ssl && %s --install-cert -d %s --key-file /etc/nginx/ssl/%s.key --fullchain-file /etc/nginx/ssl/%s.crt --reloadcmd 'systemctl reload nginx'", acmePath, domain, domain, domain)
+
+	fullCmd := fmt.Sprintf("%s && %s", cmd, installCmd)
+	return RunRemote(vpsCfg, fullCmd, 300*time.Second)
 }
 
 // CleanupVPS — умная очистка VPS от фантомных конфигов
@@ -299,11 +293,11 @@ func CleanupVPS(vpsCfg map[string]string, activeServices []string) (bool, string
 	return true, "VPS is clean"
 }
 
-// HealthCheck — проверка состояния VPS: Nginx, SSL, Certbot
+// HealthCheck выполняет проверку состояния VPS и SSL (v1.5.0-go)
 func HealthCheck(vpsCfg map[string]string) map[string]interface{} {
 	results := map[string]interface{}{
-		"nginx":     "Unknown",
-		"ssl_timer": "Unknown",
+		"nginx":     "Неизвестно",
+		"ssl_timer": "acme.sh (Cron)",
 		"certs":     []map[string]interface{}{},
 	}
 
@@ -315,67 +309,52 @@ func HealthCheck(vpsCfg map[string]string) map[string]interface{} {
 		results["nginx"] = "Остановлен"
 	}
 
-	// 2. Проверка Certbot Timer
-	success, output = RunRemoteSimple(vpsCfg, "systemctl list-timers | grep certbot")
-	if success && strings.Contains(output, "certbot") {
-		results["ssl_timer"] = "Активен (Systemd)"
-		parts := strings.Fields(output)
-		if len(parts) > 1 {
-			results["next_run"] = parts[0] + " " + parts[1]
-		}
+	// 2. Проверка Cron (для acme.sh)
+	success, output = RunRemoteSimple(vpsCfg, "crontab -l | grep acme.sh")
+	if success && (strings.Contains(output, "acme.sh") || strings.Contains(output, "renew")) {
+		results["ssl_timer"] = "Активен (Cron)"
 	} else {
-		results["ssl_timer"] = "Не найден"
+		results["ssl_timer"] = "Не настроен (Cron)"
 	}
 
-	// 3. Список сертификатов
-	var certs []map[string]interface{}
-	
-	// 3a. Certbot
-	success, output = RunRemoteSimple(vpsCfg, "certbot certificates")
-	if success && strings.Contains(output, "Found the following certs") {
-		blocks := strings.Split(output, "Certificate Name:")
-		for _, block := range blocks[1:] {
-			cert := make(map[string]interface{})
-			domainsRe := regexp.MustCompile(`Domains:\s+(.*)`)
-			expiryRe := regexp.MustCompile(`Expiry Date:\s+(.*?)\s+\(VALID:\s+(\d+)\s+days\)`)
-			if m := domainsRe.FindStringSubmatch(block); len(m) > 1 {
-				cert["domains"] = strings.TrimSpace(m[1])
-			}
-			if m := expiryRe.FindStringSubmatch(block); len(m) > 2 {
-				cert["expiry"] = strings.TrimSpace(m[1])
-				var days int
-				fmt.Sscanf(m[2], "%d", &days)
-				cert["days"] = days
-			}
-			if len(cert) > 0 {
-				certs = append(certs, cert)
-			}
-		}
-	}
-
-	// 3b. acme.sh (для IP)
+	// 3. Список сертификатов (только acme.sh)
 	acmeSuccess, acmeOutput := RunRemoteSimple(vpsCfg, "$HOME/.acme.sh/acme.sh --list")
 	if acmeSuccess && strings.Contains(acmeOutput, "Main_Domain") {
+		// Очистка вывода от мусора SSH ("Warning: Permanently added...")
 		lines := strings.Split(acmeOutput, "\n")
+		var certs []map[string]interface{}
 		for _, line := range lines {
 			line = strings.TrimSpace(line)
-			if line == "" || strings.Contains(line, "Main_Domain") {
+			if line == "" || strings.Contains(line, "Main_Domain") || strings.Contains(line, "Warning:") {
 				continue
 			}
 			f := strings.Fields(line)
 			if len(f) >= 1 {
 				cert := make(map[string]interface{})
-				cert["domains"] = f[0] + " (IP SSL)"
-				cert["expiry"] = "Managed by acme.sh"
-				if len(f) >= 6 {
-					cert["expiry"] = "Next renew: " + f[5]
+				domain := f[0]
+				isIP := regexp.MustCompile(`^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$`).MatchString(domain)
+				
+				label := domain
+				if isIP {
+					label += " [IP SSL]"
 				}
-				cert["days"] = 6 // Условно для индикации
+				cert["domains"] = label
+				
+				cert["expiry"] = "Управляется acme.sh"
+				if len(f) >= 6 {
+					cert["expiry"] = "Обновление: " + strings.Join(f[5:], " ")
+				}
+				
+				// Условно ставим 90 дней для обычных и 6 для IP для индикации в UI
+				cert["days"] = 90
+				if isIP {
+					cert["days"] = 6
+				}
 				certs = append(certs, cert)
 			}
 		}
+		results["certs"] = certs
 	}
-	results["certs"] = certs
 
 	return results
 }
