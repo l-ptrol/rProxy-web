@@ -329,7 +329,8 @@ func HealthCheck(vpsCfg map[string]string) map[string]interface{} {
 				continue
 			}
 			f := strings.Fields(line)
-			if len(f) >= 1 {
+			// Проверка: минимум 4 поля, домен должен содержать точку и не быть в кавычках (фильтр "ec-256")
+			if len(f) >= 4 && strings.Contains(f[0], ".") && !strings.HasPrefix(f[0], "\"") {
 				cert := make(map[string]interface{})
 				domain := f[0]
 				isIP := regexp.MustCompile(`^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$`).MatchString(domain)
@@ -342,7 +343,7 @@ func HealthCheck(vpsCfg map[string]string) map[string]interface{} {
 				
 				cert["expiry"] = "Управляется acme.sh"
 				if len(f) >= 6 {
-					cert["expiry"] = "Обновление: " + strings.Join(f[5:], " ")
+					cert["expiry"] = strings.Join(f[5:], " ")
 				}
 				
 				// Условно ставим 90 дней для обычных и 6 для IP для индикации в UI
