@@ -129,7 +129,15 @@ func httpProxyConf(name, domain, localPort, extPort, authUser string, useSSL boo
 server {
     listen 80;
     server_name %s;
-    return 301 https://$host$request_uri;
+
+    location ~ ^/.well-known/acme-challenge/ {
+        allow all;
+        root /var/www/letsencrypt;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
 }`, domain)
 	}
 
@@ -278,8 +286,14 @@ func CertbotValidationVhost(domain string) string {
 server {
     listen 80;
     server_name %s;
+    
+    location ~ ^/.well-known/acme-challenge/ {
+        allow all;
+        root /var/www/letsencrypt;
+    }
+
     location / {
-        return 200 "Certbot validation window";
+        return 200 "SSL validation window (rProxy)";
     }
 }
 `, domain)

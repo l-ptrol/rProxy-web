@@ -243,11 +243,13 @@ func RunCertbot(vpsCfg map[string]string, domain string) (bool, string) {
 
 	if isIP {
 		// Для IP адресов используем acme.sh с профилем shortlived (v1.4.2-go)
-		// 1. Предварительная очистка для предотвращения конфликтов
+		// 1. Гарантируем наличие acme.sh (на случай если Setup VPS не запускали)
+		RunRemoteSimple(vpsCfg, "if [ ! -f ~/.acme.sh/acme.sh ]; then curl https://get.acme.sh | sh -s email=rproxy-ssl@$(hostname); fi")
+		
+		// 2. Предварительная очистка для предотвращения конфликтов
 		RunRemoteSimple(vpsCfg, fmt.Sprintf("rm -rf ~/.acme.sh/%s", domain))
 		
-		// 2. Выпуск через acme.sh (Let's Encrypt поддерживает IP только в shortlived режиме)
-		// --days 3 означает, что сертификат будет обновляться каждые 3 дня (при лимите в 6-7 дней)
+		// 3. Выпуск через acme.sh (Let's Encrypt поддерживает IP только в shortlived режиме)
 		acmeCmd := fmt.Sprintf("~/.acme.sh/acme.sh --issue --server letsencrypt -d %s -w /var/www/letsencrypt --certificate-profile shortlived --days 3 --force", domain)
 		ok, output := RunRemote(vpsCfg, acmeCmd, 180*time.Second)
 		if !ok {
