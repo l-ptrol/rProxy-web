@@ -936,7 +936,7 @@ func handleUpdateService(w http.ResponseWriter, r *http.Request, name string) {
 		"SVC_SSL":         defaultStr(data["ssl"], "no"),
 		"SVC_ROUTER_AUTH": defaultStr(data["router_auth"], "no"),
 		"SVC_TOTP_MODE":   defaultStr(data["totp_mode"], "none"),
-		"SVC_TOTP_SECRET": defaultStr(data["totp_secret"], oldCfg["SVC_TOTP_SECRET"]),
+		"SVC_TOTP_SECRET": data["totp_secret"],
 		"SVC_TUNNEL_PORT": oldCfg["SVC_TUNNEL_PORT"],
 		"SVC_ENABLED":     defaultStr(oldCfg["SVC_ENABLED"], "yes"),
 	}

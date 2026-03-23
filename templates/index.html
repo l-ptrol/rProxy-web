@@ -1108,7 +1108,7 @@
                             <div class="c-option" data-value="global">Глобальный (Общий ключ)</div>
                             <div class="c-option" data-value="local">Локальный (Уникальный ключ)</div>
                         </div>
-                        <input type="hidden" id="f-totp-mode" value="none">
+                        <input type="hidden" id="f-totp-mode" value="none" onchange="onTotpModeChange()">
                     </div>
                 </div>
 
@@ -1269,7 +1269,7 @@
     </div>
 
     <!-- ==================== МОДАЛКА: QR-код (v1.7.1-go) ==================== -->
-    <div class="modal-overlay" id="modal-qr" style="z-index: 1100;">
+    <div class="modal-overlay" id="modal-qr" style="z-index: 10000;">
         <div class="modal" style="width: 380px; text-align: center;">
             <div class="modal-header">
                 <h3 id="qr-modal-title">Настройка 2FA</h3>
@@ -1482,6 +1482,19 @@ function renderQR(containerId, url) {
         colorLight: "#ffffff",
         correctLevel: QRCode.CorrectLevel.H
     });
+}
+
+function onTotpModeChange() {
+    const tMode = document.getElementById('f-totp-mode').value;
+    if (tMode === 'local') {
+        document.getElementById('totp-local-setup').style.display = 'block';
+    } else {
+        document.getElementById('totp-local-setup').style.display = 'none';
+        document.getElementById('totp-secret-display').textContent = '--';
+        document.getElementById('f-totp-url').value = '';
+        const qrContainer = document.getElementById('totp-qr-container');
+        if (qrContainer) qrContainer.innerHTML = '';
+    }
 }
 
 async function generateLocalTotp() {
@@ -1914,7 +1927,6 @@ async function openAddService() {
     document.getElementById('f-totp-mode').value = 'none';
     document.getElementById('totp-local-setup').style.display = 'none';
     document.getElementById('totp-secret-display').textContent = '--';
-    document.getElementById('totp-qr-container').innerHTML = '';
 
     document.getElementById('f-auth-user').value = '';
     document.getElementById('f-auth-pass').value = '';
