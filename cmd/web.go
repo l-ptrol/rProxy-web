@@ -265,10 +265,7 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 		host := strings.Split(r.Host, ":")[0]
 		
 		svcCfg := core.GetServiceByDomain(host)
-		if svcCfg == nil {
-			jsonResponse(w, map[string]string{"status": "error", "message": "Сервис не найден"})
-			return
-		}
+		// Если svcCfg == nil, это обращение к панели управления (Dashboard)
 
 		secret := ""
 		if svcCfg != nil {

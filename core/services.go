@@ -103,10 +103,19 @@ func httpProxyConf(name, domain, localPort, extPort, authUser string, useSSL boo
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
+    location = /api/totp/verify {
+        auth_request off;
+        proxy_pass http://127.0.0.1:%s/api/totp/verify;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
     # Редирект на логин при 401 Unauthorized
     location @rproxy_login {
         return 302 $scheme://$http_host/login?next=$scheme://$http_host$request_uri;
-    }`, apiTunnelPort, apiTunnelPort, apiTunnelPort)
+    }`, apiTunnelPort, apiTunnelPort, apiTunnelPort, apiTunnelPort)
 	}
 
 	listen80 := ""
