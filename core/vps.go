@@ -341,30 +341,50 @@ func HealthCheck(vpsCfg map[string]string) map[string]interface{} {
 				}
 				cert["domains"] = label
 				
-				// [v1.6.2-go] Парсим дату истечения (Renew) - она всегда в конце строки
+				// [v1.6.3-go] Двойной контроль: Renew (acme.sh) и Expiry (openssl)
+				var renewDate time.Time
 				var expiryDate time.Time
 				
-				// 1. Пробуем последний сегмент как ISO (RenewDate)
-				t, err := time.Parse("2006-01-02T15:04:05Z", f[len(f)-1])
-				if err == nil {
-					expiryDate = t
+				// 1. Получаем дату продления (Renew) из acme.sh --list
+				rt, rerr := time.Parse("2006-01-02T15:04:05Z", f[len(f)-1])
+				if rerr == nil {
+					renewDate = rt
 				} else if len(f) >= 6 {
-					// 2. Пробуем последние 6 сегментов как стандартную дату acme.sh (Sun May 22 12:28:01 UTC 2026)
-					dateStr := strings.Join(f[len(f)-6:], " ")
-					t2, err2 := time.Parse("Mon Jan _2 15:04:05 MST 2006", dateStr)
-					if err2 == nil {
-						expiryDate = t2
+					rDateStr := strings.Join(f[len(f)-6:], " ")
+					rt2, rerr2 := time.Parse("Mon Jan _2 15:04:05 MST 2006", rDateStr)
+					if rerr2 == nil {
+						renewDate = rt2
 					}
 				}
 
+				// 2. Получаем РЕАЛЬНУЮ дату истечения (Expiry) через openssl на VPS
+				crtPath := fmt.Sprintf("/etc/nginx/ssl/%s.crt", domain)
+				checkCmd := fmt.Sprintf("openssl x509 -enddate -noout -in %s", crtPath)
+				out, _ := vps.Execute(checkCmd)
+				// Output format: notAfter=Jun 21 16:11:01 2026 GMT
+				if strings.Contains(out, "notAfter=") {
+					rawDate := strings.TrimSpace(strings.Split(out, "=")[1])
+					// OpenSSL date format: "Jan  2 15:04:05 2006 GMT"
+					et, eerr := time.Parse("Jan _2 15:04:05 2006 MST", rawDate)
+					if eerr == nil {
+						expiryDate = et
+					}
+				}
+
+				// Форматируем вывод
 				if !expiryDate.IsZero() {
 					cert["expiry"] = expiryDate.Format("02.01.2006 15:04")
-					// Реальный расчет оставшихся дней
 					diff := time.Until(expiryDate)
 					cert["days"] = int(diff.Hours() / 24)
 				} else {
-					cert["expiry"] = f[len(f)-1] // Откат к последнему полю
+					cert["expiry"] = "Не найдено"
 					cert["days"] = 0
+				}
+
+				if !renewDate.IsZero() {
+					cert["renew"] = renewDate.Format("02.01.2006 15:04")
+				} else {
+					cert["renew"] = "Не запланировано"
 				}
 				
 				certs = append(certs, cert)

@@ -2074,7 +2074,9 @@ async function vpsHealth(name) {
             text += '--- Сертификаты ---\n';
             d.certs.forEach(c => {
                 text += `  Домены: ${c.domains}\n`;
-                text += `  Истекает: ${c.expiry} (осталось ${c.days} дн.)\n\n`;
+                text += `  Истекает: ${c.expiry} (осталось ${c.days} дн.)\n`;
+                if (c.renew) text += `  Продление: ${c.renew}\n\n`;
+                else text += `\n`;
             });
         } else {
             text += 'Сертификаты не найдены.\n';
