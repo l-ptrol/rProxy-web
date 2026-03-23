@@ -1065,7 +1065,7 @@
                             <div class="c-option" data-value="global">Глобальный (Общий ключ)</div>
                             <div class="c-option" data-value="local">Локальный (Уникальный ключ)</div>
                         </div>
-                        <input type="hidden" id="f-totp-mode" value="none" onchange="onTotpModeChange()">
+                        <input type="hidden" id="f-totp-mode" value="none">
                     </div>
                 </div>
 
@@ -1265,6 +1265,23 @@
             </div>
             <div class="modal-footer" id="deploy-footer" style="display:none;">
                 <button class="btn" onclick="closeDeployModal()">Закрыть</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== МОДАЛКА: ПРОГРЕСС ЗАДАЧИ ==================== -->
+    <div class="modal-overlay" id="modal-vps-progress">
+        <div class="modal" style="width: 650px; max-width: 95%">
+            <div class="modal-header">
+                <h3 id="vps-progress-title">Выполнение задачи</h3>
+                <button class="btn btn-icon btn-sm" onclick="closeModal('modal-vps-progress')">✕</button>
+            </div>
+            <div class="modal-body">
+                <pre id="vps-progress-log" style="height: 350px; margin-bottom: 0;"></pre>
+                <input type="hidden" id="vps-progress-name" value="">
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="closeModal('modal-vps-progress')">Закрыть</button>
             </div>
         </div>
     </div>
@@ -1646,7 +1663,9 @@ async function svcAction(name, action) {
         btnText = 'Пересобрать';
     }
 
-    if (action === 'redeploy_nginx' && !(await confirmDialog(msg, title, isDanger, btnText))) return;
+    if (action === 'redeploy_nginx' || action === 'delete') {
+         if (!(await confirmDialog(msg, title, isDanger, btnText))) return;
+    }
 
     runningTasks[name] = { action: action, title: title, log: 'Запуск задачи...', lastLine: 'Запуск процесса...' };
     renderServices();
@@ -1960,7 +1979,7 @@ function startDeploy(name) {
     document.getElementById('deploy-progress').style.background = 'var(--accent)';
     document.getElementById('deploy-spinner').innerHTML = '<span class="badge badge-online">Подождите...</span>';
     document.getElementById('deploy-footer').style.display = 'none';
-    document.getElementById('modal-deploy').style.display = 'flex';
+    openModal('modal-deploy');
 
     api(`services/${name}/deploy`, {method:'POST'}).catch(() => {});
 
@@ -2001,7 +2020,7 @@ function startDeploy(name) {
 
 function closeDeployModal() {
     if (deployLogTimer) clearInterval(deployLogTimer);
-    document.getElementById('modal-deploy').style.display = 'none';
+    closeModal('modal-deploy');
 }
 
 // ========== VPS ==========
@@ -2587,8 +2606,11 @@ async function generateLocalTotp(isReset = false) {
 
 function showLocalQR() {
     const secret = document.getElementById('totp-secret-display').textContent;
-    const url = document.getElementById('f-totp-url').value;
+    let url = document.getElementById('f-totp-url').value;
     const name = document.getElementById('f-name').value;
+    if (!url && secret !== '--') {
+        url = `otpauth://totp/rProxy:${name}?secret=${secret}&issuer=rProxy`;
+    }
     if (secret === '--') {
         generateLocalTotp();
         return;

@@ -891,6 +891,7 @@ func handleGetService(w http.ResponseWriter, r *http.Request, name string) {
 		"router_auth": defaultStr(cfg["SVC_ROUTER_AUTH"], "no"),
 		"totp_mode":   defaultStr(cfg["SVC_TOTP_MODE"], "none"),
 		"totp_secret": cfg["SVC_TOTP_SECRET"],
+		"totp_url":    core.GetTotpUrl(cfg, name),
 		"tunnel_port": cfg["SVC_TUNNEL_PORT"],
 	})
 }

@@ -23,7 +23,7 @@ const (
 )
 
 // Версия приложения
-const VERSION = "1.8.4-go"
+const VERSION = "1.8.5-go"
 
 // WebPort — порт веб-интерфейса rProxy (для Nginx auth_request)
 var WebPort int = 3000
@@ -310,4 +310,16 @@ func GetProcessEnv() []string {
 		result = append(result, k+"="+v)
 	}
 	return result
+}
+// GetTotpUrl генерирует URL для QR-кода TOTP
+func GetTotpUrl(cfg map[string]string, name string) string {
+	secret := cfg["SVC_TOTP_SECRET"]
+	if secret == "" {
+		return ""
+	}
+	label := cfg["SVC_DOMAIN"]
+	if label == "" {
+		label = name
+	}
+	return fmt.Sprintf("otpauth://totp/rProxy:%s?secret=%s&issuer=rProxy", label, secret)
 }
