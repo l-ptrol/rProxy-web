@@ -793,7 +793,7 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 	authMiddleware := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Публичные маршруты
-			if r.URL.Path == "/login" || r.URL.Path == "/api/login" || r.URL.Path == "/api/logout" || r.URL.Path == "/api/verify" {
+			if r.URL.Path == "/login" || r.URL.Path == "/api/login" || r.URL.Path == "/api/logout" || r.URL.Path == "/api/verify" || r.URL.Path == "/api/auth/requirements" {
 				next.ServeHTTP(w, r)
 				return
 			}
