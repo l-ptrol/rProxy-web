@@ -245,6 +245,13 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 		jsonResponse(w, map[string]interface{}{
 			"login_required": loginRequired,
 			"totp_required":  totpRequired,
+			"debug": map[string]interface{}{
+				"host":       host,
+				"svc_found":  svcCfg != nil,
+				"svc_domain": func() string { if svcCfg != nil { return svcCfg["SVC_DOMAIN"] }; return "" }(),
+				"svc_port":   func() string { if svcCfg != nil { return svcCfg["SVC_EXT_PORT"] }; return "" }(),
+				"v":          core.VERSION,
+			},
 		})
 	})
 

@@ -271,6 +271,7 @@
             try {
                 const r = await fetch('/api/auth/requirements');
                 const config = await r.json();
+                console.log('[AUTH] Requirements:', config);
                 
                 if (config.login_required === false && config.totp_required === true) {
                     // Если логин не нужен, но нужен TOTP — инициируем «вход» без пароля
