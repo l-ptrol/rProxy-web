@@ -242,18 +242,37 @@ func RunCertbot(vpsCfg map[string]string, domain string) (bool, string) {
 	isIP := regexp.MustCompile(`^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$`).MatchString(domain)
 
 	if isIP {
-		// Для IP адресов используем acme.sh с профилем shortlived (v1.4.3-go)
+		// Для IP адресов используем acme.sh с профилем shortlived (v1.4.5-go)
 		// 1. Поиск или установка acme.sh
-		acmePath := "~/.acme.sh/acme.sh"
-		checkCmd := "if [ -f ~/.acme.sh/acme.sh ]; then echo 'OK'; else if curl -s https://get.acme.sh | sh -s email=rproxy-ssl@$(hostname); then echo 'INSTALLED'; else echo 'FAIL'; fi; fi"
+		// Мы используем $HOME вместо ~ для надежности в разных шеллах
+		acmePath := "$HOME/.acme.sh/acme.sh"
 		
-		ok, output := RunRemoteSimple(vpsCfg, checkCmd)
-		if !ok || strings.Contains(output, "FAIL") {
-			return false, "Не удалось найти или установить acme.sh на VPS: " + output
+		// Скрипт-детектор: ищет, устанавливает, проверяет результат
+		setupCmd := `
+		if [ -f "$HOME/.acme.sh/acme.sh" ]; then 
+			echo "ALREADY_INSTALLED"
+		else 
+			echo "Installing acme.sh..." >&2
+			if curl -L https://get.acme.sh > /tmp/acme_install.sh 2>&1; then
+				sh /tmp/acme_install.sh email=rproxy-ssl@$(hostname) --log /tmp/acme_install.log >&2
+				if [ -f "$HOME/.acme.sh/acme.sh" ]; then
+					echo "SUCCESSFULLY_INSTALLED"
+				else
+					echo "INSTALLATION_FAILED"
+					cat /tmp/acme_install.log >&2
+				fi
+			else
+				echo "CURL_FAILED"
+			fi
+		fi`
+		
+		ok, output := RunRemoteSimple(vpsCfg, setupCmd)
+		if !ok || strings.Contains(output, "FAILED") || strings.Contains(output, "CURL_FAILED") {
+			return false, "Не удалось установить acme.sh на VPS: " + output
 		}
 		
 		// 2. Предварительная очистка для предотвращения конфликтов
-		RunRemoteSimple(vpsCfg, fmt.Sprintf("%s --remove -d %s || true; rm -rf ~/.acme.sh/%s", acmePath, domain, domain))
+		RunRemoteSimple(vpsCfg, fmt.Sprintf("%s --remove -d %s || true; rm -rf $HOME/.acme.sh/%s", acmePath, domain, domain))
 		
 		// 3. Выпуск через acme.sh (Let's Encrypt поддерживает IP только в shortlived режиме)
 		acmeCmd := fmt.Sprintf("%s --issue --server letsencrypt -d %s -w /var/www/letsencrypt --certificate-profile shortlived --days 3 --force", acmePath, domain)
