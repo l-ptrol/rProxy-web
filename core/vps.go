@@ -253,8 +253,8 @@ func RunCertbot(vpsCfg map[string]string, domain string) (bool, string) {
 			echo "ALREADY_INSTALLED"
 		else 
 			echo "Installing acme.sh..." >&2
-			if curl -L https://get.acme.sh > /tmp/acme_install.sh 2>&1; then
-				sh /tmp/acme_install.sh email=rproxy-ssl@$(hostname) --log /tmp/acme_install.log >&2
+			if curl -sL https://get.acme.sh > /tmp/acme_install.sh; then
+				sh /tmp/acme_install.sh email=rproxy-ssl@$(hostname) --force --log /tmp/acme_install.log >&2
 				if [ -f "$HOME/.acme.sh/acme.sh" ]; then
 					echo "SUCCESSFULLY_INSTALLED"
 				else
