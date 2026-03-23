@@ -341,16 +341,32 @@ func HealthCheck(vpsCfg map[string]string) map[string]interface{} {
 				}
 				cert["domains"] = label
 				
-				cert["expiry"] = "Управляется acme.sh"
-				if len(f) >= 6 {
-					cert["expiry"] = strings.Join(f[5:], " ")
+				// [v1.6.2-go] Парсим дату истечения (Renew) - она всегда в конце строки
+				var expiryDate time.Time
+				
+				// 1. Пробуем последний сегмент как ISO (RenewDate)
+				t, err := time.Parse("2006-01-02T15:04:05Z", f[len(f)-1])
+				if err == nil {
+					expiryDate = t
+				} else if len(f) >= 6 {
+					// 2. Пробуем последние 6 сегментов как стандартную дату acme.sh (Sun May 22 12:28:01 UTC 2026)
+					dateStr := strings.Join(f[len(f)-6:], " ")
+					t2, err2 := time.Parse("Mon Jan _2 15:04:05 MST 2006", dateStr)
+					if err2 == nil {
+						expiryDate = t2
+					}
+				}
+
+				if !expiryDate.IsZero() {
+					cert["expiry"] = expiryDate.Format("02.01.2006 15:04")
+					// Реальный расчет оставшихся дней
+					diff := time.Until(expiryDate)
+					cert["days"] = int(diff.Hours() / 24)
+				} else {
+					cert["expiry"] = f[len(f)-1] // Откат к последнему полю
+					cert["days"] = 0
 				}
 				
-				// Условно ставим 90 дней для обычных и 6 для IP для индикации в UI
-				cert["days"] = 90
-				if isIP {
-					cert["days"] = 6
-				}
 				certs = append(certs, cert)
 			}
 		}
