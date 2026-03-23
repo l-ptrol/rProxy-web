@@ -6,6 +6,7 @@
     <title>rProxy</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg viewBox='0 0 24 24' fill='none' stroke='%236366f1' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M7 18V10a2 2 0 0 1 2-2h5'/%3E%3Cpath d='M14 18V6h3a3 3 0 0 1 0 6h-3'/%3E%3C/svg%3E">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
 
@@ -935,6 +936,22 @@
                     </div>
                     <div class="form-hint">Адрес, куда будут отправляться запросы на аутентификацию (127.0.0.1 для локального).</div>
                 </div>
+
+                <div style="margin: 20px 0; border-top: 1px solid var(--border);"></div>
+                <div class="form-group">
+                    <label>Глобальный 2FA (TOTP)</label>
+                    <div id="totp-global-setup" style="background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px;">
+                        <div style="display:flex; gap:16px; align-items: center;">
+                            <div id="totp-global-qr" style="background: white; padding: 8px; border-radius: 4px; width: 100px; height: 100px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"></div>
+                            <div style="flex:1; min-width: 0;">
+                                <div style="font-size: 10px; color: var(--text3); text-transform: uppercase; font-weight: 700; margin-bottom: 4px;">Общий секрет</div>
+                                <div id="totp-global-secret" style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--accent); margin-bottom: 8px; word-break: break-all;">--</div>
+                                <button class="btn btn-sm" onclick="resetGlobalTotp()" type="button" style="width: 100%;">Сбросить ключ</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-hint" style="margin-top: 8px;">Этот ключ используется для всех сервисов в режиме «Глобальный».</div>
+                </div>
                 <div style="margin: 20px 0; border-top: 1px solid var(--border);"></div>
                 <div class="form-group">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
@@ -1071,6 +1088,34 @@
                         <input type="hidden" id="f-router-auth" value="no">
                     </div>
                     <div class="form-hint">Позволяет заходить в сервис по паролю роутера (сессия rProxy). Работает только для HTTP/HTTPS.</div>
+                </div>
+
+                <!-- Блок TOTP (v1.7.0-go) -->
+                <div class="form-group" id="totp-mode-group">
+                    <label>Двухфакторная аутентификация (TOTP)</label>
+                    <div class="c-select-wrapper" id="totp-select-wrapper">
+                        <div class="c-select" id="totp-select-current" tabindex="0">Отключена</div>
+                        <div class="c-options">
+                            <div class="c-option selected" data-value="none">Отключена</div>
+                            <div class="c-option" data-value="global">Глобальный (Общий ключ)</div>
+                            <div class="c-option" data-value="local">Локальный (Уникальный ключ)</div>
+                        </div>
+                        <input type="hidden" id="f-totp-mode" value="none">
+                    </div>
+                </div>
+
+                <div id="totp-local-setup" style="display:none; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 16px;">
+                    <div style="display:flex; gap:16px; align-items: center;">
+                        <div id="totp-qr-container" style="background: white; padding: 8px; border-radius: 4px; width: 128px; height: 128px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                            <!-- Сюда вставится QR -->
+                        </div>
+                        <div style="flex:1; min-width: 0;">
+                            <div style="font-size: 10px; color: var(--text3); text-transform: uppercase; font-weight: 700; margin-bottom: 4px;">Секретный ключ</div>
+                            <div id="totp-secret-display" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--accent); margin-bottom: 12px; word-break: break-all; background: var(--bg); padding: 4px 8px; border-radius: 4px;">--</div>
+                            <button class="btn btn-sm btn-primary" onclick="generateLocalTotp()" type="button" style="width: 100%;">Сгенерировать</button>
+                        </div>
+                    </div>
+                    <div class="form-hint" style="margin-top: 10px; font-size: 11px;">Отсканируйте QR-код в приложении (Google Authenticator, Authy и т.д.)</div>
                 </div>
 
                 <div class="form-row" id="basic-auth-group">
@@ -1390,6 +1435,46 @@ document.addEventListener('touchend', e => {
 
 function closeModal(id) { document.getElementById(id).classList.remove('visible'); }
 function openModal(id) { document.getElementById(id).classList.add('visible'); }
+
+// --- TOTP Helpers (v1.7.0-go) ---
+function renderQR(containerId, url) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = "";
+    new QRCode(container, {
+        text: url,
+        width: 128,
+        height: 128,
+        colorDark: "#000000",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.H
+    });
+}
+
+async function generateLocalTotp() {
+    const name = document.getElementById('f-name').value;
+    if (!name) { toast("Сначала укажите название сервиса", "warn"); return; }
+    try {
+        const res = await api('totp/setup', {method: 'POST', body: JSON.stringify({name})});
+        if (res.status === 'success') {
+            document.getElementById('totp-secret-display').textContent = res.secret;
+            renderQR('totp-qr-container', res.url);
+            toast("Новый ключ сгенерирован", "success");
+        }
+    } catch(e) { toast("Ошибка генерации TOTP", "error"); }
+}
+
+async function resetGlobalTotp() {
+    if (!(await confirmDialog("Сбросить глобальный ключ TOTP? \nВсе сервисы, использующие этот режим, потребуют новый код.", "Сброс 2FA", true, "Сбросить"))) return;
+    try {
+        const res = await api('settings/totp', {method: 'POST'});
+        if (res.status === 'success') {
+            document.getElementById('totp-global-secret').textContent = res.secret;
+            renderQR('totp-global-qr', res.url);
+            toast("Глобальный ключ обновлен", "success");
+        }
+    } catch(e) { toast("Ошибка сброса", "error"); }
+}
 
 // ========== Dropdown & System Actions ==========
 function toggleDropdown(id, e) {
@@ -1790,6 +1875,13 @@ async function openAddService() {
     onTypeChange();
     setCustomSelectValue('ssl-select-wrapper', 'yes');
     setCustomSelectValue('svc-auth-select-wrapper', 'no');
+    
+    // TOTP Reset
+    setCustomSelectValue('totp-select-wrapper', 'none');
+    document.getElementById('f-totp-mode').value = 'none';
+    document.getElementById('totp-local-setup').style.display = 'none';
+    document.getElementById('totp-secret-display').textContent = '--';
+    document.getElementById('totp-qr-container').innerHTML = '';
 
     document.getElementById('f-auth-user').value = '';
     document.getElementById('f-auth-pass').value = '';
@@ -1831,6 +1923,21 @@ async function editService(name) {
         setCustomSelectValue('ssl-select-wrapper', s.ssl);
         setCustomSelectValue('svc-auth-select-wrapper', s.router_auth || 'no');
         
+        // TOTP Load
+        const tMode = s.totp || 'none';
+        setCustomSelectValue('totp-select-wrapper', tMode);
+        document.getElementById('f-totp-mode').value = tMode;
+        if (tMode === 'local') {
+            document.getElementById('totp-local-setup').style.display = 'block';
+            document.getElementById('totp-secret-display').textContent = s.totp_secret || '--';
+            if (s.totp_secret) {
+                const url = `otpauth://totp/rProxy:${s.name}?secret=${s.totp_secret}&issuer=rProxy`;
+                renderQR('totp-qr-container', url);
+            }
+        } else {
+            document.getElementById('totp-local-setup').style.display = 'none';
+        }
+
         document.getElementById('f-auth-user').value = s.auth_user;
         document.getElementById('f-auth-pass').value = s.auth_pass;
         document.getElementById('domain-hint').innerHTML = '';
@@ -1879,7 +1986,9 @@ async function submitAddService() {
         ssl: document.getElementById('f-ssl').value,
         router_auth: document.getElementById('f-router-auth').value,
         auth_user: document.getElementById('f-router-auth').value === 'yes' ? '' : document.getElementById('f-auth-user').value.trim(),
-        auth_pass: document.getElementById('f-router-auth').value === 'yes' ? '' : document.getElementById('f-auth-pass').value.trim()
+        auth_pass: document.getElementById('f-router-auth').value === 'yes' ? '' : document.getElementById('f-auth-pass').value.trim(),
+        totp_mode: document.getElementById('f-totp-mode').value,
+        totp_secret: document.getElementById('totp-secret-display').textContent === '--' ? '' : document.getElementById('totp-secret-display').textContent
     };
     if (!data.name) { toast('Укажите название','error'); return; }
     if (!data.vps) { toast('Выберите VPS','error'); return; }
@@ -2143,6 +2252,13 @@ initCustomSelect('svc-auth-select-wrapper', (val) => {
     if (u) { u.disabled = isRouter; u.style.opacity = isRouter ? '0.5' : '1'; }
     if (p) { p.disabled = isRouter; p.style.opacity = isRouter ? '0.5' : '1'; }
 });
+initCustomSelect('totp-select-wrapper', (val) => {
+    document.getElementById('f-totp-mode').value = val;
+    document.getElementById('totp-local-setup').style.display = (val === 'local') ? 'block' : 'none';
+    if (val === 'local' && document.getElementById('totp-secret-display').textContent === '--') {
+        generateLocalTotp();
+    }
+});
 initCustomSelect('auth-select-wrapper', (val) => {
     document.getElementById('router-ip-group').style.display = val === 'yes' ? 'block' : 'none';
     if (val === 'yes') {
@@ -2289,6 +2405,15 @@ async function openSettings() {
         // Подгружаем список авторизаций
         const list = await api('settings/auth/list');
         renderAuthList(list);
+
+        // Load Global TOTP (v1.7.0-go)
+        try {
+            const totp = await api('settings/totp');
+            if (totp.secret) {
+                document.getElementById('totp-global-secret').textContent = totp.secret;
+                renderQR('totp-global-qr', totp.url);
+            }
+        } catch(e) {}
     } catch(e) {}
 }
 

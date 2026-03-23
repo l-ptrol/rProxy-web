@@ -118,11 +118,19 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 		}
 
 		if ok {
-			// Успешная авторизация
+			// Успешная авторизация по паролю/роутеру
 			sid := core.CreateSession()
 			core.ClearAttempts(ip)
-			fmt.Printf("[LOGIN] Success for %s on %s (IP: %s)\n", login, host, ip)
 			
+			// Проверяем, нужен ли еще TOTP (v1.7.0-go)
+			totpRequired := false
+			if svcCfg != nil {
+				totpMode := svcCfg["SVC_TOTP_MODE"]
+				if totpMode != "" && totpMode != "none" {
+					totpRequired = true
+				}
+			}
+
 			hostParts := strings.Split(host, ".")
 			domain := ""
 			if len(hostParts) >= 2 && !isIP(host) {
@@ -137,7 +145,16 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 				HttpOnly: true,
 				MaxAge:   86400 * 30,
 			})
-			jsonResponse(w, map[string]string{"status": "success"})
+
+			if totpRequired {
+				fmt.Printf("[LOGIN] Phase 1 OK, TOTP required for %s on %s\n", login, host)
+				jsonResponse(w, map[string]string{"status": "totp_required"})
+			} else {
+				// Если TOTP не нужен, сразу помечаем как проверенный для этого домена
+				core.SetTotpVerified(sid, host)
+				fmt.Printf("[LOGIN] Complete success for %s on %s\n", login, host)
+				jsonResponse(w, map[string]string{"status": "success"})
+			}
 		} else {
 			// Неудачная попытка
 			core.RecordAttempt(ip)
@@ -198,13 +215,78 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 	mux.HandleFunc("/api/verify", func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie("rproxy_session")
 		if err == nil {
-			if core.IsSessionValid(cookie.Value) {
+			sid := cookie.Value
+			if core.IsSessionValid(sid) {
+				// [v1.7.0-go] Проверка TOTP для конкретного домена
+				host := strings.Split(r.Host, ":")[0]
+				svcCfg := core.GetServiceByDomain(host)
+				
+				if svcCfg != nil {
+					totpMode := svcCfg["SVC_TOTP_MODE"]
+					if totpMode != "" && totpMode != "none" {
+						if !core.IsTotpVerified(sid, host) {
+							fmt.Printf("[AUTH] FAIL: TOTP required but not verified for %s\n", host)
+							http.Error(w, "Unauthorized (TOTP Required)", http.StatusUnauthorized)
+							return
+						}
+					}
+				}
+
 				w.WriteHeader(http.StatusOK)
 				return
 			}
-			fmt.Printf("[AUTH] FAIL: session not found/expired: %s\n", cookie.Value)
+			fmt.Printf("[AUTH] FAIL: session not found/expired: %s\n", sid)
 		}
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	})
+
+	mux.HandleFunc("/api/totp/verify", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Method not allowed", 405)
+			return
+		}
+
+		cookie, err := r.Cookie("rproxy_session")
+		if err != nil || !core.IsSessionValid(cookie.Value) {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		sid := cookie.Value
+
+		var data map[string]string
+		json.NewDecoder(r.Body).Decode(&data)
+		code := data["code"]
+		host := strings.Split(r.Host, ":")[0]
+		
+		svcCfg := core.GetServiceByDomain(host)
+		if svcCfg == nil {
+			jsonResponse(w, map[string]string{"status": "error", "message": "Сервис не найден"})
+			return
+		}
+
+		secret := ""
+		totpMode := svcCfg["SVC_TOTP_MODE"]
+		if totpMode == "local" {
+			secret = svcCfg["SVC_TOTP_SECRET"]
+		} else if totpMode == "global" {
+			gPath := filepath.Join(core.RProxyRoot, "rproxy.conf")
+			gCfg := core.LoadConfig(gPath)
+			secret = gCfg["GLOBAL_TOTP_SECRET"]
+		}
+
+		if secret == "" {
+			jsonResponse(w, map[string]string{"status": "error", "message": "TOTP не настроен"})
+			return
+		}
+
+		if core.ValidateTOTP(secret, code) {
+			core.SetTotpVerified(sid, host)
+			fmt.Printf("[TOTP] SUCCESS for domain %s\n", host)
+			jsonResponse(w, map[string]string{"status": "success"})
+		} else {
+			fmt.Printf("[TOTP] FAIL for domain %s (code: %s)\n", host, code)
+			jsonResponse(w, map[string]string{"status": "error", "message": "Неверный код"})
+		}
 	})
 
 	// ==================== API: Система ====================
@@ -442,6 +524,70 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 		}
 	})
 
+	mux.HandleFunc("/api/settings/totp", func(w http.ResponseWriter, r *http.Request) {
+		gPath := filepath.Join(core.RProxyRoot, "rproxy.conf")
+		gCfg := core.LoadConfig(gPath)
+
+		if r.Method == "GET" {
+			secret := gCfg["GLOBAL_TOTP_SECRET"]
+			if secret == "" {
+				secret, _, _ = core.GenerateTOTPSecret("Admin")
+				gCfg["GLOBAL_TOTP_SECRET"] = secret
+				core.SaveConfig(gPath, gCfg)
+			}
+			_, url, _ := core.GenerateTOTPSecret("Admin") // Нам нужен только URL для QR
+			// Подменяем секрет в URL на текущий, так как Generate создает новый
+			url = strings.Replace(url, "secret=", "secret=" + secret, 1)
+			
+			jsonResponse(w, map[string]string{
+				"secret": secret,
+				"url":    url,
+			})
+			return
+		}
+
+		if r.Method == "POST" {
+			// Ресет глобального ключа
+			secret, url, _ := core.GenerateTOTPSecret("Admin")
+			gCfg["GLOBAL_TOTP_SECRET"] = secret
+			core.SaveConfig(gPath, gCfg)
+			jsonResponse(w, map[string]string{
+				"status": "success",
+				"secret": secret,
+				"url":    url,
+			})
+		}
+	})
+
+	// Эндпоинт для настройки локального TOTP сервиса
+	mux.HandleFunc("/api/totp/setup", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Method not allowed", 405)
+			return
+		}
+
+		var data map[string]string
+		json.NewDecoder(r.Body).Decode(&data)
+		name := data["name"]
+
+		cfgPath := filepath.Join(core.ServicesDir, name+".conf")
+		cfg := core.LoadConfig(cfgPath)
+		if len(cfg) == 0 {
+			jsonResponse(w, map[string]string{"status": "error", "message": "Сервис не найден"})
+			return
+		}
+
+		secret, url, _ := core.GenerateTOTPSecret(name)
+		cfg["SVC_TOTP_SECRET"] = secret
+		core.SaveConfig(cfgPath, cfg)
+
+		jsonResponse(w, map[string]string{
+			"status": "success",
+			"secret": secret,
+			"url":    url,
+		})
+	})
+
 	// ==================== API: Обновление ====================
 
 	mux.HandleFunc("/api/system/action", func(w http.ResponseWriter, r *http.Request) {
@@ -621,8 +767,9 @@ func handleListServices(w http.ResponseWriter, r *http.Request) {
 				"ext_port": cfg["SVC_EXT_PORT"],
 				"domain":   cfg["SVC_DOMAIN"],
 				"ssl":      cfg["SVC_SSL"] == "yes",
-				"auth":     cfg["SVC_AUTH_USER"] != "" || cfg["SVC_ROUTER_AUTH"] == "yes",
+				"auth":     cfg["SVC_AUTH_USER"] != "" || cfg["SVC_ROUTER_AUTH"] == "yes" || (cfg["SVC_TOTP_MODE"] != "" && cfg["SVC_TOTP_MODE"] != "none"),
 				"r_auth":   cfg["SVC_ROUTER_AUTH"] == "yes",
+				"totp":     cfg["SVC_TOTP_MODE"],
 				"status":   status,
 			})
 		}
@@ -672,6 +819,8 @@ func handleCreateService(w http.ResponseWriter, r *http.Request) {
 		"SVC_DOMAIN":      data["domain"],
 		"SVC_SSL":         defaultStr(data["ssl"], "no"),
 		"SVC_ROUTER_AUTH": defaultStr(data["router_auth"], "no"),
+		"SVC_TOTP_MODE":   defaultStr(data["totp_mode"], "none"),
+		"SVC_TOTP_SECRET": data["totp_secret"],
 		"SVC_TUNNEL_PORT": fmt.Sprintf("%d", tunnelPort),
 		"SVC_ENABLED":     "yes",
 	}
@@ -707,6 +856,8 @@ func handleGetService(w http.ResponseWriter, r *http.Request, name string) {
 		"auth_user":   cfg["SVC_AUTH_USER"],
 		"auth_pass":   cfg["SVC_AUTH_PASS"],
 		"router_auth": defaultStr(cfg["SVC_ROUTER_AUTH"], "no"),
+		"totp_mode":   defaultStr(cfg["SVC_TOTP_MODE"], "none"),
+		"totp_secret": cfg["SVC_TOTP_SECRET"],
 		"tunnel_port": cfg["SVC_TUNNEL_PORT"],
 	})
 }
@@ -751,6 +902,8 @@ func handleUpdateService(w http.ResponseWriter, r *http.Request, name string) {
 		"SVC_DOMAIN":      data["domain"],
 		"SVC_SSL":         defaultStr(data["ssl"], "no"),
 		"SVC_ROUTER_AUTH": defaultStr(data["router_auth"], "no"),
+		"SVC_TOTP_MODE":   defaultStr(data["totp_mode"], "none"),
+		"SVC_TOTP_SECRET": defaultStr(data["totp_secret"], oldCfg["SVC_TOTP_SECRET"]),
 		"SVC_TUNNEL_PORT": oldCfg["SVC_TUNNEL_PORT"],
 		"SVC_ENABLED":     defaultStr(oldCfg["SVC_ENABLED"], "yes"),
 	}

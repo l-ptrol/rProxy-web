@@ -46,7 +46,8 @@ func GenerateNginxConf(svcCfg map[string]string, useSSLPaths bool) string {
 		if apiPort == "" {
 			apiPort = "28181"
 		}
-		return httpProxyConf(name, domain, tunnelPort, extPort, svcCfg["SVC_AUTH_USER"], useSSLPaths, targetHost, targetPort, svcCfg["SVC_ROUTER_AUTH"], apiPort)
+		totpMode := svcCfg["SVC_TOTP_MODE"]
+		return httpProxyConf(name, domain, tunnelPort, extPort, svcCfg["SVC_AUTH_USER"], useSSLPaths, targetHost, targetPort, svcCfg["SVC_ROUTER_AUTH"], apiPort, totpMode)
 	case "tcp", "ssh":
 		domainForSSL := ""
 		// Оборачиваем в SSL только если это не SSH (SSH имеет собственное шифрование)
@@ -60,12 +61,12 @@ func GenerateNginxConf(svcCfg map[string]string, useSSLPaths bool) string {
 }
 
 // httpProxyConf генерирует конфиг для HTTP/HTTPS прокси
-func httpProxyConf(name, domain, localPort, extPort, authUser string, useSSL bool, targetHost, targetPort string, routerAuth string, apiTunnelPort string) string {
-	// Блок авторизации (Унифицированный Identity Provider v1.2.2)
+func httpProxyConf(name, domain, localPort, extPort, authUser string, useSSL bool, targetHost, targetPort string, routerAuth string, apiTunnelPort string, totpMode string) string {
+	// Блок авторизации (Унифицированный Identity Provider v1.7.0)
 	authDirectives := ""
 	authHelpers := ""
 
-	if routerAuth == "yes" || authUser != "" {
+	if routerAuth == "yes" || authUser != "" || (totpMode != "" && totpMode != "none") {
 		authDirectives = `
         auth_request /rproxy_auth_verify;
         error_page 401 = @rproxy_login;`

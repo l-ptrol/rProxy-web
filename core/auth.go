@@ -14,9 +14,28 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/pquerna/otp/totp"
 )
 
 // --- Вспомогательные функции криптографии ---
+
+// ValidateTOTP проверяет 6-значный код (v1.7.0-go)
+func ValidateTOTP(secret, code string) bool {
+	return totp.Validate(code, secret)
+}
+
+// GenerateTOTPSecret создает новый секрет (v1.7.0-go)
+func GenerateTOTPSecret(accountName string) (string, string, error) {
+	key, err := totp.Generate(totp.GenerateOptions{
+		Issuer:      "rProxy",
+		AccountName: accountName,
+	})
+	if err != nil {
+		return "", "", err
+	}
+	return key.Secret(), key.URL(), nil
+}
 
 func md5Hex(data string) string {
 	h := md5.Sum([]byte(data))
@@ -205,8 +224,9 @@ func DetectRouterIP() string {
 // --- СИСТЕМА СЕССИЙ И ЗАЩИТА ОТ БРУТФОРСА (v1.2.0) ---
 
 type Session struct {
-	ID        string
-	ExpiresAt time.Time
+	ID           string
+	ExpiresAt    time.Time
+	VerifiedTotp map[string]bool // [v1.7.0-go] Domain -> verified
 }
 
 var (
@@ -228,8 +248,9 @@ func CreateSession() string {
 	token := sha256Hex(seed)
 
 	sessions[token] = Session{
-		ID:        token,
-		ExpiresAt: time.Now().Add(24 * time.Hour),
+		ID:           token,
+		ExpiresAt:    time.Now().Add(24 * time.Hour),
+		VerifiedTotp: make(map[string]bool),
 	}
 	return token
 }
@@ -243,6 +264,33 @@ func IsSessionValid(token string) bool {
 		return false
 	}
 	return true
+}
+
+func IsTotpVerified(token, domain string) bool {
+	sessionsMu.RLock()
+	defer sessionsMu.RUnlock()
+
+	sess, ok := sessions[token]
+	if !ok || time.Now().After(sess.ExpiresAt) {
+		return false
+	}
+	// Если домен пустой (для самого rProxy), считаем проверенным, если есть сессия
+	if domain == "" { return true }
+	return sess.VerifiedTotp[domain]
+}
+
+func SetTotpVerified(token, domain string) {
+	sessionsMu.Lock()
+	defer sessionsMu.Unlock()
+
+	sess, ok := sessions[token]
+	if ok {
+		if sess.VerifiedTotp == nil {
+			sess.VerifiedTotp = make(map[string]bool)
+		}
+		sess.VerifiedTotp[domain] = true
+		sessions[token] = sess
+	}
 }
 
 func DeleteSession(token string) {

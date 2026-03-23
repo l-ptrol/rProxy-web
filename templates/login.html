@@ -208,20 +208,45 @@
 
         <div id="error-msg" class="error-box"></div>
 
-        <form id="login-form">
-            <div class="form-group">
-                <label>Пользователь</label>
-                <input type="text" id="login" required autofocus placeholder="admin">
+        <div id="login-stage">
+            <form id="login-form">
+                <div class="form-group">
+                    <label>Пользователь</label>
+                    <input type="text" id="login" required autofocus placeholder="admin">
+                </div>
+                <div class="form-group">
+                    <label>Пароль</label>
+                    <input type="password" id="password" required placeholder="••••••••">
+                </div>
+                <button type="submit" class="btn-submit" id="submit-btn" disabled>
+                    <span class="btn-text">Проверка...</span>
+                    <span class="loader"></span>
+                </button>
+            </form>
+        </div>
+
+        <div id="totp-stage" style="display: none; animation: slideIn 0.5s ease;">
+            <div style="text-align: center; margin-bottom: 2rem;">
+                <p style="font-size: 0.9rem; color: var(--text-muted);">Введите 6-значный код из вашего приложения аутентификатора</p>
             </div>
-            <div class="form-group">
-                <label>Пароль</label>
-                <input type="password" id="password" required placeholder="••••••••">
-            </div>
-            <button type="submit" class="btn-submit" id="submit-btn" disabled>
-                <span class="btn-text">Проверка...</span>
-                <span class="loader"></span>
-            </button>
-        </form>
+            <form id="totp-form">
+                <div class="form-group">
+                    <label>Код подтверждения</label>
+                    <input type="text" id="totp-code" required maxlength="6" pattern="[0-9]{6}" inputmode="numeric" placeholder="000000" style="text-align: center; font-size: 1.5rem; letter-spacing: 0.5rem;">
+                </div>
+                <button type="submit" class="btn-submit" id="totp-btn">
+                    <span class="btn-text">Подтвердить</span>
+                    <span class="loader"></span>
+                </button>
+                <div style="text-align: center; margin-top: 1.5rem;">
+                    <a href="javascript:location.reload()" style="font-size: 0.8rem; color: var(--accent-primary); text-decoration: none;">← Вернуться к паролю</a>
+                </div>
+            </form>
+        </div>
+
+        <style>
+            @keyframes slideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+        </style>
 
         <div class="footer">
             &copy; 2026 rProxy Portal.
@@ -232,21 +257,27 @@
         // Тема
         if (localStorage.getItem('theme') === 'light') document.documentElement.setAttribute('data-theme', 'light');
 
-        const form = document.getElementById('login-form');
-        const btn = document.getElementById('submit-btn');
-        const err = document.getElementById('error-msg');
+        const loginForm = document.getElementById('login-form');
+        const totpForm = document.getElementById('totp-form');
+        const submitBtn = document.getElementById('submit-btn');
+        const totpBtn = document.getElementById('totp-btn');
+        const errorBox = document.getElementById('error-msg');
         
-        // Разблокировка кнопки после загрузки DOM
         document.addEventListener('DOMContentLoaded', () => {
-            btn.disabled = false;
-            btn.querySelector('.btn-text').textContent = 'Войти';
+            submitBtn.disabled = false;
+            submitBtn.querySelector('.btn-text').textContent = 'Войти';
         });
 
-        form.onsubmit = async (e) => {
+        const showError = (msg) => {
+            errorBox.textContent = msg;
+            errorBox.style.display = 'block';
+        };
+
+        loginForm.onsubmit = async (e) => {
             e.preventDefault();
-            btn.classList.add('loading');
-            btn.disabled = true;
-            err.style.display = 'none';
+            submitBtn.classList.add('loading');
+            submitBtn.disabled = true;
+            errorBox.style.display = 'none';
 
             const login = document.getElementById('login').value;
             const password = document.getElementById('password').value;
@@ -261,22 +292,57 @@
                 const data = await response.json();
 
                 if (data.status === 'success') {
-                    // Обработка редиректа "next"
-                    const urlParams = new URLSearchParams(window.location.search);
-                    const next = urlParams.get('next') || '/';
-                    window.location.href = next;
+                    redirectNext();
+                } else if (data.status === 'totp_required') {
+                    document.getElementById('login-stage').style.display = 'none';
+                    document.getElementById('totp-stage').style.display = 'block';
+                    document.getElementById('totp-code').focus();
                 } else {
-                    err.textContent = data.message || 'Ошибка входа';
-                    err.style.display = 'block';
+                    showError(data.message || 'Ошибка входа');
                 }
-            } catch (k) {
-                err.textContent = 'Ошибка соединения с сервером';
-                err.style.display = 'block';
+            } catch (err) {
+                showError('Ошибка соединения с сервером');
             } finally {
-                btn.classList.remove('loading');
-                btn.disabled = false;
+                submitBtn.classList.remove('loading');
+                submitBtn.disabled = false;
             }
         };
+
+        totpForm.onsubmit = async (e) => {
+            e.preventDefault();
+            totpBtn.classList.add('loading');
+            totpBtn.disabled = true;
+            errorBox.style.display = 'none';
+
+            const code = document.getElementById('totp-code').value;
+
+            try {
+                const response = await fetch('/api/totp/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code })
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    redirectNext();
+                } else {
+                    showError(data.message || 'Неверный код');
+                }
+            } catch (err) {
+                showError('Ошибка проверки кода');
+            } finally {
+                totpBtn.classList.remove('loading');
+                totpBtn.disabled = false;
+            }
+        };
+
+        function redirectNext() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const next = urlParams.get('next') || '/';
+            window.location.href = next;
+        }
     </script>
 </body>
 </html>
