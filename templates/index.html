@@ -1957,7 +1957,7 @@ async function editService(name) {
         setCustomSelectValue('svc-auth-select-wrapper', s.router_auth || 'no');
         
         // TOTP Load
-        const tMode = s.totp || 'none';
+        const tMode = s.totp_mode || 'none';
         setCustomSelectValue('totp-select-wrapper', tMode);
         document.getElementById('f-totp-mode').value = tMode;
         if (tMode === 'local') {

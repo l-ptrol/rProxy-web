@@ -91,11 +91,11 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 		ok := false
 		var err error
 
+		gPath := filepath.Join(core.RProxyRoot, "rproxy.conf")
+		gCfg := core.LoadConfig(gPath)
+
 		if isRouterAuth {
 			// Авторизация через Keenetic
-			gPath := filepath.Join(core.RProxyRoot, "rproxy.conf")
-			gCfg := core.LoadConfig(gPath)
-			
 			// Приоритет: rproxy.conf -> Автоопределение (GetRouterIP) -> 192.168.1.1
 			routerIP := gCfg["ROUTER_AUTH_IP"]
 			if routerIP == "" {
@@ -122,11 +122,17 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 			sid := core.CreateSession()
 			core.ClearAttempts(ip)
 			
-			// Проверяем, нужен ли еще TOTP (v1.7.0-go)
+			// Проверяем, нужен ли еще TOTP (v1.8.0-go)
 			totpRequired := false
 			if svcCfg != nil {
 				totpMode := svcCfg["SVC_TOTP_MODE"]
 				if totpMode != "" && totpMode != "none" {
+					totpRequired = true
+				}
+			} else {
+				// Если заходим в саму панель (по IP или основному домену)
+				// и включена любая авторизация — проверяем глобальный TOTP
+				if gCfg["GLOBAL_TOTP_SECRET"] != "" {
 					totpRequired = true
 				}
 			}
@@ -265,10 +271,17 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 		}
 
 		secret := ""
-		totpMode := svcCfg["SVC_TOTP_MODE"]
-		if totpMode == "local" {
-			secret = svcCfg["SVC_TOTP_SECRET"]
-		} else if totpMode == "global" {
+		if svcCfg != nil {
+			totpMode := svcCfg["SVC_TOTP_MODE"]
+			if totpMode == "local" {
+				secret = svcCfg["SVC_TOTP_SECRET"]
+			} else if totpMode == "global" {
+				gPath := filepath.Join(core.RProxyRoot, "rproxy.conf")
+				gCfg := core.LoadConfig(gPath)
+				secret = gCfg["GLOBAL_TOTP_SECRET"]
+			}
+		} else {
+			// Панель управления (dashboard) всегда использует глобальный секрет
 			gPath := filepath.Join(core.RProxyRoot, "rproxy.conf")
 			gCfg := core.LoadConfig(gPath)
 			secret = gCfg["GLOBAL_TOTP_SECRET"]
