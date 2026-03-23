@@ -105,7 +105,22 @@ func httpProxyConf(name, domain, localPort, extPort, authUser string, useSSL boo
     # Редирект на логин при 401 Unauthorized
     location @rproxy_login {
         return 302 $scheme://$http_host/login?next=$scheme://$http_host$request_uri;
+    }
+
+    # Поддержка валидации для acme.sh (SSL на IP)
+    location ~ ^/.well-known/acme-challenge/ {
+        auth_request off;
+        allow all;
+        root /var/www/letsencrypt;
     }`, apiTunnelPort, apiTunnelPort, apiTunnelPort)
+	} else {
+		// Даже если авторизация выключена, нам нужен проброс для валидации SSL на IP
+		authHelpers = `
+    location ~ ^/.well-known/acme-challenge/ {
+        auth_request off;
+        allow all;
+        root /var/www/letsencrypt;
+    }`
 	}
 
 	listen80 := ""
@@ -125,12 +140,21 @@ server {
 
 	sslConfig := ""
 	if useSSL {
+		isIP := strings.Contains(domain, ".") && !strings.ContainsAny(domain, "abcdefghijklmnopqrstuvwxyz")
+		certPath := fmt.Sprintf("/etc/letsencrypt/live/%s/fullchain.pem", domain)
+		keyPath := fmt.Sprintf("/etc/letsencrypt/live/%s/privkey.pem", domain)
+		
+		if isIP {
+			certPath = fmt.Sprintf("/etc/nginx/ssl/rproxy_%s.crt", domain)
+			keyPath = fmt.Sprintf("/etc/nginx/ssl/rproxy_%s.key", domain)
+		}
+
 		sslConfig = fmt.Sprintf(`
-    ssl_certificate /etc/letsencrypt/live/%s/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/%s/privkey.pem;
+    ssl_certificate %s;
+    ssl_certificate_key %s;
     include /etc/letsencrypt/options-ssl-nginx.conf;
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
-    `, domain, domain)
+    `, certPath, keyPath)
 	}
 
 	stealthHost := targetHost
@@ -214,19 +238,28 @@ func streamProxyConf(port, localPort, domain, proto string) string {
 		proto = "tcp"
 	}
 	if domain != "" && proto == "tcp" {
+		isIP := strings.Contains(domain, ".") && !strings.ContainsAny(domain, "abcdefghijklmnopqrstuvwxyz")
+		certPath := fmt.Sprintf("/etc/letsencrypt/live/%s/fullchain.pem", domain)
+		keyPath := fmt.Sprintf("/etc/letsencrypt/live/%s/privkey.pem", domain)
+		
+		if isIP {
+			certPath = fmt.Sprintf("/etc/nginx/ssl/rproxy_%s.crt", domain)
+			keyPath = fmt.Sprintf("/etc/nginx/ssl/rproxy_%s.key", domain)
+		}
+
 		return fmt.Sprintf(`
 server {
     listen %s ssl;
     proxy_pass 127.0.0.1:%s;
-    ssl_certificate /etc/letsencrypt/live/%s/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/%s/privkey.pem;
+    ssl_certificate %s;
+    ssl_certificate_key %s;
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers HIGH:!aNULL:!MD5;
     ssl_handshake_timeout 15s;
     ssl_session_cache shared:SSLSTREAM:10m;
     ssl_session_timeout 1h;
 }
-`, port, localPort, domain, domain)
+`, port, localPort, certPath, keyPath)
 	}
 	listenOpts := port
 	if proto == "udp" {

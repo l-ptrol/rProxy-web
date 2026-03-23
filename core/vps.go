@@ -128,11 +128,18 @@ func SetupVPS(vpsCfg map[string]string) (bool, string) {
 export DEBIAN_FRONTEND=noninteractive
 mkdir -p /etc/nginx/sites-enabled
 mkdir -p /etc/nginx/streams-enabled
+mkdir -p /var/www/letsencrypt
+mkdir -p /etc/nginx/ssl
 
 if command -v apt-get >/dev/null 2>&1; then
-    apt-get update -qq && apt-get install -y -qq nginx libnginx-mod-stream certbot python3-certbot-nginx psmisc socat curl
+    apt-get update -qq && apt-get install -y -qq nginx libnginx-mod-stream certbot python3-certbot-nginx psmisc socat curl cron
 elif command -v yum >/dev/null 2>&1; then
-    yum install -y epel-release && yum install -y nginx nginx-mod-stream certbot python3-certbot-nginx psmisc socat curl
+    yum install -y epel-release && yum install -y nginx nginx-mod-stream certbot python3-certbot-nginx psmisc socat curl cron
+fi
+
+# Установка acme.sh для SSL на IP
+if [ ! -f ~/.acme.sh/acme.sh ]; then
+    curl https://get.acme.sh | sh -s email=rproxy-ssl@$(hostname) || true
 fi
 
 grep -q 'sites-enabled' /etc/nginx/nginx.conf || sed -i '/http {/a\    include /etc/nginx/sites-enabled/*.conf;' /etc/nginx/nginx.conf
@@ -159,6 +166,11 @@ systemctl restart ssh || systemctl restart sshd
 
 // CheckSSLExists проверяет наличие SSL сертификата для домена на VPS
 func CheckSSLExists(vpsCfg map[string]string, domain string) bool {
+	isIP := regexp.MustCompile(`^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$`).MatchString(domain)
+	if isIP {
+		success, _ := RunRemoteSimple(vpsCfg, fmt.Sprintf("[ -f /etc/nginx/ssl/rproxy_%s.crt ]", domain))
+		return success
+	}
 	success, _ := RunRemoteSimple(vpsCfg, fmt.Sprintf("[ -d /etc/letsencrypt/live/%s ]", domain))
 	return success
 }
@@ -225,16 +237,29 @@ func RemoveVhost(vpsCfg map[string]string, name string) (bool, string) {
 	return RunRemoteSimple(vpsCfg, cmd)
 }
 
-// RunCertbot запускает Certbot для получения SSL
+// RunCertbot запускает Certbot (или acme.sh для IP) для получения SSL
 func RunCertbot(vpsCfg map[string]string, domain string) (bool, string) {
 	isIP := regexp.MustCompile(`^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$`).MatchString(domain)
 
-	profile := ""
 	if isIP {
-		profile = "--cert-profile shortlived"
+		// Для IP адресов используем acme.sh с профилем shortlived (v1.4.2-go)
+		// 1. Предварительная очистка для предотвращения конфликтов
+		RunRemoteSimple(vpsCfg, fmt.Sprintf("rm -rf ~/.acme.sh/%s", domain))
+		
+		// 2. Выпуск через acme.sh (Let's Encrypt поддерживает IP только в shortlived режиме)
+		// --days 3 означает, что сертификат будет обновляться каждые 3 дня (при лимите в 6-7 дней)
+		acmeCmd := fmt.Sprintf("~/.acme.sh/acme.sh --issue --server letsencrypt -d %s -w /var/www/letsencrypt --certificate-profile shortlived --days 3 --force", domain)
+		ok, output := RunRemote(vpsCfg, acmeCmd, 180*time.Second)
+		if !ok {
+			return false, "acme.sh issue failed: " + output
+		}
+		
+		// 3. Установка сертификата в стандартное место rProxy
+		installCmd := fmt.Sprintf("~/.acme.sh/acme.sh --install-cert -d %s --key-file /etc/nginx/ssl/rproxy_%s.key --fullchain-file /etc/nginx/ssl/rproxy_%s.crt --reloadcmd 'systemctl reload nginx'", domain, domain, domain)
+		return RunRemoteSimple(vpsCfg, installCmd)
 	}
 
-	cmd := fmt.Sprintf("certbot certonly --nginx -d %s %s --non-interactive --agree-tos --register-unsafely-without-email", domain, profile)
+	cmd := fmt.Sprintf("certbot certonly --nginx -d %s --non-interactive --agree-tos --register-unsafely-without-email", domain)
 	return RunRemote(vpsCfg, cmd, 120*time.Second)
 }
 
