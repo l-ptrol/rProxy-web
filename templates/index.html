@@ -885,6 +885,29 @@
         <div class="log-panel" id="log-output">Выберите сервис и нажмите «Загрузить» для просмотра логов.</div>
     </div>
 
+    <!-- ==================== МОДАЛКА: QR-код (v1.7.1-go) ==================== -->
+    <div class="modal-overlay" id="modal-qr">
+        <div class="modal" style="width: 380px; text-align: center;">
+            <div class="modal-header">
+                <h3 id="qr-modal-title">Настройка 2FA</h3>
+                <button class="btn btn-icon btn-sm" onclick="closeModal('modal-qr')">✕</button>
+            </div>
+            <div class="modal-body">
+                <p id="qr-modal-hint" style="font-size: 13px; color: var(--text2); margin-bottom: 20px;">Отсканируйте код приложением 2FA</p>
+                <div id="qr-modal-container" style="background: white; padding: 15px; border-radius: 8px; display: inline-block; margin-bottom: 20px;">
+                    <!-- QR-код вставится сюда -->
+                </div>
+                <div style="background: var(--surface2); padding: 12px; border-radius: var(--radius); border: 1px solid var(--border);">
+                    <div style="font-size: 10px; color: var(--text3); text-transform: uppercase; font-weight: 700; margin-bottom: 4px;">Секретный ключ</div>
+                    <div id="qr-modal-secret" style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--accent); letter-spacing: 1px; word-break: break-all;">--</div>
+                </div>
+            </div>
+            <div class="modal-footer" style="justify-content: center;">
+                <button class="btn btn-primary" style="width: 100%;" onclick="closeModal('modal-qr')">Я отсканировал</button>
+            </div>
+        </div>
+    </div>
+
     <!-- ==================== МОДАЛКА: Подтверждение (Confirm) ==================== -->
     <div class="modal-overlay" id="modal-confirm">
         <div class="modal" style="width: 420px; max-width: 95%">
@@ -940,17 +963,24 @@
                 <div style="margin: 20px 0; border-top: 1px solid var(--border);"></div>
                 <div class="form-group">
                     <label>Глобальный 2FA (TOTP)</label>
-                    <div id="totp-global-setup" style="background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px;">
-                        <div style="display:flex; gap:16px; align-items: center;">
-                            <div id="totp-global-qr" style="background: white; padding: 8px; border-radius: 4px; width: 100px; height: 100px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"></div>
-                            <div style="flex:1; min-width: 0;">
-                                <div style="font-size: 10px; color: var(--text3); text-transform: uppercase; font-weight: 700; margin-bottom: 4px;">Общий секрет</div>
-                                <div id="totp-global-secret" style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--accent); margin-bottom: 8px; word-break: break-all;">--</div>
-                                <button class="btn btn-sm" onclick="resetGlobalTotp()" type="button" style="width: 100%;">Сбросить ключ</button>
+                    <div style="display:flex; gap: 8px; margin-bottom: 12px;">
+                        <input type="text" id="s-totp-name" placeholder="Индекс роутера (напр. Home)" style="flex:1;">
+                    </div>
+                    <div id="totp-global-setup" style="background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px;">
+                        <div style="display:flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-size: 10px; color: var(--text3); text-transform: uppercase; font-weight: 700; margin-bottom: 2px;">Статус</div>
+                                <div style="font-size: 13px; color: var(--green); font-weight: 600;">Ключ активен</div>
+                            </div>
+                            <div style="display: flex; gap: 6px;">
+                                <button class="btn btn-sm" onclick="showGlobalQR()" type="button">Показать QR</button>
+                                <button class="btn btn-sm btn-icon" onclick="resetGlobalTotp()" type="button" title="Сбросить и создать новый" style="color: var(--red);">
+                                    <svg viewBox="0 0 24 24" style="width:14px;height:14px;"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                                </button>
                             </div>
                         </div>
                     </div>
-                    <div class="form-hint" style="margin-top: 8px;">Этот ключ используется для всех сервисов в режиме «Глобальный».</div>
+                    <div class="form-hint" style="margin-top: 8px;">Индекс роутера будет виден в приложении 2FA для отличия аккаунтов.</div>
                 </div>
                 <div style="margin: 20px 0; border-top: 1px solid var(--border);"></div>
                 <div class="form-group">
@@ -1105,17 +1135,19 @@
                 </div>
 
                 <div id="totp-local-setup" style="display:none; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 16px;">
-                    <div style="display:flex; gap:16px; align-items: center;">
-                        <div id="totp-qr-container" style="background: white; padding: 8px; border-radius: 4px; width: 128px; height: 128px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                            <!-- Сюда вставится QR -->
+                    <div style="display:flex; justify-content: space-between; align-items: center;">
+                        <div style="min-width: 0; flex: 1;">
+                            <div style="font-size: 10px; color: var(--text3); text-transform: uppercase; font-weight: 700; margin-bottom: 4px;">Индивидуальный ключ</div>
+                            <div id="totp-secret-display" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--accent); word-break: break-all; margin-bottom: 0;">--</div>
                         </div>
-                        <div style="flex:1; min-width: 0;">
-                            <div style="font-size: 10px; color: var(--text3); text-transform: uppercase; font-weight: 700; margin-bottom: 4px;">Секретный ключ</div>
-                            <div id="totp-secret-display" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--accent); margin-bottom: 12px; word-break: break-all; background: var(--bg); padding: 4px 8px; border-radius: 4px;">--</div>
-                            <button class="btn btn-sm btn-primary" onclick="generateLocalTotp()" type="button" style="width: 100%;">Сгенерировать</button>
+                        <div style="display:flex; gap: 6px; flex-shrink:0;">
+                            <button class="btn btn-sm" onclick="showLocalQR()" type="button">Показать QR</button>
+                            <button class="btn btn-sm btn-icon" onclick="generateLocalTotp(true)" type="button" title="Перегенерировать" style="color: var(--red);">
+                                <svg viewBox="0 0 24 24" style="width:14px;height:14px;"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                            </button>
                         </div>
                     </div>
-                    <div class="form-hint" style="margin-top: 10px; font-size: 11px;">Отсканируйте QR-код в приложении (Google Authenticator, Authy и т.д.)</div>
+                    <input type="hidden" id="f-totp-url" value="">
                 </div>
 
                 <div class="form-row" id="basic-auth-group">
@@ -2406,12 +2438,14 @@ async function openSettings() {
         const list = await api('settings/auth/list');
         renderAuthList(list);
 
-        // Load Global TOTP (v1.7.0-go)
+        // Load Global TOTP (v1.7.1-go)
         try {
             const totp = await api('settings/totp');
+            document.getElementById('s-totp-name').value = totp.name || '';
             if (totp.secret) {
-                document.getElementById('totp-global-secret').textContent = totp.secret;
-                renderQR('totp-global-qr', totp.url);
+                // В 1.7.1 мы только устанавливаем статус, QR показываем по кнопке
+                // Если нужно показать ключ сразу в тексте:
+                // document.getElementById('totp-global-secret').textContent = totp.secret;
             }
         } catch(e) {}
     } catch(e) {}
@@ -2526,7 +2560,8 @@ async function commitSaveSettings(routerAuth, routerIp) {
     const data = {
         boot_delay: document.getElementById('s-boot-delay').value,
         router_auth: routerAuth,
-        router_ip: routerIp
+        router_ip: routerIp,
+        totp_name: document.getElementById('s-totp-name').value.trim()
     };
     try {
         await api('settings/global', {method:'POST', body: JSON.stringify(data)});
@@ -2584,6 +2619,81 @@ async function detectRouterIpUI() {
         document.getElementById('s-router-ip').value = 'auto';
         toast('Режим автоопределения включен', 'success');
     } catch(e) {}
+}
+
+// ========== TOTP Helpers (v1.7.1-go) ==========
+function renderQR(containerId, url) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = '';
+    if (typeof QRCode === 'undefined') {
+        container.innerHTML = '<div style="font-size:10px;color:red">Ошибка: QRCode.js не загружен</div>';
+        return;
+    }
+    new QRCode(container, {
+        text: url,
+        width: 128,
+        height: 128,
+        colorDark: "#000000",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.H
+    });
+    // Фикс для центрирования на некоторых браузерах
+    const img = container.querySelector('img');
+    if (img) { img.style.margin = '0 auto'; img.style.display = 'block'; }
+}
+
+function showQRModal(title, secret, url) {
+    document.getElementById('qr-modal-title').textContent = title;
+    document.getElementById('qr-modal-secret').textContent = secret;
+    renderQR('qr-modal-container', url);
+    openModal('modal-qr');
+}
+
+async function showGlobalQR() {
+    try {
+        const d = await api('settings/totp');
+        const name = document.getElementById('s-totp-name').value || d.name || 'Admin';
+        const url = `otpauth://totp/rProxy:${name}?secret=${d.secret}&issuer=rProxy`;
+        showQRModal('Глобальный 2FA', d.secret, url);
+    } catch(e) {}
+}
+
+async function resetGlobalTotp() {
+    if (!(await confirmDialog('Все приложения 2FA, настроенные на старый ключ, ПЕРЕСТАНУТ РАБОТАТЬ. Вы уверены?', 'Сброс глобального ключа', true, 'Сбросить'))) return;
+    try {
+        const d = await api('settings/totp', {method: 'POST'});
+        toast('Новый ключ сгенерирован', 'success');
+        showGlobalQR();
+    } catch(e) {}
+}
+
+async function generateLocalTotp(isReset = false) {
+    const name = document.getElementById('f-name').value.trim();
+    if (!name) { toast('Сначала введите название сервиса', 'warn'); return; }
+    
+    if (isReset && !(await confirmDialog('Сбросить индивидуальный ключ для этого сервиса?', 'Сброс TOTP', true, 'Сбросить'))) return;
+
+    try {
+        const d = await api('totp/setup', {
+            method: 'POST',
+            body: JSON.stringify({ name, action: isReset ? 'reset' : 'get' })
+        });
+        document.getElementById('totp-secret-display').textContent = d.secret;
+        document.getElementById('f-totp-url').value = d.url;
+        if (isReset) showLocalQR();
+    } catch(e) {}
+}
+
+function showLocalQR() {
+    const secret = document.getElementById('totp-secret-display').textContent;
+    const url = document.getElementById('f-totp-url').value;
+    const name = document.getElementById('f-name').value;
+    if (secret === '--') {
+        generateLocalTotp();
+        return;
+    }
+    showQRModal(`TOTP: ${name}`, secret, url);
 }
 
 // Старт

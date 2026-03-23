@@ -519,6 +519,9 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 			if val, ok := data["custom_auth_pass"]; ok {
 				gCfg["CUSTOM_AUTH_PASS"] = val
 			}
+			if val, ok := data["totp_name"]; ok {
+				gCfg["DASHBOARD_TOTP_NAME"] = val
+			}
 			core.SaveConfig(gPath, gCfg)
 			jsonResponse(w, map[string]string{"status": "success"})
 		}
@@ -530,25 +533,32 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 
 		if r.Method == "GET" {
 			secret := gCfg["GLOBAL_TOTP_SECRET"]
+			name := gCfg["DASHBOARD_TOTP_NAME"]
+			if name == "" {
+				name = "Admin"
+			}
 			if secret == "" {
-				secret, _, _ = core.GenerateTOTPSecret("Admin")
+				secret, _, _ = core.GenerateTOTPSecret(name)
 				gCfg["GLOBAL_TOTP_SECRET"] = secret
 				core.SaveConfig(gPath, gCfg)
 			}
-			_, url, _ := core.GenerateTOTPSecret("Admin") // Нам нужен только URL для QR
-			// Подменяем секрет в URL на текущий, так как Generate создает новый
-			url = strings.Replace(url, "secret=", "secret=" + secret, 1)
-			
+			url := core.GenerateTOTPURL(name, secret)
+
 			jsonResponse(w, map[string]string{
 				"secret": secret,
 				"url":    url,
+				"name":   name,
 			})
 			return
 		}
 
 		if r.Method == "POST" {
 			// Ресет глобального ключа
-			secret, url, _ := core.GenerateTOTPSecret("Admin")
+			name := gCfg["DASHBOARD_TOTP_NAME"]
+			if name == "" {
+				name = "Admin"
+			}
+			secret, url, _ := core.GenerateTOTPSecret(name)
 			gCfg["GLOBAL_TOTP_SECRET"] = secret
 			core.SaveConfig(gPath, gCfg)
 			jsonResponse(w, map[string]string{
@@ -569,6 +579,7 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 		var data map[string]string
 		json.NewDecoder(r.Body).Decode(&data)
 		name := data["name"]
+		action := data["action"] // 'get' or 'reset'
 
 		cfgPath := filepath.Join(core.ServicesDir, name+".conf")
 		cfg := core.LoadConfig(cfgPath)
@@ -577,9 +588,21 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 			return
 		}
 
-		secret, url, _ := core.GenerateTOTPSecret(name)
-		cfg["SVC_TOTP_SECRET"] = secret
-		core.SaveConfig(cfgPath, cfg)
+		secret := cfg["SVC_TOTP_SECRET"]
+		url := ""
+
+		if action == "reset" || secret == "" {
+			var err error
+			secret, url, err = core.GenerateTOTPSecret(name)
+			if err != nil {
+				jsonResponse(w, map[string]string{"status": "error", "message": err.Error()})
+				return
+			}
+			cfg["SVC_TOTP_SECRET"] = secret
+			core.SaveConfig(cfgPath, cfg)
+		} else {
+			url = core.GenerateTOTPURL(name, secret)
+		}
 
 		jsonResponse(w, map[string]string{
 			"status": "success",

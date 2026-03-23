@@ -20,12 +20,12 @@ import (
 
 // --- Вспомогательные функции криптографии ---
 
-// ValidateTOTP проверяет 6-значный код (v1.7.0-go)
+// ValidateTOTP проверяет 6-значный код (v1.7.1-go)
 func ValidateTOTP(secret, code string) bool {
 	return otp_totp.Validate(code, secret)
 }
 
-// GenerateTOTPSecret создает новый секрет (v1.7.0-go)
+// GenerateTOTPSecret создает новый секрет (v1.7.1-go)
 func GenerateTOTPSecret(accountName string) (string, string, error) {
 	key, err := otp_totp.Generate(otp_totp.GenerateOpts{
 		Issuer:      "rProxy",
@@ -35,6 +35,11 @@ func GenerateTOTPSecret(accountName string) (string, string, error) {
 		return "", "", err
 	}
 	return key.Secret(), key.URL(), nil
+}
+
+// GenerateTOTPURL формирует URL для существующего секрета без генерации нового (v1.7.1-go)
+func GenerateTOTPURL(accountName, secret string) string {
+	return fmt.Sprintf("otpauth://totp/rProxy:%s?secret=%s&issuer=rProxy", accountName, secret)
 }
 
 func md5Hex(data string) string {
