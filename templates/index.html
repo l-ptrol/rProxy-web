@@ -886,23 +886,6 @@
     </div>
 
 
-    <!-- ==================== МОДАЛКА: Подтверждение (Confirm) ==================== -->
-    <div class="modal-overlay" id="modal-confirm">
-        <div class="modal" style="width: 420px; max-width: 95%">
-            <div class="modal-header">
-                <h3 id="confirm-title">Подтверждение</h3>
-                <button class="btn btn-icon btn-sm" onclick="closeModal('modal-confirm')">✕</button>
-            </div>
-            <div class="modal-body">
-                <p id="confirm-message" style="margin-bottom: 8px;">Вы уверены?</p>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-outline" id="btn-confirm-no" onclick="closeModal('modal-confirm')">Отмена</button>
-                <button class="btn btn-primary" id="btn-confirm-yes">Да</button>
-            </div>
-        </div>
-    </div>
-
     <!-- ==================== МОДАЛКА: Настройки ==================== -->
     <div class="modal-overlay" id="modal-settings">
         <div class="modal" style="width: 400px;">
@@ -978,32 +961,6 @@
             <div class="modal-footer">
                 <button class="btn" onclick="closeModal('modal-settings')">Отмена</button>
                 <button class="btn btn-primary" onclick="saveSettings()">Сохранить</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- ==================== МОДАЛКА: Проверка авторизации ==================== -->
-    <div class="modal-overlay" id="modal-test-auth">
-        <div class="modal" style="width: 400px; max-width: 95%">
-            <div class="modal-header">
-                <h3>Подтверждение доступа</h3>
-                <button class="btn btn-icon btn-sm" onclick="closeModal('modal-test-auth')">✕</button>
-            </div>
-            <div class="modal-body">
-                <p style="font-size:12px; color:var(--text2); margin-bottom:12px; line-height: 1.4;">Чтобы включить защиту rProxy паролем от Keenetic, необходимо успешно пройти тестовую аутентификацию.</p>
-                <div id="test-auth-error" class="error-message" style="display:none; color:var(--red); margin-bottom:12px; font-size:12px; background:var(--red-bg); padding:10px; border-radius:var(--radius); border: 1px solid var(--red);"></div>
-                <div class="form-group">
-                    <label>Пользователь (на роутере)</label>
-                    <input type="text" id="test-auth-login" value="admin">
-                </div>
-                <div class="form-group">
-                    <label>Пароль</label>
-                    <input type="password" id="test-auth-password" placeholder="Введите пароль...">
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn" onclick="closeModal('modal-test-auth')">Отмена</button>
-                <button class="btn btn-primary" id="btn-test-auth" onclick="submitTestAuth()">Проверить и сохранить</button>
             </div>
         </div>
     </div>
@@ -1194,9 +1151,69 @@
         </div>
     </div>
 
+    <!-- ==================== МОДАЛКА: Проверка авторизации ==================== -->
+    <div class="modal-overlay" id="modal-test-auth">
+        <div class="modal" style="width: 400px; max-width: 95%">
+            <div class="modal-header">
+                <h3>Подтверждение доступа</h3>
+                <button class="btn btn-icon btn-sm" onclick="closeModal('modal-test-auth')">✕</button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size:12px; color:var(--text2); margin-bottom:12px; line-height: 1.4;">Чтобы включить защиту rProxy паролем от Keenetic, необходимо успешно пройти тестовую аутентификацию.</p>
+                <div id="test-auth-error" class="error-message" style="display:none; color:var(--red); margin-bottom:12px; font-size:12px; background:var(--red-bg); padding:10px; border-radius:var(--radius); border: 1px solid var(--red);"></div>
+                <div class="form-group">
+                    <label>Пользователь (на роутере)</label>
+                    <input type="text" id="test-auth-login" value="admin">
+                </div>
+                <div class="form-group">
+                    <label>Пароль</label>
+                    <input type="password" id="test-auth-password" placeholder="Введите пароль...">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeModal('modal-test-auth')">Отмена</button>
+                <button class="btn btn-primary" id="btn-test-auth" onclick="submitTestAuth()">Проверить и сохранить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== МОДАЛКА: ПРОГРЕСС VPS ==================== -->
+    <div class="modal-overlay" id="modal-vps-progress">
+        <div class="modal" style="width: 600px; max-width: 95%">
+            <div class="modal-header">
+                <h3>Задача VPS</h3>
+                <button class="btn btn-icon btn-sm" onclick="closeModal('modal-vps-progress')">✕</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="vps-progress-name" value="">
+                <pre id="vps-progress-log">Запуск процесса...</pre>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeModal('modal-vps-progress')">Закрыть</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== МОДАЛКА: Подтверждение (Confirm) ==================== -->
+    <div class="modal-overlay" id="modal-confirm" style="z-index: 10005;">
+        <div class="modal" style="width: 420px; max-width: 95%">
+            <div class="modal-header">
+                <h3 id="confirm-title">Подтверждение</h3>
+                <button class="btn btn-icon btn-sm" onclick="closeModal('modal-confirm')">✕</button>
+            </div>
+            <div class="modal-body">
+                <p id="confirm-message" style="margin-bottom: 8px;">Вы уверены?</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" id="btn-confirm-no" onclick="closeModal('modal-confirm')">Отмена</button>
+                <button class="btn btn-primary" id="btn-confirm-yes">Да</button>
+            </div>
+        </div>
+    </div>
+
     <!-- ==================== МОДАЛКА: Health Check ==================== -->
     <div class="modal-overlay" id="modal-health">
-        <div class="modal" style="max-width:600px">
+        <div class="modal" style="width: 600px; max-width: 95%">
             <div class="modal-header">
                 <h3 id="health-title">Health Check</h3>
                 <button class="btn btn-icon btn-sm" onclick="closeModal('modal-health')">✕</button>
@@ -1231,7 +1248,7 @@
     </div>
 
     <!-- ==================== МОДАЛКА: ДЕПЛОЙ СЕРВИСА ==================== -->
-    <div class="modal-overlay" id="modal-deploy" style="display:none;">
+    <div class="modal-overlay" id="modal-deploy">
         <div class="modal" style="width: 600px; max-width: 95%">
             <div class="modal-header">
                 <h3 id="deploy-title">Деплой сервиса</h3>
@@ -1252,24 +1269,8 @@
         </div>
     </div>
 
-    <!-- ==================== МОДАЛКА: ПРОГРЕСС VPS ==================== -->
-    <div class="modal-overlay" id="modal-vps-progress">
-        <div class="modal" style="width: 600px; max-width: 95%">
-            <div class="modal-header">
-                <h3 id="vps-progress-title">Задача VPS</h3>
-            </div>
-            <div class="modal-body">
-                <input type="hidden" id="vps-progress-name" value="">
-                <pre id="vps-progress-log">Запуск процесса...</pre>
-            </div>
-            <div class="modal-footer">
-                <button class="btn" onclick="closeModal('modal-vps-progress')">Закрыть</button>
-            </div>
-        </div>
-    </div>
-
     <!-- ==================== МОДАЛКА: QR-код (v1.7.1-go) ==================== -->
-    <div class="modal-overlay" id="modal-qr" style="z-index: 10000;">
+    <div class="modal-overlay" id="modal-qr" style="z-index: 10010;">
         <div class="modal" style="width: 380px; text-align: center;">
             <div class="modal-header">
                 <h3 id="qr-modal-title">Настройка 2FA</h3>
@@ -1468,61 +1469,7 @@ document.addEventListener('touchend', e => {
 
 function closeModal(id) { document.getElementById(id).classList.remove('visible'); }
 function openModal(id) { document.getElementById(id).classList.add('visible'); }
-
-// --- TOTP Helpers (v1.7.0-go) ---
-function renderQR(containerId, url) {
-    const container = document.getElementById(containerId);
-    if (!container) return;
-    container.innerHTML = "";
-    new QRCode(container, {
-        text: url,
-        width: 128,
-        height: 128,
-        colorDark: "#000000",
-        colorLight: "#ffffff",
-        correctLevel: QRCode.CorrectLevel.H
-    });
-}
-
-function onTotpModeChange() {
-    const tMode = document.getElementById('f-totp-mode').value;
-    if (tMode === 'local') {
-        document.getElementById('totp-local-setup').style.display = 'block';
-    } else {
-        document.getElementById('totp-local-setup').style.display = 'none';
-        document.getElementById('totp-secret-display').textContent = '--';
-        document.getElementById('f-totp-url').value = '';
-        const qrContainer = document.getElementById('totp-qr-container');
-        if (qrContainer) qrContainer.innerHTML = '';
-    }
-}
-
-async function generateLocalTotp() {
-    const name = document.getElementById('f-name').value;
-    if (!name) { toast("Сначала укажите название сервиса", "warn"); return; }
-    try {
-        const res = await api('totp/setup', {method: 'POST', body: JSON.stringify({name})});
-        if (res.status === 'success') {
-            document.getElementById('totp-secret-display').textContent = res.secret;
-            renderQR('totp-qr-container', res.url);
-            toast("Новый ключ сгенерирован", "success");
-        }
-    } catch(e) { toast("Ошибка генерации TOTP", "error"); }
-}
-
-async function resetGlobalTotp() {
-    if (!(await confirmDialog("Сбросить глобальный ключ TOTP? \nВсе сервисы, использующие этот режим, потребуют новый код.", "Сброс 2FA", true, "Сбросить"))) return;
-    try {
-        const res = await api('settings/totp', {method: 'POST'});
-        if (res.status === 'success') {
-            document.getElementById('totp-global-secret').textContent = res.secret;
-            renderQR('totp-global-qr', res.url);
-            toast("Глобальный ключ обновлен", "success");
-        }
-    } catch(e) { toast("Ошибка сброса", "error"); }
-}
-
-// ========== Dropdown & System Actions ==========
+// ========== Сессии и Dropdown ==========
 function toggleDropdown(id, e) {
     if (e) e.stopPropagation();
     document.querySelectorAll('.dropdown-menu').forEach(d => {
@@ -1552,38 +1499,6 @@ function confirmDialog(msg, title='Подтверждение', isDanger=false, 
         
         openModal('modal-confirm');
     });
-}
-
-async function systemAction(act) {
-    let msg = '', title = '', isDanger = false, btnText = 'Выполнить';
-    if (act === 'restart') {
-        title = 'Перезапуск rProxy';
-        msg = 'Перезапустить все туннели и веб-интерфейс rProxy? \nСоединения кратковременно прервутся.';
-        btnText = 'Перезапустить';
-    }
-    if (act === 'reboot') {
-        title = 'Перезагрузка устройства';
-        msg = 'Внимание: Отправка команды reboot на маршрутизатор (Keenetic). \nВы уверены?';
-        isDanger = true;
-        btnText = 'Перезагрузить';
-    }
-    if (act === 'stop') {
-        title = 'Остановка rProxy';
-        msg = 'Остановить rProxy? \nВсе запущенные сервисы и туннели будут отключены.';
-        isDanger = true;
-        btnText = 'Остановить';
-    }
-    
-    if (!(await confirmDialog(msg, title, isDanger, btnText))) return;
-    
-    try {
-        await api('system/action', {method: 'POST', body: JSON.stringify({action: act})});
-        toast('Команда успешно отправлена', 'success');
-        if (act === 'reboot' || act === 'restart') {
-            toast('Ожидание перезапуска...', 'warn');
-            setTimeout(() => location.reload(), 4000);
-        }
-    } catch(e) {}
 }
 
 // ========== Сервисы ==========
@@ -1631,7 +1546,6 @@ function renderServices() {
     servicesData.forEach(s => {
         const isOn = s.status === 'online';
         const dotClass = isOn ? 'dot-online' : 'dot-offline';
-        const sslDisplay = s.ssl ? '<span class="badge badge-ssl" style="padding:2px 6px;">SSL</span>' : '';
         
         let domainDisplay = s.domain || '—';
         let url = '';
@@ -1710,7 +1624,7 @@ function renderServices() {
 }
 
 async function svcAction(name, action) {
-    if (runningTasks[name]) return; // Защита от дублей фоновой задачи
+    if (runningTasks[name]) return; 
 
     let msg = '', title = '', isDanger = false, btnText = 'Выполнить';
     if (action === 'start') {
@@ -1734,9 +1648,8 @@ async function svcAction(name, action) {
 
     if (action === 'redeploy_nginx' && !(await confirmDialog(msg, title, isDanger, btnText))) return;
 
-    // Инициализация фоновой задачи
     runningTasks[name] = { action: action, title: title, log: 'Запуск задачи...', lastLine: 'Запуск процесса...' };
-    renderServices(); // Скрываем кнопки, показываем бар загрузки карточки
+    renderServices();
 
     api(`action/${name}/${action}`, {method: 'POST'}).then((res) => {
         const interval = setInterval(async () => {
@@ -1748,15 +1661,12 @@ async function svcAction(name, action) {
                 const log = await api(`action/${name}/${action}/log`);
                 runningTasks[name].log = log;
                 
-                // Парсим последнюю непустую строку для инлайн-прогресса
                 const lines = log.split('\n').filter(l => l.trim().length > 0);
                 if (lines.length > 0) runningTasks[name].lastLine = lines[lines.length - 1];
                 
-                // Обновляем текст в карточке (без полного перерендера)
                 const textEl = document.getElementById(`progress-text-${name}`);
                 if (textEl) textEl.innerText = runningTasks[name].lastLine;
                 
-                // Если открыта модалка ИМЕННО для этого сервиса, обновляем и её
                 const modal = document.getElementById('modal-vps-progress');
                 const modalNameInput = document.getElementById('vps-progress-name');
                 if (modal && modal.classList.contains('visible') && modalNameInput && modalNameInput.value === name) {
@@ -1800,7 +1710,7 @@ async function svcDelete(name) {
     } catch(e) {}
 }
 
-// ========== Добавить сервис ==========
+// ========== Добавить/Редактировать сервис ==========
 let defaultAuthList = [];
 async function checkDefaultAuth() {
     if (defaultAuthList.length > 0) return;
@@ -1813,7 +1723,6 @@ async function checkDefaultAuth() {
 
 function renderAuthDropdown() {
     const list = document.getElementById('auth-dropdown');
-    // Оставляем заголовок
     list.innerHTML = '<div style="font-size:11px; color:var(--text3); margin: 0 6px 6px">Сохраненные данные:</div>';
     
     if (defaultAuthList.length === 0) {
@@ -1844,30 +1753,21 @@ function selectDefaultAuth(user, pass) {
     hideAuthDropdown();
 }
 
-
 function clearAuth() {
     document.getElementById('f-auth-user').value = '';
     document.getElementById('f-auth-pass').value = '';
 }
+
 function toggleAuthPass() {
     const p = document.getElementById('f-auth-pass');
-    const b = document.getElementById('toggle-pass-btn');
-    if (p.type === 'password') {
-        p.type = 'text';
-        b.style.color = 'var(--accent)';
-    } else {
-        p.type = 'password';
-        b.style.color = 'var(--text3)';
-    }
+    p.type = p.type === 'password' ? 'text' : 'password';
+    document.getElementById('toggle-pass-btn').style.color = p.type === 'text' ? 'var(--accent)' : 'var(--text3)';
 }
 
 async function checkDomainVps() {
     const domain = document.getElementById('f-domain').value.trim();
     const hint = document.getElementById('domain-hint');
-    if (!domain) {
-        hint.innerHTML = '';
-        return;
-    }
+    if (!domain) { hint.innerHTML = ''; return; }
     
     hint.innerHTML = 'Проверка...';
     hint.style.color = 'var(--text3)';
@@ -1880,7 +1780,7 @@ async function checkDomainVps() {
                 hint.innerHTML = `Домен указывает на ${res.ip}. Выбран VPS: ${vps.name}`;
                 hint.style.color = 'var(--green)';
             } else {
-                hint.innerHTML = `Домен указывает на ${res.ip}, но такого VPS у вас нет. <a href="#" onclick="closeModal('modal-add-service'); document.querySelector('[data-tab=vps]').click(); openModal('modal-add-vps');" style="color:var(--orange); text-decoration:underline;">Добавить?</a>`;
+                hint.innerHTML = `Домен указывает на ${res.ip}, но такого VPS у вас нет. <a href="#" onclick="closeModal('modal-add-service'); switchTab('vps'); openModal('modal-add-vps');" style="color:var(--orange); text-decoration:underline;">Добавить?</a>`;
                 hint.style.color = 'var(--orange)';
             }
         } else {
@@ -1904,14 +1804,11 @@ async function openAddService() {
     document.getElementById('f-edit-mode').value = 'false';
     document.getElementById('f-name').disabled = false;
     
-    // Очистка полей
     document.getElementById('f-name').value = '';
     document.getElementById('f-host').value = '127.0.0.1';
     document.getElementById('f-port').value = '';
     document.getElementById('f-domain').value = '';
-    document.getElementById('f-router-auth').value = 'no';
     
-    // Сброс состояния полей
     const u = document.getElementById('f-auth-user');
     const p = document.getElementById('f-auth-pass');
     if (u) { u.disabled = false; u.style.opacity = '1'; }
@@ -1922,7 +1819,6 @@ async function openAddService() {
     setCustomSelectValue('ssl-select-wrapper', 'yes');
     setCustomSelectValue('svc-auth-select-wrapper', 'no');
     
-    // TOTP Reset
     setCustomSelectValue('totp-select-wrapper', 'none');
     document.getElementById('f-totp-mode').value = 'none';
     document.getElementById('totp-local-setup').style.display = 'none';
@@ -1933,8 +1829,6 @@ async function openAddService() {
     document.getElementById('domain-hint').innerHTML = '';
 
     await checkDefaultAuth();
-    // Рендерим заранее или при показе
-    
     openModal('modal-add-service');
 }
 
@@ -1947,7 +1841,7 @@ async function editService(name) {
         document.getElementById('f-edit-mode').value = 'true';
         
         document.getElementById('f-name').value = s.name;
-        document.getElementById('f-name').disabled = false; 
+        document.getElementById('f-name').disabled = true; 
         
         setCustomSelectValue('type-select-wrapper', s.type);
         setCustomSelectValue('vps-select-wrapper', s.vps);
@@ -1956,10 +1850,8 @@ async function editService(name) {
         document.getElementById('f-port').value = s.target_port;
         document.getElementById('f-domain').value = s.domain;
         document.getElementById('f-ext-port').value = s.ext_port;
-        const isRouter = s.router_auth === 'yes';
-        document.getElementById('f-router-auth').value = isRouter ? 'yes' : 'no';
         
-        // Обновляем состояние полей
+        const isRouter = s.router_auth === 'yes';
         const u = document.getElementById('f-auth-user');
         const p = document.getElementById('f-auth-pass');
         if (u) { u.disabled = isRouter; u.style.opacity = isRouter ? '0.5' : '1'; }
@@ -1968,17 +1860,13 @@ async function editService(name) {
         setCustomSelectValue('ssl-select-wrapper', s.ssl);
         setCustomSelectValue('svc-auth-select-wrapper', s.router_auth || 'no');
         
-        // TOTP Load
         const tMode = s.totp_mode || 'none';
         setCustomSelectValue('totp-select-wrapper', tMode);
         document.getElementById('f-totp-mode').value = tMode;
         if (tMode === 'local') {
             document.getElementById('totp-local-setup').style.display = 'block';
             document.getElementById('totp-secret-display').textContent = s.totp_secret || '--';
-            if (s.totp_secret) {
-                const url = `otpauth://totp/rProxy:${s.name}?secret=${s.totp_secret}&issuer=rProxy`;
-                renderQR('totp-qr-container', url);
-            }
+            document.getElementById('f-totp-url').value = s.totp_url || '';
         } else {
             document.getElementById('totp-local-setup').style.display = 'none';
         }
@@ -1988,9 +1876,8 @@ async function editService(name) {
         document.getElementById('domain-hint').innerHTML = '';
         
         await checkDefaultAuth();
-        
         openModal('modal-add-service');
-        onTypeChange(); // Обновить состояние поля порта
+        onTypeChange();
     } catch(e) {
         toast('Ошибка получения данных сервиса', 'error');
     }
@@ -2000,21 +1887,28 @@ function onTypeChange() {
     const t = document.getElementById('f-type').value;
     const isSpecial = (t === 'ssh' || t === 'tcp' || t === 'udp');
     
-    // Скрытие групп
     const sslGrp = document.getElementById('ssl-group');
     const rAuthGrp = document.getElementById('router-auth-group');
     const bAuthGrp = document.getElementById('basic-auth-group');
+    const totpGrp = document.getElementById('totp-mode-group');
     
     if (sslGrp) sslGrp.style.display = isSpecial ? 'none' : 'block';
     if (rAuthGrp) rAuthGrp.style.display = isSpecial ? 'none' : 'block';
-    if (bAuthGrp) bAuthGrp.style.display = isSpecial ? 'none' : 'grid';
+    if (totpGrp) totpGrp.style.display = isSpecial ? 'none' : 'block';
+    
+    if (bAuthGrp) {
+        if (t === 'http') {
+            bAuthGrp.style.display = 'grid';
+        } else {
+            bAuthGrp.style.display = 'none';
+        }
+    }
 
     if (t === 'ttyd') {
         document.getElementById('f-host').value = '127.0.0.1';
-        document.getElementById('f-port').value = String(7682 + Math.floor(Math.random() * 100));
-        document.getElementById('f-port').disabled = true;
-    } else {
-        document.getElementById('f-port').disabled = false;
+        if (!document.getElementById('f-port').value) {
+             document.getElementById('f-port').value = String(7682 + Math.floor(Math.random() * 100));
+        }
     }
 }
 
@@ -2030,8 +1924,8 @@ async function submitAddService() {
         ext_port: document.getElementById('f-ext-port').value.trim(),
         ssl: document.getElementById('f-ssl').value,
         router_auth: document.getElementById('f-router-auth').value,
-        auth_user: document.getElementById('f-router-auth').value === 'yes' ? '' : document.getElementById('f-auth-user').value.trim(),
-        auth_pass: document.getElementById('f-router-auth').value === 'yes' ? '' : document.getElementById('f-auth-pass').value.trim(),
+        auth_user: document.getElementById('f-auth-user').value.trim(),
+        auth_pass: document.getElementById('f-auth-pass').value.trim(),
         totp_mode: document.getElementById('f-totp-mode').value,
         totp_secret: document.getElementById('totp-secret-display').textContent === '--' ? '' : document.getElementById('totp-secret-display').textContent
     };
@@ -2040,19 +1934,15 @@ async function submitAddService() {
     if (!data.target_port) { toast('Укажите порт цели','error'); return; }
 
     try {
+        await api('services' + (isEdit ? '/' + data.name : ''), {
+            method:'POST', 
+            body: JSON.stringify(data)
+        });
+        closeModal('modal-add-service');
         if (isEdit) {
-            const oldName = document.getElementById('modal-service-title').textContent.split(': ')[1];
-            await api(`services/${oldName}`, {method:'POST', body: JSON.stringify(data)});
-            closeModal('modal-add-service');
-            
             toast('Настройки сохранены', 'success');
-            setTimeout(() => startDeploy(data.name), 300);
+            refreshAll();
         } else {
-            // Шаг 1: Создаём конфиг
-            await api('services', {method:'POST', body: JSON.stringify(data)});
-            closeModal('modal-add-service');
-
-            // Шаг 2: Открываем модалку деплоя
             startDeploy(data.name);
         }
     } catch(e) {
@@ -2072,10 +1962,8 @@ function startDeploy(name) {
     document.getElementById('deploy-footer').style.display = 'none';
     document.getElementById('modal-deploy').style.display = 'flex';
 
-    // Запуск деплоя
     api(`services/${name}/deploy`, {method:'POST'}).catch(() => {});
 
-    // Поллинг логов
     let step = 0;
     deployLogTimer = setInterval(async () => {
         step++;
@@ -2087,7 +1975,6 @@ function startDeploy(name) {
                 el.scrollTop = el.scrollHeight;
             }
 
-            // Прогрессбар: плавно растёт
             const pct = Math.min(10 + step * 5, 90);
             document.getElementById('deploy-progress').style.width = pct + '%';
 

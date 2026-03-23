@@ -224,7 +224,7 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 			sid := cookie.Value
 			if core.IsSessionValid(sid) {
 				// [v1.7.0-go] Проверка TOTP для конкретного домена
-				host := strings.Split(r.Host, ":")[0]
+				host := r.Host
 				svcCfg := core.GetServiceByDomain(host)
 				
 				if svcCfg != nil {
@@ -262,7 +262,7 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 		var data map[string]string
 		json.NewDecoder(r.Body).Decode(&data)
 		code := data["code"]
-		host := strings.Split(r.Host, ":")[0]
+		host := r.Host
 		
 		svcCfg := core.GetServiceByDomain(host)
 		// Если svcCfg == nil, это обращение к панели управления (Dashboard)

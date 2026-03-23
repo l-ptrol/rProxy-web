@@ -299,6 +299,8 @@ func GetServiceByDomain(host string) map[string]string {
 		return nil
 	}
 
+	var fallbackCfg map[string]string
+
 	for _, e := range entries {
 		if strings.HasSuffix(e.Name(), ".conf") {
 			path := filepath.Join(ServicesDir, e.Name())
@@ -311,18 +313,20 @@ func GetServiceByDomain(host string) map[string]string {
 			}
 
 			if cfgDomain == domain {
-				// Если порт не указан в Host, считаем его 80 или 443
-				if port == "" {
-					if cfgPort == "80" || cfgPort == "443" {
-						return cfg
-					}
-				} else if cfgPort == port {
+				// Если есть полное совпадение домена и порта — возвращаем сразу
+				if port != "" && cfgPort == port {
 					return cfg
 				}
+				// Если порт не указан в Host, и конфиг на 80/443 — это тоже точное совпадение
+				if port == "" && (cfgPort == "80" || cfgPort == "443") {
+					return cfg
+				}
+				// В противном случае запоминаем как возможный вариант, но продолжаем поиск точного совпадения
+				fallbackCfg = cfg
 			}
 		}
 	}
-	return nil
+	return fallbackCfg
 }
 
 func ListServiceConfigs(servicesDir string) []string {
