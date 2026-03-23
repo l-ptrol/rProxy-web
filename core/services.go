@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -105,22 +106,7 @@ func httpProxyConf(name, domain, localPort, extPort, authUser string, useSSL boo
     # Редирект на логин при 401 Unauthorized
     location @rproxy_login {
         return 302 $scheme://$http_host/login?next=$scheme://$http_host$request_uri;
-    }
-
-    # Поддержка валидации для acme.sh (SSL на IP)
-    location ~ ^/.well-known/acme-challenge/ {
-        auth_request off;
-        allow all;
-        root /var/www/letsencrypt;
     }`, apiTunnelPort, apiTunnelPort, apiTunnelPort)
-	} else {
-		// Даже если авторизация выключена, нам нужен проброс для валидации SSL на IP
-		authHelpers = `
-    location ~ ^/.well-known/acme-challenge/ {
-        auth_request off;
-        allow all;
-        root /var/www/letsencrypt;
-    }`
 	}
 
 	listen80 := ""
@@ -129,15 +115,7 @@ func httpProxyConf(name, domain, localPort, extPort, authUser string, useSSL boo
 server {
     listen 80;
     server_name %s;
-
-    location ~ ^/.well-known/acme-challenge/ {
-        allow all;
-        root /var/www/letsencrypt;
-    }
-
-    location / {
-        return 301 https://$host$request_uri;
-    }
+    return 301 https://$host$request_uri;
 }`, domain)
 	}
 
@@ -148,20 +126,20 @@ server {
 
 	sslConfig := ""
 	if useSSL {
-		isIP := strings.Contains(domain, ".") && !strings.ContainsAny(domain, "abcdefghijklmnopqrstuvwxyz")
 		certPath := fmt.Sprintf("/etc/letsencrypt/live/%s/fullchain.pem", domain)
 		keyPath := fmt.Sprintf("/etc/letsencrypt/live/%s/privkey.pem", domain)
 		
-		if isIP {
-			certPath = fmt.Sprintf("/etc/nginx/ssl/rproxy_%s.crt", domain)
-			keyPath = fmt.Sprintf("/etc/nginx/ssl/rproxy_%s.key", domain)
+		// Если это IP-адрес, используем кастомные пути от acme.sh (bashdays.ru)
+		if regexp.MustCompile(`^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$`).MatchString(domain) {
+			certPath = fmt.Sprintf("/etc/nginx/ssl/%s.crt", domain)
+			keyPath = fmt.Sprintf("/etc/nginx/ssl/%s.key", domain)
 		}
 
 		sslConfig = fmt.Sprintf(`
     ssl_certificate %s;
     ssl_certificate_key %s;
-    include /etc/letsencrypt/options-ssl-nginx.conf;
-    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
     `, certPath, keyPath)
 	}
 
