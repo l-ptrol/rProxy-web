@@ -360,7 +360,7 @@ func HealthCheck(vpsCfg map[string]string) map[string]interface{} {
 				// 2. Получаем РЕАЛЬНУЮ дату истечения (Expiry) через openssl на VPS
 				crtPath := fmt.Sprintf("/etc/nginx/ssl/%s.crt", domain)
 				checkCmd := fmt.Sprintf("openssl x509 -enddate -noout -in %s", crtPath)
-				out, _ := vps.Execute(checkCmd)
+				_, out := RunRemoteSimple(vpsCfg, checkCmd)
 				// Output format: notAfter=Jun 21 16:11:01 2026 GMT
 				if strings.Contains(out, "notAfter=") {
 					rawDate := strings.TrimSpace(strings.Split(out, "=")[1])
