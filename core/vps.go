@@ -249,7 +249,8 @@ func RunCertbot(vpsCfg map[string]string, domain string) (bool, string) {
 		RunRemoteSimple(vpsCfg, setupCmd)
 
 		// 2. Выпуск и установка (используем --nginx для автоматизации валидации)
-		cmd := fmt.Sprintf("%s --issue --nginx -d %s --certificate-profile shortlived --days 3 --force && mkdir -p /etc/nginx/ssl && %s --install-cert -d %s --key-file /etc/nginx/ssl/%s.key --fullchain-file /etc/nginx/ssl/%s.crt --reloadcmd 'systemctl reload nginx'", acmePath, domain, acmePath, domain, domain, domain)
+		// Явно указываем --server letsencrypt, так как ZeroSSL (дефолт в v3+) не поддерживает IP
+		cmd := fmt.Sprintf("%s --issue --nginx --server letsencrypt -d %s --certificate-profile shortlived --days 3 --force && mkdir -p /etc/nginx/ssl && %s --install-cert -d %s --key-file /etc/nginx/ssl/%s.key --fullchain-file /etc/nginx/ssl/%s.crt --reloadcmd 'systemctl reload nginx'", acmePath, domain, acmePath, domain, domain, domain)
 		return RunRemote(vpsCfg, cmd, 300*time.Second)
 	}
 
