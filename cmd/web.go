@@ -74,34 +74,34 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 		fullHost := r.Host
 		svcCfg := core.GetServiceByDomain(fullHost)
 
-		isRouterAuth := true
+		gPath := filepath.Join(core.RProxyRoot, "rproxy.conf")
+		gCfg := core.LoadConfig(gPath)
+
+		isRouterAuth := false
+		loginRequired := false
 		expectedUser := ""
 		expectedPass := ""
 
 		if svcCfg != nil {
-			if svcCfg["SVC_ROUTER_AUTH"] != "yes" && svcCfg["SVC_AUTH_USER"] != "" {
+			if svcCfg["SVC_ROUTER_AUTH"] == "yes" {
+				isRouterAuth = true
+				loginRequired = true
+			} else if svcCfg["SVC_AUTH_USER"] != "" {
 				isRouterAuth = false
+				loginRequired = true
 				expectedUser = svcCfg["SVC_AUTH_USER"]
 				expectedPass = svcCfg["SVC_AUTH_PASS"]
 			}
 		} else {
-			fmt.Printf("[AUTH] No config found for host: %s (RemoteAddr: %s)\n", fullHost, r.RemoteAddr)
+			// Для самой панели управления — проверяем глобальные настройки
+			if gCfg["ROUTER_AUTH"] == "yes" {
+				isRouterAuth = true
+				loginRequired = true
+			}
 		}
 
 		ok := false
 		var err error
-
-		gPath := filepath.Join(core.RProxyRoot, "rproxy.conf")
-		gCfg := core.LoadConfig(gPath)
-
-		loginRequired := true
-		if svcCfg != nil {
-			if svcCfg["SVC_ROUTER_AUTH"] != "yes" && svcCfg["SVC_AUTH_USER"] == "" {
-				loginRequired = false
-			}
-		} else if gCfg["ROUTER_AUTH"] != "yes" {
-			loginRequired = false
-		}
 
 		if loginRequired {
 			if isRouterAuth {
@@ -221,21 +221,21 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 		host := r.Host
 		svcCfg := core.GetServiceByDomain(host)
 
-		loginRequired := true
+		loginRequired := false
 		totpRequired := false
 
 		gCfg := core.LoadConfig(filepath.Join(core.RProxyRoot, "rproxy.conf"))
 
 		if svcCfg != nil {
-			if svcCfg["SVC_ROUTER_AUTH"] != "yes" && svcCfg["SVC_AUTH_USER"] == "" {
-				loginRequired = false
+			if svcCfg["SVC_ROUTER_AUTH"] == "yes" || svcCfg["SVC_AUTH_USER"] != "" {
+				loginRequired = true
 			}
 			if svcCfg["SVC_TOTP_MODE"] != "" && svcCfg["SVC_TOTP_MODE"] != "none" {
 				totpRequired = true
 			}
 		} else {
-			if gCfg["ROUTER_AUTH"] != "yes" {
-				loginRequired = false
+			if gCfg["ROUTER_AUTH"] == "yes" {
+				loginRequired = true
 			}
 			if gCfg["GLOBAL_TOTP_SECRET"] != "" {
 				totpRequired = true
@@ -255,14 +255,14 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 		
 		gCfg := core.LoadConfig(filepath.Join(core.RProxyRoot, "rproxy.conf"))
 
-		loginRequired := true
+		loginRequired := false
 		if svcCfg != nil {
-			if svcCfg["SVC_ROUTER_AUTH"] != "yes" && svcCfg["SVC_AUTH_USER"] == "" {
-				loginRequired = false
+			if svcCfg["SVC_ROUTER_AUTH"] == "yes" || svcCfg["SVC_AUTH_USER"] != "" {
+				loginRequired = true
 			}
 		} else {
-			if gCfg["ROUTER_AUTH"] != "yes" {
-				loginRequired = false
+			if gCfg["ROUTER_AUTH"] == "yes" {
+				loginRequired = true
 			}
 		}
 
