@@ -263,9 +263,30 @@
         const totpBtn = document.getElementById('totp-btn');
         const errorBox = document.getElementById('error-msg');
         
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             submitBtn.disabled = false;
             submitBtn.querySelector('.btn-text').textContent = 'Войти';
+            
+            // Проверка требований авторизации (v1.8.6-go)
+            try {
+                const r = await fetch('/api/auth/requirements');
+                const config = await r.json();
+                
+                if (config.login_required === false && config.totp_required === true) {
+                    // Если логин не нужен, но нужен TOTP — инициируем «вход» без пароля
+                    const response = await fetch('/api/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ login: '', password: '' })
+                    });
+                    const data = await response.json();
+                    if (data.status === 'totp_required') {
+                        document.getElementById('login-stage').style.display = 'none';
+                        document.getElementById('totp-stage').style.display = 'block';
+                        document.getElementById('totp-code').focus();
+                    }
+                }
+            } catch (e) { console.error('Auth requirements check failed', e); }
         });
 
         const showError = (msg) => {

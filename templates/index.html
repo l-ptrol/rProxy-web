@@ -1960,10 +1960,8 @@ async function submitAddService() {
         closeModal('modal-add-service');
         if (isEdit) {
             toast('Настройки сохранены', 'success');
-            refreshAll();
-        } else {
-            startDeploy(data.name);
         }
+        startDeploy(data.name);
     } catch(e) {
         toast('Ошибка: ' + (e.message || e), 'error');
     }

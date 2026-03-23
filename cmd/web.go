@@ -94,47 +94,48 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 		gPath := filepath.Join(core.RProxyRoot, "rproxy.conf")
 		gCfg := core.LoadConfig(gPath)
 
-		if isRouterAuth {
-			// Авторизация через Keenetic
-			// Приоритет: rproxy.conf -> Автоопределение (GetRouterIP) -> 192.168.1.1
-			routerIP := gCfg["ROUTER_AUTH_IP"]
-			if routerIP == "" {
-				routerIP = core.GetRouterIP()
+		loginRequired := true
+		if svcCfg != nil {
+			if svcCfg["SVC_ROUTER_AUTH"] != "yes" && svcCfg["SVC_AUTH_USER"] == "" {
+				loginRequired = false
 			}
-			
-			fmt.Printf("[AUTH] Using Router Auth (IP: %s) for host: %s\n", routerIP, fullHost)
-			ok, err = core.KeeneticAuth(routerIP, login, password)
-		} else {
-			// Обычная авторизация по паролю из конфига сервиса
-			fmt.Printf("[AUTH] Using Local Auth for host: %s (User: %s)\n", fullHost, expectedUser)
-			if login == expectedUser && password == expectedPass {
-				ok = true
+		} else if gCfg["ROUTER_AUTH"] != "yes" {
+			loginRequired = false
+		}
+
+		if loginRequired {
+			if isRouterAuth {
+				routerIP := gCfg["ROUTER_AUTH_IP"]
+				if routerIP == "" {
+					routerIP = core.GetRouterIP()
+				}
+				fmt.Printf("[AUTH] Using Router Auth (IP: %s) for host: %s\n", routerIP, fullHost)
+				ok, err = core.KeeneticAuth(routerIP, login, password)
 			} else {
-				errMsg := "Неверный логин или пароль для сервиса"
-				jsonResponse(w, map[string]string{"status": "error", "message": errMsg})
-				core.RecordAttempt(ip)
-				return
+				fmt.Printf("[AUTH] Using Local Auth for host: %s (User: %s)\n", fullHost, expectedUser)
+				if login == expectedUser && password == expectedPass {
+					ok = true
+				}
 			}
+		} else {
+			// Если логин не требуется — разрешаем вход для TOTP фазы
+			fmt.Printf("[AUTH] Skipping login phase for host: %s\n", fullHost)
+			ok = true
 		}
 
 		if ok {
-			// Успешная авторизация по паролю/роутеру
 			sid := core.CreateSession()
 			core.ClearAttempts(ip)
 			
-			// Проверяем, нужен ли еще TOTP (v1.8.0-go)
+			// Проверяем TOTP
 			totpRequired := false
 			if svcCfg != nil {
 				totpMode := svcCfg["SVC_TOTP_MODE"]
 				if totpMode != "" && totpMode != "none" {
 					totpRequired = true
 				}
-			} else {
-				// Если заходим в саму панель (по IP или основному домену)
-				// и включена любая авторизация — проверяем глобальный TOTP
-				if gCfg["GLOBAL_TOTP_SECRET"] != "" {
-					totpRequired = true
-				}
+			} else if gCfg["GLOBAL_TOTP_SECRET"] != "" {
+				totpRequired = true
 			}
 
 			hostParts := strings.Split(host, ".")
@@ -153,16 +154,14 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 			})
 
 			if totpRequired {
-				fmt.Printf("[LOGIN] Phase 1 OK, TOTP required for %s on %s\n", login, host)
+				fmt.Printf("[LOGIN] Phase 1 OK, TOTP required for %s\n", host)
 				jsonResponse(w, map[string]string{"status": "totp_required"})
 			} else {
-				// Если TOTP не нужен, сразу помечаем как проверенный для этого домена
 				core.SetTotpVerified(sid, host)
-				fmt.Printf("[LOGIN] Complete success for %s on %s\n", login, host)
+				fmt.Printf("[LOGIN] Complete success for %s\n", host)
 				jsonResponse(w, map[string]string{"status": "success"})
 			}
 		} else {
-			// Неудачная попытка
 			core.RecordAttempt(ip)
 			errMsg := "Неверный логин или пароль"
 			if err != nil {
@@ -218,15 +217,58 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 		jsonResponse(w, map[string]string{"status": "success"})
 	})
 
+	mux.HandleFunc("/api/auth/requirements", func(w http.ResponseWriter, r *http.Request) {
+		host := r.Host
+		svcCfg := core.GetServiceByDomain(host)
+
+		loginRequired := true
+		totpRequired := false
+
+		gCfg := core.LoadConfig(filepath.Join(core.RProxyRoot, "rproxy.conf"))
+
+		if svcCfg != nil {
+			if svcCfg["SVC_ROUTER_AUTH"] != "yes" && svcCfg["SVC_AUTH_USER"] == "" {
+				loginRequired = false
+			}
+			if svcCfg["SVC_TOTP_MODE"] != "" && svcCfg["SVC_TOTP_MODE"] != "none" {
+				totpRequired = true
+			}
+		} else {
+			if gCfg["ROUTER_AUTH"] != "yes" {
+				loginRequired = false
+			}
+			if gCfg["GLOBAL_TOTP_SECRET"] != "" {
+				totpRequired = true
+			}
+		}
+
+		jsonResponse(w, map[string]interface{}{
+			"login_required": loginRequired,
+			"totp_required":  totpRequired,
+		})
+	})
+
 	mux.HandleFunc("/api/verify", func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie("rproxy_session")
+		host := r.Host
+		svcCfg := core.GetServiceByDomain(host)
+		
+		gCfg := core.LoadConfig(filepath.Join(core.RProxyRoot, "rproxy.conf"))
+
+		loginRequired := true
+		if svcCfg != nil {
+			if svcCfg["SVC_ROUTER_AUTH"] != "yes" && svcCfg["SVC_AUTH_USER"] == "" {
+				loginRequired = false
+			}
+		} else {
+			if gCfg["ROUTER_AUTH"] != "yes" {
+				loginRequired = false
+			}
+		}
+
 		if err == nil {
 			sid := cookie.Value
 			if core.IsSessionValid(sid) {
-				// [v1.7.0-go] Проверка TOTP для конкретного домена
-				host := r.Host
-				svcCfg := core.GetServiceByDomain(host)
-				
 				if svcCfg != nil {
 					totpMode := svcCfg["SVC_TOTP_MODE"]
 					if totpMode != "" && totpMode != "none" {
@@ -236,13 +278,33 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 							return
 						}
 					}
+				} else {
+					if gCfg["GLOBAL_TOTP_SECRET"] != "" {
+						if !core.IsTotpVerified(sid, host) {
+							http.Error(w, "Unauthorized (Global TOTP Required)", http.StatusUnauthorized)
+							return
+						}
+					}
 				}
-
 				w.WriteHeader(http.StatusOK)
 				return
 			}
-			fmt.Printf("[AUTH] FAIL: session not found/expired: %s\n", sid)
 		}
+
+		totpRequired := false
+		if svcCfg != nil {
+			if svcCfg["SVC_TOTP_MODE"] != "" && svcCfg["SVC_TOTP_MODE"] != "none" {
+				totpRequired = true
+			}
+		} else if gCfg["GLOBAL_TOTP_SECRET"] != "" {
+			totpRequired = true
+		}
+
+		if !loginRequired && !totpRequired {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 	})
 
