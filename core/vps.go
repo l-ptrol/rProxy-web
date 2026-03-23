@@ -242,22 +242,28 @@ func RunCertbot(vpsCfg map[string]string, domain string) (bool, string) {
 	isIP := regexp.MustCompile(`^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$`).MatchString(domain)
 
 	if isIP {
-		// Для IP адресов используем acme.sh с профилем shortlived (v1.4.2-go)
-		// 1. Гарантируем наличие acme.sh (на случай если Setup VPS не запускали)
-		RunRemoteSimple(vpsCfg, "if [ ! -f ~/.acme.sh/acme.sh ]; then curl https://get.acme.sh | sh -s email=rproxy-ssl@$(hostname); fi")
+		// Для IP адресов используем acme.sh с профилем shortlived (v1.4.3-go)
+		// 1. Поиск или установка acme.sh
+		acmePath := "~/.acme.sh/acme.sh"
+		checkCmd := "if [ -f ~/.acme.sh/acme.sh ]; then echo 'OK'; else if curl -s https://get.acme.sh | sh -s email=rproxy-ssl@$(hostname); then echo 'INSTALLED'; else echo 'FAIL'; fi; fi"
+		
+		ok, output := RunRemoteSimple(vpsCfg, checkCmd)
+		if !ok || strings.Contains(output, "FAIL") {
+			return false, "Не удалось найти или установить acme.sh на VPS: " + output
+		}
 		
 		// 2. Предварительная очистка для предотвращения конфликтов
-		RunRemoteSimple(vpsCfg, fmt.Sprintf("rm -rf ~/.acme.sh/%s", domain))
+		RunRemoteSimple(vpsCfg, fmt.Sprintf("%s --remove -d %s || true; rm -rf ~/.acme.sh/%s", acmePath, domain, domain))
 		
 		// 3. Выпуск через acme.sh (Let's Encrypt поддерживает IP только в shortlived режиме)
-		acmeCmd := fmt.Sprintf("~/.acme.sh/acme.sh --issue --server letsencrypt -d %s -w /var/www/letsencrypt --certificate-profile shortlived --days 3 --force", domain)
-		ok, output := RunRemote(vpsCfg, acmeCmd, 180*time.Second)
+		acmeCmd := fmt.Sprintf("%s --issue --server letsencrypt -d %s -w /var/www/letsencrypt --certificate-profile shortlived --days 3 --force", acmePath, domain)
+		ok, output = RunRemote(vpsCfg, acmeCmd, 180*time.Second)
 		if !ok {
 			return false, "acme.sh issue failed: " + output
 		}
 		
-		// 3. Установка сертификата в стандартное место rProxy
-		installCmd := fmt.Sprintf("~/.acme.sh/acme.sh --install-cert -d %s --key-file /etc/nginx/ssl/rproxy_%s.key --fullchain-file /etc/nginx/ssl/rproxy_%s.crt --reloadcmd 'systemctl reload nginx'", domain, domain, domain)
+		// 4. Установка сертификата в стандартное место rProxy
+		installCmd := fmt.Sprintf("%s --install-cert -d %s --key-file /etc/nginx/ssl/rproxy_%s.key --fullchain-file /etc/nginx/ssl/rproxy_%s.crt --reloadcmd 'systemctl reload nginx'", acmePath, domain, domain, domain)
 		return RunRemoteSimple(vpsCfg, installCmd)
 	}
 
