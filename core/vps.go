@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -77,7 +78,7 @@ func RunRemote(vpsCfg map[string]string, command string, timeout time.Duration) 
 	cmd.Env = GetProcessEnv()
 
 	outBytes, err := cmd.CombinedOutput()
-	output := strings.TrimSpace(string(outBytes))
+	output := filterSSHOutput(strings.TrimSpace(string(outBytes)))
 
 	if ctx.Err() == context.DeadlineExceeded {
 		return false, "Превышено время ожидания SSH"
@@ -122,13 +123,22 @@ func FindVPSByDomain(domain string) string {
 	return ""
 }
 
-// SetupVPS выполняет первичную настройку окружения на удаленном VPS (v1.5.0-go)
+// SetupVPS выполняет первичную настройку окружения на удаленном VPS (v1.9.3-go)
 func SetupVPS(vpsCfg map[string]string) (bool, string) {
-	setupScript := `
+	// Берём email для acme.sh из глобальных настроек
+	gPath := filepath.Join(RProxyRoot, "rproxy.conf")
+	gCfg := LoadConfig(gPath)
+	acmeEmail := gCfg["ACME_EMAIL"]
+	if acmeEmail == "" {
+		acmeEmail = "admin@example.com"
+	}
+
+	setupScript := fmt.Sprintf(`
 export DEBIAN_FRONTEND=noninteractive
 mkdir -p /etc/nginx/sites-enabled
 mkdir -p /etc/nginx/streams-enabled
 mkdir -p /etc/nginx/ssl
+chmod 755 /etc/nginx/ssl
 
 if command -v apt-get >/dev/null 2>&1; then
     apt-get update -qq && apt-get install -y -qq nginx libnginx-mod-stream psmisc socat curl cron
@@ -136,9 +146,36 @@ elif command -v yum >/dev/null 2>&1; then
     yum install -y epel-release && yum install -y nginx nginx-mod-stream psmisc socat curl cron
 fi
 
-# Установка acme.sh для всех типов сертификатов
+# Открытие портов 80 и 443 в брандмауэре для получения SSL
+if command -v ufw >/dev/null 2>&1; then
+    ufw allow 80/tcp || true
+    ufw allow 443/tcp || true
+    ufw reload || true
+elif command -v firewall-cmd >/dev/null 2>&1; then
+    firewall-cmd --permanent --add-service=http || true
+    firewall-cmd --permanent --add-service=https || true
+    firewall-cmd --reload || true
+fi
+iptables -I INPUT -p tcp --dport 80 -j ACCEPT 2>/dev/null || true
+iptables -I INPUT -p tcp --dport 443 -j ACCEPT 2>/dev/null || true
+
+# Удаляем стандартный конфиг Nginx, чтобы избежать конфликта default_server
+rm -f /etc/nginx/sites-enabled/default
+
+# Настройка default server для блокировки левых доменов (Best Practice)
+cat <<EOF > /etc/nginx/sites-enabled/00-default.conf
+server {
+    listen 80 default_server;
+    server_name _;
+    access_log off;
+    log_not_found off;
+    return 444; 
+}
+EOF
+
+# Установка acme.sh (Pattern: rProxy-web)
 if [ ! -f ~/.acme.sh/acme.sh ]; then
-    curl -sL https://get.acme.sh | sh -s email=admin@$(hostname -I | awk '{print $1}') --force || true
+    curl -sL https://get.acme.sh | sh -s email=%s --force || true
 fi
 
 grep -q 'sites-enabled' /etc/nginx/nginx.conf || sed -i '/http {/a\    include /etc/nginx/sites-enabled/*.conf;' /etc/nginx/nginx.conf
@@ -156,15 +193,19 @@ systemctl enable nginx && systemctl restart nginx
 sed -i 's/^#*GatewayPorts.*/GatewayPorts yes/' /etc/ssh/sshd_config
 sed -i 's/^#*AllowTcpForwarding.*/AllowTcpForwarding yes/' /etc/ssh/sshd_config
 systemctl restart ssh || systemctl restart sshd
-`
+`, acmeEmail)
 	Msg(fmt.Sprintf("Настройка окружения на VPS %s...", vpsCfg["VPS_HOST"]))
 	return RunRemote(vpsCfg, setupScript, 300*time.Second)
 }
 
-// CheckSSLExists проверяет наличие SSL сертификата для домена на VPS (v1.5.0-go)
+// CheckSSLExists проверяет наличие SSL сертификата для домена на VPS (v1.9.3-go)
 func CheckSSLExists(vpsCfg map[string]string, domain string) bool {
-	// Проверяем единый путь в /etc/nginx/ssl
-	success, _ := RunRemoteSimple(vpsCfg, fmt.Sprintf("[ -f /etc/nginx/ssl/%s.crt ]", domain))
+	// Проверяем наличие, размер файлов сертификата/ключа и валидность самого сертификата через openssl
+	checkCmd := fmt.Sprintf(
+		"[ -s /etc/nginx/ssl/%[1]s.crt ] && [ -s /etc/nginx/ssl/%[1]s.key ] && openssl x509 -in /etc/nginx/ssl/%[1]s.crt -noout 2>/dev/null",
+		domain,
+	)
+	success, _ := RunRemoteSimple(vpsCfg, checkCmd)
 	return success
 }
 
@@ -221,7 +262,13 @@ func DeployVhost(vpsCfg map[string]string, name, content, path string) (bool, st
 		return false, errMsg
 	}
 
-	return RunRemoteSimple(vpsCfg, "nginx -t && systemctl reload nginx")
+	cmd := "nginx -t && systemctl reload nginx"
+	if strings.Contains(path, "stream") {
+		// Для стрим-конфигов (TCP/UDP) требуется полный перезапуск и открытие портов в брандмауэре VPS
+		firewallCmd := "iptables -I INPUT -p tcp --dport 40000:50000 -j ACCEPT 2>/dev/null; (command -v ufw >/dev/null && ufw allow 40000:50000/tcp || true)"
+		cmd = fmt.Sprintf("%s; nginx -t && systemctl restart nginx", firewallCmd)
+	}
+	return RunRemoteSimple(vpsCfg, cmd)
 }
 
 // RemoveVhost удаляет конфиг Nginx с VPS
@@ -230,8 +277,9 @@ func RemoveVhost(vpsCfg map[string]string, name string) (bool, string) {
 	return RunRemoteSimple(vpsCfg, cmd)
 }
 
-// RunCertbot запускает выпуск SSL через acme.sh (v1.5.0-go)
+// RunCertbot запускает выпуск SSL через acme.sh в режиме --nginx (v1.9.3-go)
 func RunCertbot(vpsCfg map[string]string, domain string) (bool, string) {
+	domain = strings.TrimSpace(domain)
 	isIP := regexp.MustCompile(`^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$`).MatchString(domain)
 	acmePath := "$HOME/.acme.sh/acme.sh"
 
@@ -242,55 +290,207 @@ func RunCertbot(vpsCfg map[string]string, domain string) (bool, string) {
 	}
 
 	// Команда выпуска через acme.sh в режиме --nginx
-	// Мы всегда используем Let's Encrypt для стабильности (v1.5.0-go)
 	cmd := fmt.Sprintf("%s --issue --nginx --server letsencrypt -d %s %s --force", acmePath, domain, profile)
 	
-	// Команда установки сертификата в системную папку Nginx
-	installCmd := fmt.Sprintf("mkdir -p /etc/nginx/ssl && %s --install-cert -d %s --key-file /etc/nginx/ssl/%s.key --fullchain-file /etc/nginx/ssl/%s.crt --reloadcmd 'systemctl reload nginx'", acmePath, domain, domain, domain)
+	crtPath := fmt.Sprintf("/etc/nginx/ssl/%s.crt", domain)
+	keyPath := fmt.Sprintf("/etc/nginx/ssl/%s.key", domain)
+	
+	// Команда установки сертификата в системную папку Nginx с проверкой результата
+	verifyCmd := fmt.Sprintf("[ -f %s ] && [ -f %s ]", crtPath, keyPath)
+	installCmd := fmt.Sprintf("mkdir -p /etc/nginx/ssl && %s --install-cert -d %s --key-file %s --fullchain-file %s --reloadcmd 'systemctl reload nginx' && %s", acmePath, domain, keyPath, crtPath, verifyCmd)
 
-	fullCmd := fmt.Sprintf("%s && %s", cmd, installCmd)
-	return RunRemote(vpsCfg, fullCmd, 300*time.Second)
+	// Bash-скрипт с проверкой 80 и 443 портов, временным отключением конфликтующих служб и автозапуском Nginx
+	scriptTemplate := `bash -c '
+RESTORE_SERVICES=""
+restore() {
+    for s in $RESTORE_SERVICES; do
+        echo "▸ Восстановление службы $s..."
+        systemctl start "$s" || true
+    done
+}
+trap restore EXIT
+
+# 1. Открытие портов в брандмауэре перед выпуском
+if command -v ufw >/dev/null 2>&1; then
+    ufw allow 80/tcp || true
+    ufw allow 443/tcp || true
+    ufw reload || true
+elif command -v firewall-cmd >/dev/null 2>&1; then
+    firewall-cmd --permanent --add-service=http || true
+    firewall-cmd --permanent --add-service=https || true
+    firewall-cmd --reload || true
+fi
+iptables -I INPUT -p tcp --dport 80 -j ACCEPT 2>/dev/null || true
+iptables -I INPUT -p tcp --dport 443 -j ACCEPT 2>/dev/null || true
+
+# 2. Проверка, не заняты ли порты 80 и 443 сторонними процессами
+for port in 80 443; do
+    PORT_PID=""
+    if command -v ss >/dev/null 2>&1; then
+        PORT_PID=$(ss -tlnp sport = :$port 2>/dev/null | grep -oE "pid=[0-9]+" | cut -d= -f2 | head -n1)
+    elif command -v netstat >/dev/null 2>&1; then
+        PORT_PID=$(netstat -tlnp 2>/dev/null | grep -E ":$port\s" | grep -oE "[0-9]+/[-a-zA-Z0-9_]+" | cut -d/ -f1 | head -n1)
+    elif command -v lsof >/dev/null 2>&1; then
+        PORT_PID=$(lsof -t -i :$port 2>/dev/null | head -n1)
+    fi
+
+    if [ -n "$PORT_PID" ]; then
+        PROC_NAME=$(ps -p "$PORT_PID" -o comm= 2>/dev/null | xargs)
+        if [ "$PROC_NAME" != "nginx" ] && [ "$PROC_NAME" != "" ]; then
+            echo "⚠️ Порт $port занят сторонним процессом: $PROC_NAME (PID: $PORT_PID)"
+            UNIT=""
+            if [ -f "/proc/$PORT_PID/cgroup" ]; then
+                UNIT=$(cat "/proc/$PORT_PID/cgroup" 2>/dev/null | grep -oE "[^/]+\.service" | head -n1)
+            fi
+            if [ -z "$UNIT" ]; then
+                UNIT=$(systemctl status "$PORT_PID" 2>/dev/null | grep -oE "^[● ]* ([^ ]+\.service)" | head -n1 | sed "s/[● ]*//g")
+            fi
+            
+            if [ -n "$UNIT" ]; then
+                # Проверим, не добавили ли уже эту службу в список восстановления
+                if ! echo "$RESTORE_SERVICES" | grep -q "$UNIT"; then
+                    echo "▸ Временно останавливаем службу $UNIT на время выпуска SSL..."
+                    systemctl stop "$UNIT"
+                    RESTORE_SERVICES="$RESTORE_SERVICES $UNIT"
+                fi
+            else
+                echo "⚠️ Процесс $PROC_NAME не управляется systemd. Завершаем его принудительно (kill)..."
+                kill -9 "$PORT_PID" || true
+            fi
+        fi
+    fi
+done
+
+# Убедимся, что Nginx запущен
+if ! systemctl is-active nginx >/dev/null 2>&1; then
+    echo "▸ Запуск Nginx..."
+    systemctl start nginx || true
+fi
+
+# 3. Выпуск сертификата через acme.sh
+%s
+
+# 4. Установка сертификата
+%s
+'`
+
+	fullCmd := fmt.Sprintf(scriptTemplate, cmd, installCmd)
+	Msg(fmt.Sprintf("Выпуск SSL для %s (режим: nginx, IP: %v)...", domain, isIP))
+	
+	success, output := RunRemote(vpsCfg, fullCmd, 300*time.Second)
+	if success {
+		if CheckSSLExists(vpsCfg, domain) {
+			Msg(fmt.Sprintf("✅ SSL для %s успешно выпущен и установлен.", domain))
+			return true, output
+		} else {
+			return false, "Certbot сообщил об успехе, но файлы в /etc/nginx/ssl/ отсутствуют!"
+		}
+	}
+	return false, output
 }
 
-// CleanupVPS — умная очистка VPS от фантомных конфигов
+// CleanupVPS — умная очистка VPS от фантомных конфигов (v1.9.3-go)
 func CleanupVPS(vpsCfg map[string]string, activeServices []string) (bool, string) {
 	success, output := RunRemoteSimple(vpsCfg, "ls /etc/nginx/sites-enabled/rproxy_*.conf /etc/nginx/streams-enabled/rproxy_*.conf 2>/dev/null")
-	if !success || output == "" {
-		return true, "No files found for cleanup"
-	}
-
-	files := strings.Split(output, "\n")
+	
 	var deleted []string
 
-	for _, f := range files {
-		f = strings.TrimSpace(f)
-		if f == "" {
-			continue
-		}
-		base := filepath.Base(f)
-		sName := strings.TrimPrefix(base, "rproxy_")
-		sName = strings.TrimSuffix(sName, ".conf")
+	if success && output != "" {
+		files := strings.Split(output, "\n")
+		for _, f := range files {
+			f = strings.TrimSpace(f)
+			if f == "" || strings.Contains(f, "rproxy_dom_") {
+				continue // Групповые конфиги обрабатываем отдельно ниже
+			}
+			base := filepath.Base(f)
+			sName := strings.TrimPrefix(base, "rproxy_")
+			sName = strings.TrimSuffix(sName, ".conf")
 
-		// Проверяем, есть ли в списке активных
-		found := false
-		for _, active := range activeServices {
-			if active == sName {
-				found = true
-				break
+			// Проверяем, есть ли в списке активных
+			found := false
+			for _, active := range activeServices {
+				if active == sName {
+					found = true
+					break
+				}
+			}
+
+			if !found {
+				RunRemoteSimple(vpsCfg, fmt.Sprintf("rm -f %s", f))
+				deleted = append(deleted, base)
 			}
 		}
-
-		if !found {
-			RunRemoteSimple(vpsCfg, fmt.Sprintf("rm -f %s", f))
-			deleted = append(deleted, base)
-		}
 	}
+
+	// Очистка групповых доменных конфигов
+	CleanupOrphanDomainConfigs(vpsCfg)
 
 	if len(deleted) > 0 {
 		RunRemoteSimple(vpsCfg, "nginx -t && systemctl reload nginx")
-		return true, fmt.Sprintf("Deleted: %s", strings.Join(deleted, ", "))
+		return true, fmt.Sprintf("Очищено: %s", strings.Join(deleted, ", "))
 	}
-	return true, "VPS is clean"
+	return true, "VPS очищен"
+}
+
+// CleanupOrphanDomainConfigs — полная зачистка всех заброшенных доменных конфигов на VPS
+func CleanupOrphanDomainConfigs(vpsCfg map[string]string) {
+	vpsName := ""
+	// Находим имя VPS по его конфигу
+	entries, _ := os.ReadDir(VPSDir)
+	for _, e := range entries {
+		vCfg := LoadConfig(filepath.Join(VPSDir, e.Name()))
+		if vCfg["VPS_HOST"] == vpsCfg["VPS_HOST"] {
+			vpsName = strings.TrimSuffix(e.Name(), ".conf")
+			break
+		}
+	}
+	if vpsName == "" {
+		return
+	}
+
+	activePairs := GetAllActiveDomainPortPairs(vpsName)
+	
+	listCmd := "ls /etc/nginx/sites-enabled/rproxy_dom_*.conf 2>/dev/null"
+	if success, output := RunRemoteSimple(vpsCfg, listCmd); success && output != "" {
+		files := strings.Split(output, "\n")
+		for _, f := range files {
+			f = strings.TrimSpace(f)
+			if f == "" {
+				continue
+			}
+			
+			// Ищем соответствие (домен:порт) в активных парах
+			// Имя файла: /etc/nginx/sites-enabled/rproxy_dom_DOMAIN_ENCODED_PORT.conf
+			base := filepath.Base(f)
+			parts := strings.Split(strings.TrimSuffix(base, ".conf"), "_")
+			if len(parts) < 4 {
+				continue
+			}
+			
+			port := parts[len(parts)-1]
+			foundMatch := false
+			for pair := range activePairs {
+				pParts := strings.Split(pair, ":")
+				pDom := pParts[0]
+				pPort := pParts[1]
+				
+				if pPort == port {
+					safeDom := strings.ReplaceAll(pDom, ".", "_")
+					safeDom = strings.ReplaceAll(safeDom, "-", "_")
+					safeDom = strings.ReplaceAll(safeDom, " ", "_")
+					if strings.Contains(base, "rproxy_dom_"+safeDom+"_") {
+						foundMatch = true
+						break
+					}
+				}
+			}
+			
+			if _, err := strconv.Atoi(port); err == nil && !foundMatch {
+				Msg(fmt.Sprintf("Удаление заброшенного доменного конфига: %s", base))
+				RunRemoteSimple(vpsCfg, fmt.Sprintf("rm -f %s", f))
+			}
+		}
+	}
 }
 
 // HealthCheck выполняет проверку состояния VPS и SSL (v1.5.0-go)

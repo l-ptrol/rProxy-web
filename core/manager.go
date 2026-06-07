@@ -321,9 +321,16 @@ exec %s "$@"
 		} else if !fast {
 			useSSLFinal := hasCertificate && useSSL
 			Msg(fmt.Sprintf("Применение конфигурации Nginx (SSL: %v)...", useSSLFinal))
-			nginxConf := GenerateNginxConf(svcCfg, useSSLFinal)
-
-			success, output := DeployVhost(vpsCfg, name, nginxConf, nginxPath)
+			
+			var success bool
+			var output string
+			if IsHTTPType(svcType) {
+				success, output = DeployDomainConfig(svcCfg, vpsCfg, useSSLFinal)
+			} else {
+				nginxConf := GenerateNginxConf(svcCfg, useSSLFinal)
+				success, output = DeployVhost(vpsCfg, name, nginxConf, nginxPath)
+			}
+			
 			if !success {
 				Warn(fmt.Sprintf("Nginx reload warning: %s", output))
 			}
@@ -623,10 +630,17 @@ func RedeployNginx(svcCfg, vpsCfg map[string]string) bool {
 		hasCertificate = CheckSSLExists(vpsCfg, domain)
 	}
 
-	nginxConf := GenerateNginxConf(svcCfg, hasCertificate)
 	nginxPath := GetNginxPath(svcCfg["SVC_TYPE"])
 
-	success, output := DeployVhost(vpsCfg, name, nginxConf, nginxPath)
+	var success bool
+	var output string
+	if IsHTTPType(svcCfg["SVC_TYPE"]) {
+		success, output = DeployDomainConfig(svcCfg, vpsCfg, hasCertificate)
+	} else {
+		nginxConf := GenerateNginxConf(svcCfg, hasCertificate)
+		success, output = DeployVhost(vpsCfg, name, nginxConf, nginxPath)
+	}
+
 	if success {
 		Msg(fmt.Sprintf("Конфигурация Nginx для '%s' успешно обновлена.", name))
 		Msg("Принудительный перезапуск сервиса...")
@@ -637,6 +651,74 @@ func RedeployNginx(svcCfg, vpsCfg map[string]string) bool {
 		Err(fmt.Sprintf("Ошибка при обновлении Nginx: %s", output))
 	}
 	return success
+}
+
+// DeployDomainConfig — объединенный деплой Nginx для всех HTTP-сервисов на одном домене (v1.9.3-go)
+func DeployDomainConfig(svcCfg, vpsCfg map[string]string, useSSL bool) (bool, string) {
+	domain := svcCfg["SVC_DOMAIN"]
+	vps := svcCfg["SVC_VPS"]
+	extPort := svcCfg["SVC_EXT_PORT"]
+	if extPort == "" {
+		extPort = "80"
+	}
+
+	// Находим все HTTP-сервисы на этом домене
+	group := FindHTTPServicesForDomain(domain, vps, extPort)
+	if len(group) == 0 {
+		// Не нашли группу — деплоим одиночный конфиг
+		nginxConf := GenerateNginxConf(svcCfg, useSSL)
+		return DeployVhost(vpsCfg, svcCfg["SVC_NAME"], nginxConf, GetNginxPath(svcCfg["SVC_TYPE"]))
+	}
+
+	// Генерируем объединенный конфиг
+	combinedConf := GenerateCombinedHttpConf(group, useSSL)
+	domConfName := GetDomainConfName(domain, extPort)
+	nginxPath := "/etc/nginx/sites-enabled"
+
+	// Деплоим объединенный конфиг
+	success, output := DeployVhost(vpsCfg, domConfName, combinedConf, nginxPath)
+	if !success {
+		return false, output
+	}
+
+	// Очищаем старые per-service конфиги (они теперь заменены на доменный)
+	for _, svc := range group {
+		oldName := svc["SVC_NAME"]
+		RunRemoteSimple(vpsCfg, fmt.Sprintf("rm -f /etc/nginx/sites-enabled/rproxy_%s.conf", oldName))
+	}
+
+	// Очистка устаревших доменных файлов на VPS
+	safeDom := strings.ReplaceAll(domain, ".", "_")
+	safeDom = strings.ReplaceAll(safeDom, "-", "_")
+	safeDom = strings.ReplaceAll(safeDom, " ", "_")
+	
+	activePairs := GetAllActiveDomainPortPairs(vps)
+	
+	listCmd := fmt.Sprintf("ls /etc/nginx/sites-enabled/rproxy_dom_%s_*.conf 2>/dev/null", safeDom)
+	if success, output := RunRemoteSimple(vpsCfg, listCmd); success && output != "" {
+		files := strings.Split(output, "\n")
+		for _, f := range files {
+			f = strings.TrimSpace(f)
+			if f == "" || strings.HasSuffix(f, "_"+extPort+".conf") {
+				continue
+			}
+			
+			parts := strings.Split(strings.TrimSuffix(f, ".conf"), "_")
+			if len(parts) > 0 {
+				oldPort := parts[len(parts)-1]
+				if _, err := strconv.Atoi(oldPort); err == nil {
+					pairKey := fmt.Sprintf("%s:%s", domain, oldPort)
+					
+					if !activePairs[pairKey] {
+						Msg(fmt.Sprintf("Очистка устаревшего конфига домена: %s (порт: %s)", domain, oldPort))
+						RunRemoteSimple(vpsCfg, fmt.Sprintf("rm -f %s", f))
+					}
+				}
+			}
+		}
+	}
+
+	return true, ""
 }
 
 // RunCertbotForService — ручной запуск Certbot для сервиса

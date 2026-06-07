@@ -23,7 +23,7 @@ const (
 )
 
 // Версия приложения
-const VERSION = "1.9.2-go"
+const VERSION = "1.9.3-go"
 
 // WebPort — порт веб-интерфейса rProxy (для Nginx auth_request)
 var WebPort int = 3000
@@ -322,4 +322,22 @@ func GetTotpUrl(cfg map[string]string, name string) string {
 		label = name
 	}
 	return fmt.Sprintf("otpauth://totp/rProxy:%s?secret=%s&issuer=rProxy", label, secret)
+}
+
+// filterSSHOutput удаляет технический шум SSH из вывода
+func filterSSHOutput(input string) string {
+	lines := strings.Split(input, "\n")
+	var filtered []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		// Пропускаем известные предупреждения SSH
+		if strings.HasPrefix(trimmed, "Warning:") || strings.Contains(trimmed, "Permanently added") {
+			continue
+		}
+		filtered = append(filtered, line)
+	}
+	return strings.TrimSpace(strings.Join(filtered, "\n"))
 }
