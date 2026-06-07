@@ -29,7 +29,26 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 
 	// Страница входа
 	mux.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
+		title := "rProxy Web Identity v" + core.VERSION
+		icon := `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18V10a2 2 0 0 1 2-2h5"></path><path d="M14 18V6h3a3 3 0 0 1 0 6h-3"></path></svg>`
+
+		svcCfg := core.GetServiceByDomain(r.Host)
+		if svcCfg != nil {
+			if t, ok := svcCfg["SVC_LOGIN_TITLE"]; ok && t != "" {
+				title = t
+			}
+			if i, ok := svcCfg["SVC_LOGIN_ICON"]; ok && i != "" {
+				if strings.Contains(i, "<svg") {
+					icon = i
+				} else {
+					icon = fmt.Sprintf(`<span style="font-size: 28px; line-height: 1;">%s</span>`, i)
+				}
+			}
+		}
+
 		content := strings.ReplaceAll(string(loginHTML), "{{version}}", core.VERSION)
+		content = strings.ReplaceAll(content, "{{login_title}}", title)
+		content = strings.ReplaceAll(content, "{{login_icon}}", icon)
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write([]byte(content))
 	})
@@ -925,6 +944,8 @@ func handleCreateService(w http.ResponseWriter, r *http.Request) {
 		"SVC_TOTP_SECRET": data["totp_secret"],
 		"SVC_TUNNEL_PORT": fmt.Sprintf("%d", tunnelPort),
 		"SVC_ENABLED":     "yes",
+		"SVC_LOGIN_TITLE": data["login_title"],
+		"SVC_LOGIN_ICON":  data["login_icon"],
 	}
 
 	authUser := strings.TrimSpace(data["auth_user"])
@@ -962,6 +983,8 @@ func handleGetService(w http.ResponseWriter, r *http.Request, name string) {
 		"totp_secret": cfg["SVC_TOTP_SECRET"],
 		"totp_url":    core.GetTotpUrl(cfg, name),
 		"tunnel_port": cfg["SVC_TUNNEL_PORT"],
+		"login_title": cfg["SVC_LOGIN_TITLE"],
+		"login_icon":  cfg["SVC_LOGIN_ICON"],
 	})
 }
 
@@ -1009,6 +1032,8 @@ func handleUpdateService(w http.ResponseWriter, r *http.Request, name string) {
 		"SVC_TOTP_SECRET": data["totp_secret"],
 		"SVC_TUNNEL_PORT": oldCfg["SVC_TUNNEL_PORT"],
 		"SVC_ENABLED":     defaultStr(oldCfg["SVC_ENABLED"], "yes"),
+		"SVC_LOGIN_TITLE": data["login_title"],
+		"SVC_LOGIN_ICON":  data["login_icon"],
 	}
 
 	authUser := strings.TrimSpace(data["auth_user"])

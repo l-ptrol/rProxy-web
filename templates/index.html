@@ -1085,6 +1085,18 @@
                     <input type="hidden" id="f-totp-url" value="">
                 </div>
 
+                <!-- Блок кастомизации страницы входа (v1.9.4-go) -->
+                <div class="form-row" id="login-custom-group" style="display: none;">
+                    <div class="form-group">
+                        <label>Заголовок страницы входа</label>
+                        <input id="f-login-title" placeholder="rProxy Web Identity">
+                    </div>
+                    <div class="form-group">
+                        <label>Иконка страницы входа (эмодзи или SVG)</label>
+                        <input id="f-login-icon" placeholder="🛡️ или &lt;svg&gt;...&lt;/svg&gt;">
+                    </div>
+                </div>
+
                 <div class="form-row" id="basic-auth-group">
                     <div class="form-group dropdown" style="position:relative;">
                         <label>
@@ -1845,6 +1857,8 @@ async function openAddService() {
 
     document.getElementById('f-auth-user').value = '';
     document.getElementById('f-auth-pass').value = '';
+    document.getElementById('f-login-title').value = '';
+    document.getElementById('f-login-icon').value = '';
     document.getElementById('domain-hint').innerHTML = '';
 
     await checkDefaultAuth();
@@ -1892,6 +1906,8 @@ async function editService(name) {
 
         document.getElementById('f-auth-user').value = s.auth_user;
         document.getElementById('f-auth-pass').value = s.auth_pass;
+        document.getElementById('f-login-title').value = s.login_title || '';
+        document.getElementById('f-login-icon').value = s.login_icon || '';
         document.getElementById('domain-hint').innerHTML = '';
         
         await checkDefaultAuth();
@@ -1914,6 +1930,11 @@ function onTypeChange() {
     if (sslGrp) sslGrp.style.display = isSpecial ? 'none' : 'block';
     if (rAuthGrp) rAuthGrp.style.display = isSpecial ? 'none' : 'block';
     if (totpGrp) totpGrp.style.display = isSpecial ? 'none' : 'block';
+    
+    const loginCustGrp = document.getElementById('login-custom-group');
+    if (loginCustGrp) {
+        loginCustGrp.style.display = (t === 'http' || t === 'ttyd') ? 'grid' : 'none';
+    }
     
     if (bAuthGrp) {
         if (t === 'http') {
@@ -1946,7 +1967,9 @@ async function submitAddService() {
         auth_user: document.getElementById('f-auth-user').value.trim(),
         auth_pass: document.getElementById('f-auth-pass').value.trim(),
         totp_mode: document.getElementById('f-totp-mode').value,
-        totp_secret: document.getElementById('totp-secret-display').textContent === '--' ? '' : document.getElementById('totp-secret-display').textContent
+        totp_secret: document.getElementById('totp-secret-display').textContent === '--' ? '' : document.getElementById('totp-secret-display').textContent,
+        login_title: document.getElementById('f-login-title').value.trim(),
+        login_icon: document.getElementById('f-login-icon').value.trim()
     };
     if (!data.name) { toast('Укажите название','error'); return; }
     if (!data.vps) { toast('Выберите VPS','error'); return; }
