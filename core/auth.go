@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"crypto/md5"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
-	"net/http/cookiejar"
 	"os"
-	"os/exec"
 	"regexp"
 	"strings"
 	"sync"
@@ -17,6 +17,13 @@ import (
 
 	otp_totp "github.com/pquerna/otp/totp"
 )
+
+var keeneticHTTPClient = &http.Client{
+	Timeout: 5 * time.Second,
+	CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	},
+}
 
 // --- Вспомогательные функции криптографии ---
 
@@ -54,19 +61,46 @@ func sha256Hex(data string) string {
 
 // --- Авторизация Keenetic (NDM API) ---
 
-func KeeneticAuth(routerIP, login, password string) (bool, error) {
-	jar, _ := cookiejar.New(nil)
-	client := &http.Client{
-		Jar:     jar,
-		Timeout: 5 * time.Second,
+// getLinuxDefaultGateway парсит /proc/net/route для нахождения шлюза по умолчанию
+func getLinuxDefaultGateway() string {
+	data, err := os.ReadFile("/proc/net/route")
+	if err != nil {
+		return ""
 	}
+	lines := strings.Split(string(data), "\n")
+	for _, line := range lines {
+		fields := strings.Fields(line)
+		if len(fields) >= 3 && fields[1] == "00000000" {
+			gwHex := fields[2]
+			if len(gwHex) == 8 {
+				// Парсим hex-строку (little-endian порядок байт)
+				var ip [4]byte
+				for i := 0; i < 4; i++ {
+					b, err := hex.DecodeString(gwHex[8-i*2-2 : 8-i*2])
+					if err != nil || len(b) != 1 {
+						return ""
+					}
+					ip[i] = b[0]
+				}
+				return fmt.Sprintf("%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3])
+			}
+		}
+	}
+	return ""
+}
 
+func KeeneticAuth(routerIP, login, password string) (bool, error) {
 	fmt.Printf("[AUTH] Start: routerIP=%q, login=%q\n", routerIP, login)
 
 	if routerIP == "" || routerIP == "auto" {
 		routerIP = DetectRouterIP()
 	} else if routerIP == "127.0.0.1" {
-		clientCheck := &http.Client{Timeout: 1 * time.Second}
+		clientCheck := &http.Client{
+			Timeout: 1 * time.Second,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		}
 		if r, err := clientCheck.Get("http://127.0.0.1:80/auth"); err == nil {
 			r.Body.Close()
 			if r.StatusCode == 403 {
@@ -77,19 +111,41 @@ func KeeneticAuth(routerIP, login, password string) (bool, error) {
 		}
 	}
 
-	if !strings.Contains(routerIP, ":") {
-		routerIP = routerIP + ":80"
+	scheme := "http"
+	if strings.HasPrefix(routerIP, "https://") {
+		scheme = "https"
+		routerIP = strings.TrimPrefix(routerIP, "https://")
+	} else if strings.HasPrefix(routerIP, "http://") {
+		routerIP = strings.TrimPrefix(routerIP, "http://")
+	} else if strings.HasSuffix(routerIP, ":443") || strings.HasSuffix(routerIP, ":8443") {
+		scheme = "https"
 	}
 
-	authURL := fmt.Sprintf("http://%s/auth", routerIP)
+	if !strings.Contains(routerIP, ":") {
+		if scheme == "https" {
+			routerIP = routerIP + ":443"
+		} else {
+			routerIP = routerIP + ":80"
+		}
+	}
+
+	authURL := fmt.Sprintf("%s://%s/auth", scheme, routerIP)
 	fmt.Printf("[AUTH] Using URL: %s\n", authURL)
 
-	reqGet, _ := http.NewRequest("GET", authURL, nil)
-	respGet, err := client.Do(reqGet)
+	reqGet, err := http.NewRequest("GET", authURL, nil)
+	if err != nil {
+		return false, err
+	}
+	respGet, err := keeneticHTTPClient.Do(reqGet)
 	if err != nil {
 		return false, fmt.Errorf("ошибка связи с роутером (%s): %v", routerIP, err)
 	}
 	defer respGet.Body.Close()
+
+	if respGet.StatusCode == http.StatusOK {
+		fmt.Printf("[AUTH] SUCCESS (No auth required): Access granted for %s\n", login)
+		return true, nil
+	}
 
 	challenge := respGet.Header.Get("X-NDM-Challenge")
 	realm := respGet.Header.Get("X-NDM-Realm")
@@ -125,18 +181,26 @@ func KeeneticAuth(routerIP, login, password string) (bool, error) {
 	}
 	jsonData, _ := json.Marshal(payload)
 
-	reqPost, _ := http.NewRequest("POST", authURL, bytes.NewBuffer(jsonData))
+	reqPost, err := http.NewRequest("POST", authURL, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return false, err
+	}
 	reqPost.Header.Set("Content-Type", "application/json")
 	
 	cleanIP := routerIP
-	if strings.HasSuffix(cleanIP, ":80") {
-		cleanIP = strings.TrimSuffix(cleanIP, ":80")
+	if strings.Contains(cleanIP, ":") {
+		cleanIP = strings.Split(cleanIP, ":")[0]
 	}
 	
-	reqPost.Header.Set("Origin", fmt.Sprintf("http://%s", cleanIP))
-	reqPost.Header.Set("Referer", fmt.Sprintf("http://%s/", cleanIP))
+	reqPost.Header.Set("Origin", fmt.Sprintf("%s://%s", scheme, cleanIP))
+	reqPost.Header.Set("Referer", fmt.Sprintf("%s://%s/", scheme, cleanIP))
 
-	respPost, err := client.Do(reqPost)
+	// Переносим куки с GET запроса на POST запрос
+	for _, cookie := range respGet.Cookies() {
+		reqPost.AddCookie(cookie)
+	}
+
+	respPost, err := keeneticHTTPClient.Do(reqPost)
 	if err != nil {
 		return false, fmt.Errorf("ошибка POST-авторизации: %v", err)
 	}
@@ -158,7 +222,12 @@ func DetectRouterIP() string {
 		return cachedRouterIP
 	}
 
-	client := http.Client{Timeout: 1 * time.Second}
+	client := http.Client{
+		Timeout: 1 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 	ports := []string{"80", "81", "8080"}
 
 	for _, p := range ports {
@@ -172,37 +241,40 @@ func DetectRouterIP() string {
 		}
 	}
 
-	out, err := exec.Command("ip", "addr", "show", "br0").Output()
+	// Нативное определение IP на интерфейсе br0
+	iface, err := net.InterfaceByName("br0")
 	if err == nil {
-		re := regexp.MustCompile(`inet\s+([0-9.]+)/`)
-		if match := re.FindStringSubmatch(string(out)); len(match) > 1 {
-			br0IP := match[1]
-			for _, p := range ports {
-				url := fmt.Sprintf("http://%s:%s/auth", br0IP, p)
-				if resp, err := client.Get(url); err == nil {
-					resp.Body.Close()
-					if resp.StatusCode == 401 {
-						cachedRouterIP = br0IP + ":" + p
-						return cachedRouterIP
+		addrs, err := iface.Addrs()
+		if err == nil {
+			for _, addr := range addrs {
+				if ipnet, ok := addr.(*net.IPNet); ok {
+					if ip4 := ipnet.IP.To4(); ip4 != nil {
+						br0IP := ip4.String()
+						for _, p := range ports {
+							url := fmt.Sprintf("http://%s:%s/auth", br0IP, p)
+							if resp, err := client.Get(url); err == nil {
+								resp.Body.Close()
+								if resp.StatusCode == 401 {
+									cachedRouterIP = br0IP + ":" + p
+									return cachedRouterIP
+								}
+							}
+						}
 					}
 				}
 			}
 		}
 	}
 
-	out, err = exec.Command("ip", "route", "show", "default").Output()
-	if err == nil {
-		re := regexp.MustCompile(`via\s+([0-9.]+)`)
-		if match := re.FindStringSubmatch(string(out)); len(match) > 1 {
-			gw := match[1]
-			for _, p := range ports {
-				url := fmt.Sprintf("http://%s:%s/auth", gw, p)
-				if resp, err := client.Get(url); err == nil {
-					resp.Body.Close()
-					if resp.StatusCode == 401 {
-						cachedRouterIP = gw + ":" + p
-						return cachedRouterIP
-					}
+	// Нативное определение шлюза по умолчанию
+	if gw := getLinuxDefaultGateway(); gw != "" {
+		for _, p := range ports {
+			url := fmt.Sprintf("http://%s:%s/auth", gw, p)
+			if resp, err := client.Get(url); err == nil {
+				resp.Body.Close()
+				if resp.StatusCode == 401 {
+					cachedRouterIP = gw + ":" + p
+					return cachedRouterIP
 				}
 			}
 		}
@@ -238,12 +310,31 @@ var (
 	sessions   = make(map[string]Session)
 	sessionsMu sync.RWMutex
 
-	loginAttempts = make(map[string]struct {
-		Count      int
-		BlockUntil time.Time
-	})
+	loginAttempts = make(map[string]attemptData)
 	attemptsMu sync.Mutex
 )
+
+type attemptData struct {
+	Count      int
+	BlockUntil time.Time
+	LastSeen   time.Time
+}
+
+func init() {
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		for range ticker.C {
+			attemptsMu.Lock()
+			now := time.Now()
+			for ip, data := range loginAttempts {
+				if now.Sub(data.LastSeen) > 15*time.Minute {
+					delete(loginAttempts, ip)
+				}
+			}
+			attemptsMu.Unlock()
+		}
+	}()
+}
 
 func CreateSession() string {
 	sessionsMu.Lock()
@@ -331,6 +422,7 @@ func RecordAttempt(ip string) {
 
 	data := loginAttempts[ip]
 	data.Count++
+	data.LastSeen = time.Now()
 	if data.Count >= 5 {
 		data.BlockUntil = time.Now().Add(5 * time.Minute)
 		fmt.Printf("[AUTH] IP %s blocked for 5 minutes (brute-force)\n", ip)
