@@ -1085,15 +1085,28 @@
                     <input type="hidden" id="f-totp-url" value="">
                 </div>
 
-                <!-- Блок кастомизации страницы входа (v1.9.4-go) -->
+                <!-- Блок кастомизации страницы входа (v1.9.5-go) -->
                 <div class="form-row" id="login-custom-group" style="display: none;">
                     <div class="form-group">
                         <label>Заголовок страницы входа</label>
                         <input id="f-login-title" placeholder="rProxy Web Identity">
                     </div>
                     <div class="form-group">
-                        <label>Иконка страницы входа (эмодзи или SVG)</label>
-                        <input id="f-login-icon" placeholder="🛡️ или &lt;svg&gt;...&lt;/svg&gt;">
+                        <label>
+                            Значок входа (эмодзи, SVG или файл)
+                            <span style="float:right; cursor:pointer; color:var(--text3);" onclick="clearLoginIcon()" title="Очистить значок">✕</span>
+                        </label>
+                        <div style="display: flex; gap: 8px;">
+                            <input id="f-login-icon" placeholder="🛡️, <svg>...</svg> или файл" style="flex: 1;">
+                            <button class="btn" type="button" onclick="document.getElementById('f-login-icon-file').click()" style="white-space: nowrap; padding: 0 12px;" title="Загрузить файл изображения (ico, png, jpg, svg...)">
+                                <svg viewBox="0 0 24 24" style="width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                            </button>
+                        </div>
+                        <input type="file" id="f-login-icon-file" accept=".ico,.png,.jpg,.jpeg,.bmp,.gif,.svg" style="display: none;">
+                        <div id="login-icon-preview-container" style="display: none; align-items: center; gap: 8px; margin-top: 8px; background: var(--surface2); padding: 6px 12px; border-radius: var(--radius); border: 1px solid var(--border);">
+                            <span style="font-size: 11px; color: var(--text3); font-weight: 600; text-transform: uppercase;">Превью:</span>
+                            <div id="login-icon-preview" style="width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; overflow: hidden; background: var(--accent-bg); border-radius: 6px;"></div>
+                        </div>
                     </div>
                 </div>
 
@@ -1859,6 +1872,8 @@ async function openAddService() {
     document.getElementById('f-auth-pass').value = '';
     document.getElementById('f-login-title').value = '';
     document.getElementById('f-login-icon').value = '';
+    document.getElementById('f-login-icon-file').value = '';
+    updateLoginIconPreview();
     document.getElementById('domain-hint').innerHTML = '';
 
     await checkDefaultAuth();
@@ -1908,6 +1923,8 @@ async function editService(name) {
         document.getElementById('f-auth-pass').value = s.auth_pass;
         document.getElementById('f-login-title').value = s.login_title || '';
         document.getElementById('f-login-icon').value = s.login_icon || '';
+        document.getElementById('f-login-icon-file').value = '';
+        updateLoginIconPreview();
         document.getElementById('domain-hint').innerHTML = '';
         
         await checkDefaultAuth();
@@ -2236,6 +2253,68 @@ initCustomSelect('auth-select-wrapper', (val) => {
     if (val === 'yes') {
         const ipInput = document.getElementById('s-router-ip');
         if (!ipInput.value || ipInput.value === '127.0.0.1') ipInput.value = 'auto';
+    }
+});
+
+// Функции управления иконкой входа (v1.9.5-go)
+function clearLoginIcon() {
+    document.getElementById('f-login-icon').value = '';
+    document.getElementById('f-login-icon-file').value = '';
+    updateLoginIconPreview();
+}
+
+function updateLoginIconPreview() {
+    const val = document.getElementById('f-login-icon').value.trim();
+    const container = document.getElementById('login-icon-preview-container');
+    const preview = document.getElementById('login-icon-preview');
+    
+    if (!val) {
+        container.style.display = 'none';
+        preview.innerHTML = '';
+        return;
+    }
+    
+    container.style.display = 'flex';
+    if (val.startsWith('data:') || val.includes(';base64,')) {
+        preview.innerHTML = `<img src="${val}" style="max-width: 100%; max-height: 100%; object-fit: contain;" />`;
+    } else if (val.includes('<svg')) {
+        preview.innerHTML = val;
+        const svg = preview.querySelector('svg');
+        if (svg) {
+            svg.style.width = '16px';
+            svg.style.height = '16px';
+            svg.style.color = 'var(--text)';
+        }
+    } else {
+        preview.innerHTML = `<span style="font-size: 16px; line-height: 1;">${val}</span>`;
+    }
+}
+
+// Инициализация событий файла и ручного ввода
+document.addEventListener('DOMContentLoaded', () => {
+    const fileInput = document.getElementById('f-login-icon-file');
+    const textInput = document.getElementById('f-login-icon');
+    
+    if (fileInput && textInput) {
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            if (file.size > 512 * 1024) {
+                toast('Размер файла превышает 500 КБ. Пожалуйста, используйте меньшую картинку.', 'error');
+                fileInput.value = '';
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                textInput.value = evt.target.result;
+                updateLoginIconPreview();
+            };
+            reader.readAsDataURL(file);
+        });
+        
+        textInput.addEventListener('input', updateLoginIconPreview);
     }
 });
 

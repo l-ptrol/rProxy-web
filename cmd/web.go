@@ -40,6 +40,8 @@ func StartWebServer(port int, indexHTML []byte, loginHTML []byte) {
 			if i, ok := svcCfg["SVC_LOGIN_ICON"]; ok && i != "" {
 				if strings.Contains(i, "<svg") {
 					icon = i
+				} else if strings.HasPrefix(i, "data:") || strings.Contains(i, ";base64,") {
+					icon = fmt.Sprintf(`<img src="%s" style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 10px;" />`, i)
 				} else {
 					icon = fmt.Sprintf(`<span style="font-size: 28px; line-height: 1;">%s</span>`, i)
 				}
